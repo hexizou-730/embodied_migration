@@ -2,21 +2,144 @@
 
 LLM-generated robot program migration across robot embodiments.
 
-This repository is being refocused toward a more serious research direction:
+This repository is being refocused toward a research project on:
 
 ```text
 Capability-Conditioned Failure-Driven Adaptation of LLM-Generated Robot Programs
 ```
 
-Chinese title:
+中文题目：
 
 ```text
 面向机器人能力约束的失败驱动式 LLM 机器人程序迁移
 ```
 
-The early PyBullet and robosuite/MuJoCo demos are kept locally as prototypes,
-but they are no longer tracked on GitHub. The public repository now keeps the
-core framework and the planned ManiSkill research route.
+The current public repository keeps the reusable framework skeleton and the
+planned ManiSkill research route. Earlier PyBullet and robosuite/MuJoCo demos
+are kept locally only as legacy prototypes because their tasks are too simple
+for the intended paper direction.
+
+---
+
+## Research Question
+
+When an LLM-generated robot program works on one robot, what breaks when the
+same program is moved to another robot, and can the LLM repair the program using:
+
+1. the target robot's capability description, and
+2. structured feedback from failed execution?
+
+The project studies **code migration**, not just robot task completion.
+
+```text
+source robot program
+        ↓
+target robot with different embodiment capabilities
+        ↓
+source-copy may fail
+        ↓
+Capability Card + Failure Report guide code adaptation
+        ↓
+LLM generates corrected target-specific program
+```
+
+---
+
+## What This Project Takes from Four Related Papers
+
+The project is organized around four concrete research modules inspired by four
+recent lines of work.
+
+### 1. RoboInspector → Failure Taxonomy and Reliability Analysis
+
+RoboInspector studies why LLM-generated robot policy code is unreliable.
+
+This project adopts that spirit by making failure analysis a first-class output:
+
+- API mismatch
+- reachability failure
+- gripper / force failure
+- alignment failure
+- insertion speed failure
+- tool-use ordering failure
+- invalid generated code
+- impossible-task refusal failure
+
+Planned contribution:
+
+```text
+A cross-embodiment failure taxonomy for LLM-generated robot programs.
+```
+
+### 2. Static Text-Based Simulation → Text-Only Feedback Baseline
+
+Static text-based simulation suggests that an LLM can inspect robot code before
+running expensive simulation.
+
+This project will include a text-only baseline:
+
+```text
+llm_static_feedback
+```
+
+It checks generated code before simulator execution:
+
+- Does the code call unavailable APIs?
+- Does it ignore target robot limitations?
+- Does it use two-arm skills on a single-arm robot?
+- Does it skip reachability or alignment checks?
+- Does it use unsafe insertion speed?
+
+Planned contribution:
+
+```text
+A comparison between text-only corrective feedback and real simulator feedback.
+```
+
+### 3. Closed-Loop Code Generation → Planner / Executor / Reporter
+
+Closed-loop code-generation work highlights that robot programs should be
+generated, executed, inspected, and repaired iteratively.
+
+This project uses the same high-level architecture:
+
+```text
+Planner  →  Executor  →  Reporter  →  Planner
+```
+
+- Planner: LLM generates LMP code.
+- Executor: ManiSkill executes the code through a constrained skill API.
+- Reporter: the system converts failure into a structured Failure Report.
+
+Planned contribution:
+
+```text
+A closed-loop code adaptation pipeline for cross-embodiment robot programs.
+```
+
+### 4. AHA → Multimodal Failure Report Roadmap
+
+AHA shows that vision-language models can detect and explain manipulation
+failures from visual evidence.
+
+This project will start with simulator state feedback, then extend toward
+multimodal feedback:
+
+- RGB screenshot
+- object pose
+- robot state
+- executed code
+- simulator success/failure info
+- optional VLM-based failure explanation
+
+Planned contribution:
+
+```text
+A staged roadmap from state-based Failure Reports to multimodal Failure Reports.
+```
+
+The first paper version does not need to train a new VLM. A VLM judge can be
+used as a later baseline or extension.
 
 ---
 
@@ -24,71 +147,39 @@ core framework and the planned ManiSkill research route.
 
 The GitHub version currently keeps only the reusable core:
 
-- LMP code extraction and execution.
-- Capability Card representation.
-- Failure Report representation.
-- OpenRouter / LLM client.
-- Environment setup templates.
-- ManiSkill research roadmap.
+```text
+embodied_migration/
+├── llm_client.py
+├── requirements.txt
+├── requirements-maniskill.txt
+├── .env.example
+│
+├── capabilities/
+│   └── capability_card.py
+│
+├── lmp/
+│   ├── executor.py
+│   ├── extractor.py
+│   └── failure_report.py
+│
+└── docs/
+    ├── MANISKILL_ROADMAP_CN.md
+    └── EXPERIMENT_PLAN_CN.docx
+```
 
-The following prototype code is intentionally not tracked on GitHub anymore:
+Removed from GitHub and kept locally only:
 
 - KUKA / Franka single-block PyBullet tasks.
 - `put the red block into the yellow tray`.
 - `arrange_line`, `arrange_triangle`, `arrange_circle`.
-- Success checks based only on object distance thresholds.
-- robosuite/MuJoCo `TwoArmLift`, `TwoArmHandover`, `TwoArmPegInHole` prototype.
+- distance-only success checks.
+- robosuite/MuJoCo dual-arm prototype.
 
 Reason:
 
 ```text
-Those tasks are useful for early debugging, but they are too simple for the
-planned research direction. The next version should use harder ManiSkill tasks
-with clearer embodiment differences and richer failure modes.
-```
-
----
-
-## Research Question
-
-The central question is:
-
-```text
-When a robot program generated for one embodiment is moved to another robot,
-what fails, and can an LLM repair the program using target capability
-information plus execution failure feedback?
-```
-
-The project is not just about making a robot move. It is about measuring whether
-the generated program changes in the correct way when the robot changes.
-
-Examples of desired code migration behavior:
-
-- A mobile manipulator should reason about navigation and reachability.
-- A small arm should reject or adapt tasks outside its workspace.
-- A different gripper should change grasp strategy.
-- Peg insertion should adapt tolerance and insertion speed.
-- Tool-use tasks should preserve correct action ordering.
-- Impossible tasks should trigger correct refusal instead of unsafe code.
-
----
-
-## Core Loop
-
-```text
-source task / source robot program
-        ↓
-target robot with different capabilities
-        ↓
-source-copy baseline may fail
-        ↓
-Capability Card describes the target embodiment
-        ↓
-Failure Report describes the execution failure
-        ↓
-LLM generates adapted code
-        ↓
-simulator checks physical/task success
+The old tasks are useful for debugging, but they do not provide enough task
+complexity, failure diversity, or embodiment contrast for a strong paper.
 ```
 
 ---
@@ -97,8 +188,7 @@ simulator checks physical/task success
 
 ### LMP Code
 
-LMP Code is executable Python code generated by an LLM. The LLM does not only
-output natural language; it outputs a short program using the robot API.
+LMP Code is executable Python code generated by the LLM.
 
 Example shape:
 
@@ -119,130 +209,56 @@ else:
 
 ### Capability Card
 
-A Capability Card is a structured robot description used in the prompt.
+A Capability Card is a structured description of target robot capabilities:
 
-It should describe:
-
-- Robot embodiment.
-- Number of arms.
-- Whether the robot has a mobile base.
-- Gripper type.
-- Workspace size.
-- Payload / force limitations.
-- Precision tolerance.
-- Safe insertion speed.
-- Available high-level skills.
-- Refusal conditions.
+- embodiment type
+- number of arms
+- mobile base availability
+- gripper type
+- workspace radius
+- payload / force constraints
+- alignment tolerance
+- insertion speed limit
+- available high-level skills
+- refusal conditions
 
 ### Failure Report
 
-A Failure Report is structured feedback from a failed attempt.
-
-Example:
+A Failure Report is structured feedback generated after a failed attempt:
 
 ```text
 Task: PegInsertionSide
-Failure: insert_peg returned False.
-Actual: peg pose is misaligned by 3.5 cm.
+Failure: insert returned False.
+Actual: peg is misaligned by 3.5 cm.
 Diagnosis: target robot needs tighter approach alignment.
-Suggestion: call align_to_target(..., tolerance=0.01) before insertion and reduce insertion speed.
-```
-
-### Baselines
-
-The planned experimental comparison:
-
-| Method | Meaning |
-|---|---|
-| `source-copy` | Execute the source robot program directly on the target robot |
-| `llm_no_card` | LLM adapts code without target capability information |
-| `llm_card_only` | LLM receives the target Capability Card |
-| `llm_failure_only` | LLM receives execution feedback but no Capability Card |
-| `llm_card_failure` | LLM receives both Capability Card and Failure Report |
-| `oracle` | Hand-written upper-bound adaptation |
-
----
-
-## Repository Structure
-
-```text
-embodied_migration/
-├── llm_client.py
-├── requirements.txt
-├── requirements-maniskill.txt
-├── .env.example
-│
-├── capabilities/
-│   └── capability_card.py
-│
-├── lmp/
-│   ├── executor.py
-│   ├── extractor.py
-│   └── failure_report.py
-│
-└── docs/
-    └── MANISKILL_ROADMAP_CN.md
-```
-
-The planned next package is:
-
-```text
-maniskill_backend/
-├── profiles.py       # robot capability cards
-├── tasks.py          # task specifications
-├── skills.py         # high-level skill API
-├── env_adapter.py    # gym.make / reset / step / render
-├── migration.py      # source-copy / oracle / llm adaptation
-└── evaluation.py     # success and failure extraction
+Suggestion: call align_to_target(..., tolerance=0.01) and reduce insertion speed.
 ```
 
 ---
 
-## Environment Setup
+## Planned ManiSkill Platform
 
-### Base Environment
+The next implementation target is **ManiSkill 3** on native Ubuntu.
 
-```bash
-conda create -n em-ms python=3.10 -y
-conda activate em-ms
-```
-
-Expected output:
+Recommended setup:
 
 ```text
-(em-ms) user@machine ...
-```
-
-Install the shared LLM/code framework dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Expected output:
-
-```text
-Successfully installed ...
-```
-
-### ManiSkill Environment
-
-Recommended platform:
-
-```text
-Native Ubuntu 22.04 or 24.04
+Ubuntu 22.04 / 24.04
 NVIDIA driver
 RTX 3060 Laptop GPU
-Python 3.10
+Conda Python 3.10
 ManiSkill 3
 ```
 
 WSL is not recommended as the main platform if GUI rendering and GPU simulation
-are needed. Native Ubuntu is the preferred setup.
+are needed.
 
-Install ManiSkill dependencies:
+### Environment
 
 ```bash
+conda create -n em-ms python=3.10 -y
+conda activate em-ms
+pip install -r requirements.txt
 pip install -r requirements-maniskill.txt
 ```
 
@@ -260,69 +276,36 @@ Expected result:
 A ManiSkill / SAPIEN viewer opens and random actions run in the scene.
 ```
 
-More relevant task test:
+---
 
-```bash
-python -m mani_skill.examples.demo_random_action \
-  -e PegInsertionSide-v1 \
-  --render-mode human
-```
-
-Expected result:
+## Planned ManiSkill Backend
 
 ```text
-The peg insertion environment opens.
-Random actions will not solve the task, but the simulator and rendering should run.
+maniskill_backend/
+├── profiles.py       # robot capability cards
+├── tasks.py          # task specifications and source programs
+├── skills.py         # high-level skill API exposed to LLM
+├── env_adapter.py    # gym.make / reset / step / render
+├── migration.py      # source-copy / oracle / llm adaptation
+└── evaluation.py     # success and failure extraction
 ```
 
 ---
 
-## Configure LLM API
+## Planned Tasks
 
-Only LLM-based planners require an API key.
+Main tasks should avoid toy block placement and focus on richer failure modes:
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```text
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-EM_MODEL=anthropic/claude-sonnet-4.5
-```
-
-Check:
-
-```bash
-python -c "import os; from dotenv import load_dotenv; load_dotenv('.env'); print('OPENROUTER_API_KEY =', 'SET' if os.getenv('OPENROUTER_API_KEY') else 'MISSING')"
-```
-
-Expected output:
-
-```text
-OPENROUTER_API_KEY = SET
-```
-
----
-
-## Planned ManiSkill Tasks
-
-The main experiments should avoid toy block-to-tray placement and use tasks
-with clearer failure modes.
-
-Recommended tasks:
-
-| Task | Why it is useful |
+| Task | Research Value |
 |---|---|
-| `PegInsertionSide-v1` | Alignment, contact, insertion speed, precision |
-| `PlugCharger-v1` | Contact-rich insertion and recovery |
-| `PullCubeTool-v1` | Tool use, reachability, action ordering |
-| `PickSingleYCB-v1` | Object geometry variation and grasp robustness |
-| `OpenCabinetDrawer-v1` | Articulated object constraints |
-| `PickCube-v1` | Smoke test only, not a main paper task |
+| `PegInsertionSide-v1` | alignment, contact, insertion speed, precision |
+| `PlugCharger-v1` | contact-rich insertion and recovery |
+| `PullCubeTool-v1` | tool use, reachability, action ordering |
+| `PickSingleYCB-v1` | object geometry variation and grasp robustness |
+| `OpenCabinetDrawer-v1` | articulated object constraints |
+| `PickCube-v1` | smoke test only |
 
-First serious experimental set:
+First serious experiment set:
 
 ```text
 PegInsertionSide-v1
@@ -336,22 +319,31 @@ PullCubeTool-v1
 
 Initial robot set:
 
-| Robot | Research value |
+| Robot | Role |
 |---|---|
-| `panda` | Standard source robot |
-| `fetch` | Mobile manipulation and reachability |
-| `xarm6_robotiq` | Different arm and gripper |
-| `so100` | Smaller low-cost arm, limited workspace |
-| `widowxai` | Smaller workspace and different precision profile |
+| `panda` | source robot / standard arm |
+| `fetch` | mobile manipulator |
+| `xarm6_robotiq` | different arm and gripper |
+| `so100` | small low-cost arm with limited workspace |
+| `widowxai` | small arm with different precision profile |
 
-The source robot can initially be `panda`, then migrate programs to the other
-target embodiments.
+---
+
+## Planned Baselines
+
+| Method | Meaning |
+|---|---|
+| `source-copy` | directly execute source program on target robot |
+| `llm_no_card` | LLM adapts code without capability card |
+| `llm_card_only` | LLM receives target Capability Card |
+| `llm_failure_only` | LLM receives Failure Report only |
+| `llm_card_failure` | LLM receives both Capability Card and Failure Report |
+| `llm_static_feedback` | LLM performs text-only pre-execution correction |
+| `oracle` | hand-written upper-bound adaptation |
 
 ---
 
 ## Planned Metrics
-
-For each task and target robot:
 
 ```text
 success rate
@@ -361,150 +353,39 @@ invalid code rate
 refusal correctness
 API-call difference
 code edit distance
-```
-
-Important failure categories:
-
-```text
-API mismatch
-reachability failure
-gripper/force failure
-alignment failure
-insertion speed failure
-tool-use ordering failure
-unsafe or impossible task
-invalid generated code
+static-feedback vs simulator-feedback gap
 ```
 
 ---
 
-## Planned Implementation Stages
+## Implementation Stages
 
-### Stage 1: Ubuntu + ManiSkill Setup
-
-Goal:
-
-```text
-Run ManiSkill GUI and headless simulation reliably on native Ubuntu.
-```
-
-Deliverable:
-
-```text
-PickCube-v1 and PegInsertionSide-v1 launch successfully.
-```
-
-### Stage 2: ManiSkill Backend Skeleton
-
-Create:
-
-```text
-maniskill_backend/profiles.py
-maniskill_backend/tasks.py
-maniskill_backend/env_adapter.py
-maniskill_backend/evaluation.py
-```
-
-Deliverable:
-
-```text
-The code can reset a ManiSkill task, inspect observations/info, and evaluate success.
-```
-
-### Stage 3: High-Level Skill API
-
-Define a constrained API for LLM-generated code:
-
-```python
-robot.grasp("peg")
-robot.align_to_target("peg", "hole", tolerance=0.01)
-robot.insert("peg", "hole", speed=0.015)
-robot.pull_with_tool("cube", "tool")
-robot.open_drawer("drawer")
-```
-
-Deliverable:
-
-```text
-Oracle programs can solve or partially solve selected ManiSkill tasks.
-```
-
-### Stage 4: Migration Planner
-
-Implement:
-
-```text
-source-copy
-oracle
-llm_no_card
-llm_card_only
-llm_failure_only
-llm_card_failure
-```
-
-Deliverable:
-
-```text
-The same source program can be tested on multiple target embodiments.
-```
-
-### Stage 5: Benchmark and Analysis
-
-Add logging:
-
-```text
-prompt
-generated code
-execution result
-failure report
-API calls
-success/failure type
-```
-
-Deliverable:
-
-```text
-summary.csv
-failure_breakdown.csv
-code_feature_summary.csv
-qualitative_failure_cases.md
-```
-
-### Stage 6: Paper-Ready Evaluation
-
-Run:
-
-```text
-3-5 tasks
-4-5 target robots
-5-10 seeds
-all baselines
-```
-
-Deliverable:
-
-```text
-tables, plots, qualitative cases, and an experiment section draft.
-```
+1. Set up Ubuntu + ManiSkill and verify rendering.
+2. Implement `maniskill_backend/env_adapter.py`.
+3. Implement robot profiles and Capability Cards.
+4. Implement high-level skills for the first task.
+5. Implement source-copy and oracle programs.
+6. Add LLM generation with and without Capability Cards.
+7. Add Failure Report retry.
+8. Add text-only static feedback baseline.
+9. Add benchmark logging and failure taxonomy.
+10. Add optional screenshot/VLM failure explanation.
 
 ---
 
 ## Current Status
 
-Current public GitHub status:
+Current GitHub status:
 
 ```text
 Research framework skeleton.
 Legacy toy simulators removed from the public branch.
-Next major milestone: ManiSkill backend on Ubuntu.
+Next major milestone: Ubuntu + ManiSkill backend.
 ```
-
-Local-only legacy code still exists on the development machine for reference,
-but it should not be treated as the main research contribution.
 
 The next real implementation step is:
 
 ```text
-Set up Ubuntu + ManiSkill, then implement maniskill_backend/.
+Run ManiSkill successfully on Ubuntu, then implement the first
+PegInsertionSide-v1 migration pipeline.
 ```
-
