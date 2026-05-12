@@ -35,3 +35,12 @@ results/
 /docs/STAGE6_PAPER_PACKAGE_CN.md
 /docs/TEACHER_DEMO_GUIDE_CN.docx
 /docs/code_migration_progress_brief_cn.pptx
+
+# Local legacy robosuite/MuJoCo prototype kept outside GitHub.
+/robosuite_backend/
+/examples/robosuite_migration_demo.py
+/examples/__init__.py
+/benchmark/run_robosuite_migration.py
+/benchmark/__init__.py
+/docs/ROBOSUITE_MIGRATION_CN.md
+/requirements-robosuite.txt

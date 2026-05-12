@@ -1,2 +1,0 @@
-mujoco>=3.2
-robosuite>=1.5
