@@ -1,7 +1,6 @@
-"""Robot profiles for the optional robosuite migration backend.
+"""Robot profiles for the robosuite migration backend.
 
-The project still uses PyBullet for the original tabletop experiments. These
-profiles describe more complex robosuite embodiments and the high-level skill
+These profiles describe robosuite embodiments and the high-level skill
 constraints that the LLM should consider when migrating source programs.
 """
 from __future__ import annotations

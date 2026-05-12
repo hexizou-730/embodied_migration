@@ -1,7 +1,7 @@
 # Robosuite 复杂任务迁移使用说明
 
-这个增量把原来的 PyBullet 简单桌面任务扩展到一个可选的
-`robosuite + MuJoCo` 后端，用于展示更复杂的双臂操作任务和更清楚的成功/失败。
+这个模块是当前公开仓库里保留的可运行迁移原型，使用
+`robosuite + MuJoCo` 后端展示更复杂的双臂操作任务和更清楚的成功/失败。
 
 ## 新增内容
 
@@ -15,7 +15,7 @@
 - `benchmark/run_robosuite_migration.py`
   - 小规模复杂任务迁移 benchmark
 - `requirements-robosuite.txt`
-  - 可选依赖，不影响原 PyBullet 主线
+  - robosuite / MuJoCo 依赖
 
 ## 安装 robosuite 后端
 
@@ -182,7 +182,7 @@ success=True reason=success_on_attempt_1
 
 - 没有 `--real-control`：只跑高层 skill 状态机，速度快，适合 benchmark。
 - 有 `--real-control`：skill 会发送 robosuite 连续控制动作，GUI 中机械臂会靠近、闭合、上抬。
-- `assisted grasp constraint` 是在控制器到达两个把手后启用的抽象抓取约束，作用类似 PyBullet 里用 constraint 连接被抓物体。它让演示可以稳定显示“抓住并抬起锅”，同时保留真实控制器轨迹。
+- `assisted grasp constraint` 是在控制器到达两个把手后启用的抽象抓取约束，作用类似物理仿真里的 attach constraint。它让演示可以稳定显示“抓住并抬起锅”，同时保留真实控制器轨迹。
 
 对比直接复制失败：
 

@@ -8,3 +8,30 @@ venv/
 *.log
 MUJOCO_LOG.TXT
 results/
+
+# Local legacy PyBullet prototype kept outside GitHub.
+# These files are still useful for personal reference, but the public
+# repository now focuses on robosuite/MuJoCo and the planned ManiSkill track.
+/main.py
+/robots/
+/perception/
+/prompts/
+/examples/smoke_test.py
+/examples/test_capability_card.py
+/benchmark/run_benchmark.py
+/benchmark/validate_seeded_scenes.py
+/benchmark/analyze_results.py
+/benchmark/audit_run.py
+/benchmark/build_casebook.py
+/benchmark/build_paper_assets.py
+/benchmark/experiment_logging.py
+/benchmark/llm_cache.py
+/scripts/
+/paper/
+/docs/PROJECT_USAGE_CN.md
+/docs/STAGE3_MOBILE_DUAL_TASKS_CN.md
+/docs/STAGE4_STRICT_ABLATION_CN.md
+/docs/STAGE5_SEEDED_EXPERIMENT_CN.md
+/docs/STAGE6_PAPER_PACKAGE_CN.md
+/docs/TEACHER_DEMO_GUIDE_CN.docx
+/docs/code_migration_progress_brief_cn.pptx

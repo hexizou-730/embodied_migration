@@ -2,7 +2,7 @@
 
 This benchmark is intentionally separate from `benchmark.run_benchmark` because
 the robosuite backend evaluates source-program migration on complex task-level
-skills rather than PyBullet tabletop object positions.
+skills rather than early tabletop object-position checks.
 """
 from __future__ import annotations
 
