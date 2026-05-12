@@ -1,237 +1,824 @@
-# Embodied Migration v9: Mobile + Dual-arm 迁移任务集
+# Embodied Migration
 
-> v9 = v8 + dual-arm PyBullet 原型与 Mobile/Dual-arm 迁移任务集。
+LLM 生成机器人程序的跨具身迁移实验平台。
 
-完整中文使用文档见:
+本项目研究一个问题：**同一个自然语言任务或源机器人程序，在换到不同机器人之后，为什么会失败，以及如何利用机器人能力描述和失败反馈让 LLM 自动修改程序。**
+
+当前项目包含两个层次：
+
+1. **PyBullet 原型层**：验证移动底盘、双臂、不同夹爪/吸附器等具身差异会导致 LLM 代码迁移失败。
+2. **robosuite/MuJoCo 复杂任务层**：把任务从简单方块搬运推进到双臂抬锅、handover、peg-in-hole 等更接近机器人论文的任务。
+
+推荐论文方向：
 
 ```text
-docs/PROJECT_USAGE_CN.md
-docs/STAGE3_MOBILE_DUAL_TASKS_CN.md
-docs/STAGE4_STRICT_ABLATION_CN.md
-docs/STAGE5_SEEDED_EXPERIMENT_CN.md
-docs/STAGE6_PAPER_PACKAGE_CN.md
-docs/ROBOSUITE_MIGRATION_CN.md
+Capability-Conditioned Failure-Driven Adaptation of LLM-Generated Robot Programs
+面向机器人能力约束的失败驱动式 LLM 机器人程序迁移
 ```
 
 ---
 
-## v8 增量
+## 1. 项目做了什么
 
-针对老师反馈「任务太简单 + 迁移模型太简单」,本批次加了:
+项目的核心不是单纯“让机器人执行一句指令”，而是研究 **代码迁移**：
 
-1. **Mobile Manipulator**(`robots/mobile_robot.py`) — Husky 移动底盘 + KUKA iiwa 7-DOF 臂叠加。新增 `navigate_to`, `is_reachable`, `get_base_position` 三个 API,这是 KUKA / Franka 没有的。
-2. **5 个空间几何任务** — `arrange_line`, `arrange_triangle`, `arrange_circle`, `mirror_layout`, `sort_left_to_right`。这些任务要求 LLM 现场写 NumPy 几何计算,Tool Calling 范式做不到。
-3. **2 个 refusal 任务** — `refuse_rotate_object`, `refuse_missing_object`。用于评估 Capability Card 是否能让 LLM 正确拒绝不可执行或场景中不存在的请求。
-4. **CapabilityCard 扩展** — 新增 `has_mobile_base`, `global_reachable`, `nav_min_clearance_m` 三个字段,LLM 据此自动推导出 mobile-aware 的代码模式。
-5. **论文级分析脚本** — `benchmark/analyze_results.py` 会生成 method/robot/task-family/failure/code-diff 的 CSV 与 LaTeX 表格。
-6. **Seeded randomized layouts** — `--scene-variant seeded --seed-base N` 可复现生成多初始布局,避免只在单一固定场景上过拟合。
-7. **论文指标扩展** — 自动输出 Wilson 95% CI、Migration Score、相对 few-shot baseline 的 paired method delta。
-8. **Paper asset builder** — `benchmark/build_paper_assets.py` 从实验表格生成 SVG 图、结果小节草稿、实验 manifest 和 LaTeX table include 文件。
-9. **Stage-6 package script** — `scripts/build_stage6_paper_package.sh` 一键把完整 run 目录转成论文材料包,并检查关键表格/图表是否生成完整。
-10. **LLM response cache** — `benchmark/llm_cache.py` 按 system prompt、user prompt、model、temperature 生成 SHA256 key,避免重复付费。
-11. **Resumable benchmark** — `--resume` 会跳过已完成 trial JSON,中断后可继续跑同一个 `run_id`。
-12. **Run audit** — `benchmark/audit_run.py` 检查缺失 trial、未完成 trial、LLM error、cache hit rate 和 summary 行数。
-13. **Stage-7 reliable pipeline** — `scripts/run_stage7_reliable_experiments.sh` 串起 benchmark、analysis、audit、paper assets。
-14. **Qualitative casebook** — `benchmark/build_casebook.py` 自动选择代表性恢复案例、失败案例、refusal 案例,并生成代码 diff。
-15. **Stage-8 package script** — `scripts/build_stage8_qualitative_package.sh` 一键生成 tables、audit、paper assets 和 casebook。
-16. **Dual-arm robot + migration tasks** — 新增 `robots/dual_arm_robot.py`、`--robot dual_arm`、`mobility` / `bimanual` 任务族,默认 benchmark 对比 `mobile` 与 `dual_arm`。
-17. **Stage-4 strict ablation runner** — `scripts/run_stage4_mobile_dual_ablation.sh` 一键运行 Mobile/Dual-arm 的 `api/fewshot/card/failure/card_failure` 对照实验。
-18. **Stage-5 seeded validation** — `benchmark/validate_seeded_scenes.py` 在真实 LLM 实验前验证 seeded layouts 的物理可解性和预期能力边界。
-19. **Optional robosuite complex-task backend** — 新增 `robosuite_backend/`、`examples/robosuite_migration_demo.py`、`benchmark/run_robosuite_migration.py`,用于 `TwoArmLift` / `TwoArmHandover` / `TwoArmPegInHole` 的源程序到目标机器人迁移。
+```text
+源机器人程序 / 同一个任务指令
+        ↓
+换到目标机器人
+        ↓
+由于目标机器人能力不同，原代码可能失败
+        ↓
+Capability Card 告诉 LLM 目标机器人能做什么、不能做什么
+Failure Report 告诉 LLM 上一次为什么失败
+        ↓
+LLM 重新生成或修改机器人程序
+```
+
+例如：
+
+- 固定双臂机器人可以直接双臂协作抓两个物体。
+- 移动双臂机器人必须先导航到桌边，再执行双臂任务。
+- robosuite 里的 Dual IIWA 需要显式设置更大的 grip force。
+- 单臂 mobile Tiago 不能执行真正的双臂同步任务，应当拒绝或选择替代策略。
 
 ---
 
-## 项目结构变化
+## 2. 核心概念
 
+### 2.1 LMP Code
+
+LMP Code 是 LLM 生成的 Python 机器人程序。它不是直接输出一句话，而是输出可执行代码，例如：
+
+```python
+red_pos = scene.get_object_position("red block")
+green_pos = scene.get_object_position("green block")
+tray_pos = scene.get_object_position("yellow tray")
+
+lift_ok = robot.lift_two_objects(red_pos, green_pos)
+if lift_ok:
+    ret_val = robot.place_two_objects(
+        tray_pos + np.array([-0.03, -0.03, 0.05]),
+        tray_pos + np.array([0.03, 0.03, 0.05]),
+        pre_release_height=0.005,
+    )
 ```
-robots/
-├── kuka_robot.py
-├── franka_robot.py
-├── mobile_robot.py          ⭐ Husky + KUKA 叠加,带导航 API
-└── dual_arm_robot.py        ⭐ NEW: 2x KUKA 双臂原型,带左右臂 API
 
-benchmark/
-├── run_benchmark.py         ⭐ MODIFIED: strict ablation + task families
-├── experiment_logging.py    ⭐ NEW: trial/prompt/code/failure logging
-├── analyze_results.py       ⭐ NEW: paper tables + failure/code analysis
-├── build_paper_assets.py    ⭐ NEW: SVG figures + results draft
-├── audit_run.py             ⭐ NEW: run completeness/reproducibility audit
-├── llm_cache.py             ⭐ NEW: prompt-response cache
-├── build_casebook.py        ⭐ NEW: qualitative failure/recovery casebook
-└── validate_seeded_scenes.py ⭐ NEW: Stage-5 seeded layout oracle validation
+### 2.2 Capability Card
 
-scripts/
-├── run_stage4_mobile_dual_ablation.sh ⭐ NEW: Mobile/Dual-arm strict ablation
-├── run_stage5_experiments.sh       ⭐ NEW: one-command seeded full experiment
-├── build_stage6_paper_package.sh   ⭐ NEW: one-command paper package builder
-├── run_stage7_reliable_experiments.sh ⭐ NEW: cache+resume+audit+paper pipeline
-└── build_stage8_qualitative_package.sh ⭐ NEW: qualitative analysis package
+Capability Card 是机器人能力卡，描述目标机器人有哪些 API、能力和限制。
 
-paper/
-├── experiment_section_template.md
-├── main_paper_outline.md
-├── qualitative_analysis_template.md
-└── submission_readiness_checklist.md
+它回答的是：
 
-capabilities/
-└── capability_card.py       ⭐ MODIFIED: +mobile-aware 字段和 implications
+```text
+这个机器人有没有移动底盘？
+有没有双臂？
+能不能 bimanual coordination？
+夹爪是什么类型？
+需要低高度释放吗？
+需要多大的 grip force？
+工作空间半径是多少？
+```
 
-prompts/
-└── cap_prompt.py            ⭐ MODIFIED: 给 mobile 注入额外 API hint
+它类似 skill/API 的说明书，但不是 skill 本身。  
+Skill 是 `robot.lift_two_objects()` 这种可执行函数；Capability Card 是告诉 LLM 什么时候该用这些函数。
+
+### 2.3 Failure Report
+
+Failure Report 是失败反馈。代码第一次失败后，系统会把失败原因组织成结构化信息，再让 LLM 重试。
+
+例如：
+
+```text
+robot API returned False
+failed to move above object
+target is outside reachable workspace
+grip force is below required threshold
+mobile robot must navigate before picking
+```
+
+### 2.4 Baseline / B / B+A
+
+项目中常见的对比方式：
+
+| 名称 | 含义 |
+|---|---|
+| baseline | 不给能力卡，不给失败反馈，只让 LLM 直接生成代码 |
+| B | 给失败反馈并允许 retry，但不给 Capability Card |
+| B+A | 给 Failure Report，也给 Capability Card |
+| source-copy | 直接把源机器人程序复制到目标机器人上执行 |
+| oracle | 手写的理想迁移上界，用来确认任务本身可解 |
+| llm | 调用 OpenRouter / LLM 自动生成迁移代码 |
+
+论文里真正要证明的是：**B+A 是否比 baseline / B / source-copy 更稳定。**
+
+---
+
+## 3. 项目结构
+
+```text
+embodied_migration/
+├── main.py                         # PyBullet 交互式 LLM demo
+├── llm_client.py                   # OpenRouter / LLM 客户端
+├── requirements.txt                # PyBullet 基础依赖
+├── requirements-robosuite.txt      # robosuite / MuJoCo 可选依赖
+├── .env.example                    # API key 模板
+│
+├── robots/                         # PyBullet 机器人封装
+│   ├── kuka_robot.py
+│   ├── franka_robot.py
+│   ├── mobile_robot.py
+│   ├── dual_arm_robot.py
+│   ├── dual_franka_robot.py
+│   └── mobile_dual_arm_robot.py
+│
+├── perception/                     # PyBullet 桌面场景与物体位置接口
+├── capabilities/                   # Capability Card 定义
+├── prompts/                        # LLM prompt 构造
+├── lmp/                            # LMP 代码抽取、执行、失败反馈
+│
+├── examples/
+│   ├── smoke_test.py               # 不调用 LLM 的 PyBullet 物理层烟测
+│   └── robosuite_migration_demo.py # robosuite 复杂任务迁移 demo
+│
+├── robosuite_backend/              # robosuite / MuJoCo 后端
+│   ├── profiles.py                 # 目标机器人 profile
+│   ├── tasks.py                    # TwoArmLift / Handover / PegInHole 任务
+│   ├── symbolic.py                 # 高层 skill API
+│   ├── trajectory_robot.py         # robosuite 控制器轨迹桥接
+│   └── migration.py                # source-copy / oracle / llm 迁移逻辑
+│
+├── benchmark/                      # 批量实验、统计、日志、表格
+├── scripts/                        # 一键实验脚本
+├── docs/                           # 中文说明文档、演示手册、PPT
+└── paper/                          # 论文结构和实验小节模板
 ```
 
 ---
 
-## 快速运行
+## 4. 环境安装
+
+### 4.1 创建 conda 环境
+
+推荐 Python 3.10。
 
 ```bash
-# 1. 进入环境
-cd ~/Downloads/embodied_migration && conda activate em
+conda create -n em python=3.10 -y
+conda activate em
+```
 
-# 2. 烟测(确保 mobile / dual_arm 机器人能加载)
-python -m examples.smoke_test --robot mobile
-python -m examples.smoke_test --robot dual_arm
+预期输出：
 
-# 3. 阶段 3: Mobile + Dual-arm 迁移任务
-python -m benchmark.run_benchmark \
-    --robots mobile dual_arm \
-    --modes api fewshot card failure card_failure \
-    --tasks migration \
-    --trials 1 \
-    --run-id stage3_mobile_dual
+```text
+(em) your-user@your-machine ...
+```
 
-# 4. 生成论文表格
-python -m benchmark.analyze_results results/runs/stage3_mobile_dual
+### 4.2 进入项目目录
 
-# 5. 阶段 4: strict baseline / ablation 一键运行
-bash scripts/run_stage4_mobile_dual_ablation.sh stage4_mobile_dual_ablation
+```bash
+cd /Users/xifan/Downloads/embodied_migration
+```
 
-# 6. 阶段 5: seeded full experiment
-bash scripts/run_stage5_experiments.sh stage5_mobile_dual_seeded
+Ubuntu 上按你的实际路径进入，例如：
 
-# 7. 阶段 6: 生成论文图表包
-bash scripts/build_stage6_paper_package.sh stage5_mobile_dual_seeded
+```bash
+cd ~/embodied_migration
+```
 
-# 8. 推荐正式主实验: 可恢复、带缓存、带审计
-bash scripts/run_stage7_reliable_experiments.sh stage7_mobile_dual_seeded
+### 4.3 安装 PyBullet 基础依赖
 
-# 9. 阶段 8: 生成质性案例分析包
-bash scripts/build_stage8_qualitative_package.sh stage7_mobile_dual_seeded
+```bash
+pip install -r requirements.txt
+```
 
-# 10. 可选: robosuite 复杂双臂任务迁移 demo
+预期输出：
+
+```text
+Successfully installed ...
+```
+
+### 4.4 安装 robosuite / MuJoCo 可选依赖
+
+如果只跑 PyBullet，可以先跳过这一步。  
+如果要跑复杂双臂任务，执行：
+
+```bash
+pip install -r requirements-robosuite.txt
+```
+
+预期输出：
+
+```text
+Successfully installed mujoco ...
+Successfully installed robosuite ...
+```
+
+检查 robosuite 是否可用：
+
+```bash
+python -c "from robosuite_backend.env_adapter import availability_message; print(availability_message())"
+```
+
+预期输出结尾：
+
+```text
+robosuite backend is available
+```
+
+如果看到下面这些 warning，一般不影响当前 demo：
+
+```text
+[robosuite WARNING] No private macro file found
+[robosuite WARNING] Could not import robosuite_models
+[robosuite WARNING] Could not load the mink-based whole-body IK
+```
+
+---
+
+## 5. 配置 LLM API Key
+
+如果只跑 smoke test / oracle，不需要 API key。  
+如果要跑 `--planner llm` 或 `main.py` 交互式 LLM demo，需要配置 OpenRouter key。
+
+复制模板：
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`：
+
+```text
+OPENROUTER_API_KEY=你的_OpenRouter_Key
+EM_MODEL=anthropic/claude-sonnet-4.5
+```
+
+检查 key 是否读到：
+
+```bash
+python -c "import os; from dotenv import load_dotenv; load_dotenv('.env'); print('OPENROUTER_API_KEY =', 'SET' if os.getenv('OPENROUTER_API_KEY') else 'MISSING')"
+```
+
+预期输出：
+
+```text
+OPENROUTER_API_KEY = SET
+```
+
+---
+
+## 6. 快速运行：PyBullet 稳定演示
+
+这一部分不调用 LLM，用手写 LMP Code 验证机器人和物理层是否正常。
+
+### 6.1 固定双臂机器人
+
+```bash
+python -m examples.smoke_test --robot dual_arm --gui
+```
+
+预期现象：
+
+- 弹出 PyBullet GUI。
+- 看到两个 KUKA 机械臂。
+- 两个机械臂同时抓起 red block 和 green block。
+- 两个方块被放入 yellow tray。
+
+预期终端输出包含：
+
+```text
+✅ Scene ready. Embodiment: Dual-arm Fixed Manipulator (2x KUKA)
+[DualArm:both] Coordinated lift complete
+[DualArm:both] Coordinated place complete
+ret_val = 'success'
+physical_success = True
+```
+
+### 6.2 移动双臂机器人
+
+```bash
+python -m examples.smoke_test --robot mobile_dual_arm --gui
+```
+
+预期现象：
+
+- 弹出 PyBullet GUI。
+- 看到 Husky 移动底盘 + 双 KUKA 机械臂。
+- 移动机器人先导航到桌边。
+- 再同时抓起两个方块并放入托盘。
+
+预期终端输出包含：
+
+```text
+✅ Scene ready. Embodiment: Mobile Dual-arm Manipulator
+[MobileDualArm] 🚐 Navigated base
+[DualArm:both] Coordinated lift complete
+[DualArm:both] Coordinated place complete
+ret_val = 'success'
+physical_success = True
+```
+
+### 6.3 双 Franka 机器人
+
+```bash
+python -m examples.smoke_test --robot dual_franka --gui
+```
+
+预期输出包含：
+
+```text
+✅ Scene ready. Embodiment: Dual-arm Fixed Manipulator (2x Franka)
+ret_val = 'success'
+physical_success = True
+```
+
+---
+
+## 7. 运行 PyBullet LLM 交互模式
+
+交互模式会真正调用 LLM，让 LLM 根据自然语言生成 LMP Code。
+
+```bash
+python main.py --robot mobile_dual_arm --mode ba
+```
+
+预期输出：
+
+```text
+🌍 Launching PyBullet (robot=mobile_dual_arm)...
+✅ Scene ready. Embodiment: Mobile Dual-arm Manipulator ...
+⚙️  Config: capability_card=True, retry=True
+💬 Enter a natural-language instruction. Type 'exit' to quit.
+👉 >
+```
+
+可以输入：
+
+```text
+pick up the red block and green block at the same time, then place both into the yellow tray
+```
+
+如果 LLM 生成正确代码，预期输出包含：
+
+```text
+🧠 [Attempt 1/3] Asking LLM to generate code
+🧠 LMP Code to execute:
+...
+[MobileDualArm] 🚐 Navigated base
+[DualArm:both] Coordinated lift complete
+[DualArm:both] Coordinated place complete
+✅ Instruction code executed on attempt 1.
+```
+
+如果第一次失败，系统会自动生成 Failure Report 并重试：
+
+```text
+⚠️  Attempt 1 failed, will retry with structured feedback.
+🧠 [Attempt 2/3] Retrying with failure report...
+```
+
+---
+
+## 8. 运行 robosuite / MuJoCo 复杂任务
+
+robosuite 部分用于展示更复杂的代码迁移任务。当前主要任务包括：
+
+| 任务 | 含义 |
+|---|---|
+| `two_arm_lift` | 双臂抓住锅的两个把手并抬起 |
+| `two_arm_handover` | 一只手抓 hammer，交给另一只手，再放到目标区域 |
+| `two_arm_peg_in_hole` | 一只手扶板，另一只手插 peg |
+
+目标机器人包括：
+
+| 机器人 | 含义 |
+|---|---|
+| `rs_dual_panda` | 源机器人，双 Panda |
+| `rs_dual_iiwa` | 目标机器人，双 KUKA IIWA |
+| `rs_baxter` | 目标机器人，Baxter 双臂 |
+| `rs_mobile_tiago` | 目标机器人，移动单臂 Tiago |
+
+### 8.1 不打开 GUI 的 oracle 迁移
+
+```bash
 python -m examples.robosuite_migration_demo \
-    --task two_arm_lift \
-    --target rs_dual_iiwa \
-    --planner oracle
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner oracle \
+  --real-control \
+  --quiet
 ```
 
-阶段 5 的显式命令等价于:
+预期输出包含：
+
+```text
+Complex Robosuite Program Migration Demo
+Task: two_arm_lift
+Source robot: rs_dual_panda
+Target robot: rs_dual_iiwa
+Planner: oracle
+[robosuite] set grip force to 0.85
+[robosuite] real controller: approaching pot handles
+[robosuite] real controller: lifting both arms
+success=True reason=success_on_attempt_1
+real_physical_success=True
+```
+
+### 8.2 对比 source-copy 失败
 
 ```bash
-python -m benchmark.run_benchmark \
-    --robots mobile dual_arm \
-    --modes api fewshot card failure card_failure \
-    --tasks migration \
-    --trials 5 \
-    --scene-variant seeded \
-    --seed-base 0 \
-    --run-id stage5_mobile_dual_seeded
-
-python -m benchmark.analyze_results results/runs/stage5_mobile_dual_seeded
-
-python -m benchmark.build_paper_assets results/runs/stage5_mobile_dual_seeded
+python -m examples.robosuite_migration_demo \
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner source-copy \
+  --real-control \
+  --quiet
 ```
 
-阶段 7 推荐命令:
+预期结果通常是失败，因为源程序没有针对 Dual IIWA 设置足够 grip force：
+
+```text
+❌ grasp_pot_handle: grip_force=0.50 is below required 0.75
+success=False reason=action-fail
+real_physical_success=False
+```
+
+这就是代码迁移的核心展示：
+
+```text
+同一个源程序直接复制到目标机器人会失败；
+加入目标机器人能力约束后，需要生成不同代码，例如 set_grip_force(0.85)。
+```
+
+### 8.3 打开 GUI 观看 robosuite 任务
+
+macOS 上建议使用 `mjpython` 打开 MuJoCo GUI：
 
 ```bash
-bash scripts/run_stage7_reliable_experiments.sh stage7_mobile_dual_seeded
+mjpython -m examples.robosuite_migration_demo \
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner oracle \
+  --show-env \
+  --gui \
+  --real-control \
+  --hold-seconds 120
 ```
 
-等价核心命令:
+Ubuntu 上通常可以直接：
 
 ```bash
-python -m benchmark.run_benchmark \
-    --robots mobile dual_arm \
-    --modes api fewshot card failure card_failure \
-    --tasks migration \
-    --trials 5 \
-    --scene-variant seeded \
-    --seed-base 0 \
-    --model "${EM_MODEL:-anthropic/claude-sonnet-4.5}" \
-    --temperature 0.0 \
-    --cache-dir results/llm_cache \
-    --resume \
-    --run-id stage7_mobile_dual_seeded
-
-python -m benchmark.analyze_results results/runs/stage7_mobile_dual_seeded
-python -m benchmark.audit_run results/runs/stage7_mobile_dual_seeded --fail-on-missing
-python -m benchmark.build_paper_assets results/runs/stage7_mobile_dual_seeded
-python -m benchmark.build_casebook results/runs/stage7_mobile_dual_seeded
+python -m examples.robosuite_migration_demo \
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner oracle \
+  --show-env \
+  --gui \
+  --real-control \
+  --hold-seconds 120
 ```
 
-如果只想验证缓存中已有结果,不允许 live API 调用:
+预期现象：
+
+- 弹出 MuJoCo / robosuite viewer。
+- 双臂靠近锅的两个把手。
+- 系统执行高层 skill 对应的低层控制轨迹。
+- 终端输出 `success=True`。
+
+说明：当前 robosuite real-control 是一个研究原型。它已经把 high-level skill 接到了 robosuite 控制器轨迹上，但稳定抓取仍使用 assisted grasp constraint，类似 PyBullet 中的 attach constraint。它适合演示程序迁移思想，但还不是完整的接触丰富控制策略。
+
+### 8.4 调用 LLM 做 robosuite 迁移
+
+需要 `.env` 中配置 `OPENROUTER_API_KEY`。
 
 ```bash
-OFFLINE_CACHE_ONLY=1 bash scripts/run_stage7_reliable_experiments.sh stage7_mobile_dual_seeded
+python -m examples.robosuite_migration_demo \
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner llm \
+  --attempts 3
 ```
 
-阶段 5/6 输出:
+预期输出：
 
+```text
+Planner: llm
+Attempt 1:
+  exec_ok=...
+  checker_success=...
+  code:
+    ...
 ```
-results/runs/stage5_mobile_dual_seeded/tables/
-├── method_summary.csv/.tex
-├── robot_method_summary.csv/.tex
-├── task_family_method_summary.csv/.tex
-├── migration_score.csv/.tex
-├── paired_method_deltas.csv/.tex
-├── failure_breakdown.csv/.tex
-├── failure_cases.csv
-├── generated_code_features.csv
-├── code_changes_after_feedback.csv
-├── code_change_summary.csv
-└── analysis_report.md
 
-results/runs/stage5_mobile_dual_seeded/paper_assets/
-├── experiment_manifest.json
-├── paper_results_section.md
-├── figure_index.md
-├── fig_method_success.svg
-├── fig_robot_method_success.svg
-├── fig_task_family_success.svg
-├── fig_migration_score.svg
-└── table_includes.tex
+如果第一次失败，会看到重试过程：
 
-results/runs/stage7_mobile_dual_seeded/audit/
-├── audit_summary.json
-└── audit_report.md
-
-results/runs/stage7_mobile_dual_seeded/casebook/
-├── qualitative_cases.csv
-├── qualitative_casebook.md
-└── qualitative_casebook.tex
+```text
+Retrying with failure report
 ```
 
 ---
 
-## 关键观察点
+## 9. 运行 benchmark
 
-跑完数据后,关注以下几件事:
+### 9.1 PyBullet benchmark
 
-1. **Mobile 在 baseline 模式下大量失败** —— 因为它不知道有 navigate_to。这是方法 A 价值的最强证明。
-2. **Dual-arm 在 bimanual 任务中应明显优于 mobile** —— 因为它可以最终同时保持两个物体悬空。
-3. **Capability Card 是否诱导正确 API** —— `card` / `card_failure` 应更容易输出 `navigate_to` 或 `pick_with_arm` 等 embodiment-aware 代码。
-4. **Failure Report 是否真的改变代码** —— 看 `code_changes_after_feedback.csv` 和 `code_change_summary.csv`,尤其是是否新增 `navigate_to`,双臂 API,低释放高度或返回值检查。
-5. **+B+A 应该把所有任务推回到 70%+** —— 如果没推上去,说明 capability card 或 failure report 还需要打磨。
-6. **多 seed 是否稳定** —— 看 `seed_method_summary.csv`,确认结论不是某个初始布局偶然造成的。
-7. **迁移分数是否提升** —— 看 `migration_score.csv`,这是论文里比单机器人 success rate 更有说服力的指标。
+```bash
+python -m benchmark.run_benchmark \
+  --robots mobile dual_arm \
+  --modes api fewshot card failure card_failure \
+  --tasks migration \
+  --trials 1 \
+  --run-id demo_run
+```
+
+预期输出：
+
+```text
+Running trial ...
+Wrote results/runs/demo_run/summary.csv
+```
+
+生成统计表：
+
+```bash
+python -m benchmark.analyze_results results/runs/demo_run
+```
+
+预期生成：
+
+```text
+results/runs/demo_run/tables/method_summary.csv
+results/runs/demo_run/tables/failure_breakdown.csv
+results/runs/demo_run/tables/generated_code_features.csv
+```
+
+### 9.2 robosuite benchmark
+
+```bash
+python -m benchmark.run_robosuite_migration \
+  --tasks two_arm_lift two_arm_handover two_arm_peg_in_hole \
+  --targets rs_dual_iiwa rs_baxter rs_mobile_tiago \
+  --planners source-copy oracle \
+  --run-id robosuite_demo
+```
+
+预期输出：
+
+```text
+[source-copy] two_arm_lift: rs_dual_panda -> rs_dual_iiwa
+  -> success=False reason=...
+[oracle] two_arm_lift: rs_dual_panda -> rs_dual_iiwa
+  -> success=True reason=success_on_attempt_1
+Wrote results/robosuite_runs/robosuite_demo/summary.csv
+```
 
 ---
 
-## 下一批做什么
+## 10. 推荐演示流程
 
-- 正式跑 `stage7_mobile_dual_seeded`,检查 `analysis_report.md`、`audit/audit_report.md` 和 `paper_assets/paper_results_section.md`。
-- 运行阶段 8,从 `casebook/qualitative_casebook.md` 选 3-5 个代表性案例写进论文。
-- 根据失败案例修 prompt/card/report,然后冻结实验设置。
-- 把 `paper/experiment_section_template.md` 和 `paper/main_paper_outline.md` 整合进论文草稿。
-- 若时间允许,继续扩充到 4-6 个 say-no/refusal scenarios。
+如果要给老师展示目前进度，建议按这个顺序：
+
+### 第一步：说明项目目标
+
+```text
+这个项目研究 LLM 生成的机器人代码如何在不同 embodiment 之间迁移。
+我们不是只看一个机器人能否完成任务，而是看源程序换到目标机器人后哪里失败，
+以及 Capability Card + Failure Report 能不能帮助 LLM 修改代码。
+```
+
+### 第二步：跑 PyBullet 双臂成功案例
+
+```bash
+python -m examples.smoke_test --robot dual_arm --gui
+```
+
+展示点：
+
+```text
+固定双臂机器人可以同时抓两个方块并放入托盘。
+```
+
+### 第三步：跑移动双臂成功案例
+
+```bash
+python -m examples.smoke_test --robot mobile_dual_arm --gui
+```
+
+展示点：
+
+```text
+同样任务换成移动双臂机器人后，代码必须多一步 navigate_to。
+这就是 embodiment difference 导致的代码迁移差异。
+```
+
+### 第四步：跑 robosuite source-copy 失败
+
+```bash
+python -m examples.robosuite_migration_demo \
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner source-copy \
+  --real-control \
+  --quiet
+```
+
+展示点：
+
+```text
+源机器人程序直接复制到 Dual IIWA 上失败，因为目标机器人需要更高 grip force。
+```
+
+### 第五步：跑 robosuite oracle 成功
+
+```bash
+python -m examples.robosuite_migration_demo \
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner oracle \
+  --real-control \
+  --quiet
+```
+
+展示点：
+
+```text
+迁移后的代码加入 set_grip_force(0.85)，任务成功。
+```
+
+### 第六步：解释 LLM 版本
+
+```bash
+python -m examples.robosuite_migration_demo \
+  --task two_arm_lift \
+  --target rs_dual_iiwa \
+  --planner llm \
+  --attempts 3
+```
+
+展示点：
+
+```text
+LLM 会根据 Capability Card 和 Failure Report 生成或修改 LMP Code。
+```
+
+---
+
+## 11. 当前暂时成果
+
+目前已经完成：
+
+1. PyBullet 中实现了 6 类机器人：
+   - `kuka`
+   - `franka`
+   - `mobile`
+   - `dual_arm`
+   - `mobile_dual_arm`
+   - `dual_franka`
+2. 实现了移动机器人导航 API：
+   - `navigate_to`
+   - `is_reachable`
+   - `get_base_position`
+3. 实现了双臂协作 API：
+   - `choose_arm_for`
+   - `pick_with_arm`
+   - `place_with_arm`
+   - `lift_two_objects`
+   - `place_two_objects`
+4. 实现了 Capability Card 注入 prompt。
+5. 实现了 Failure Report retry。
+6. 实现了 LMP Code 执行器和失败检测。
+7. 实现了 PyBullet benchmark、日志记录、代码特征分析和统计表格。
+8. 新增 robosuite/MuJoCo 后端：
+   - `two_arm_lift`
+   - `two_arm_handover`
+   - `two_arm_peg_in_hole`
+9. 新增 robosuite 目标机器人 profile：
+   - `rs_dual_panda`
+   - `rs_dual_iiwa`
+   - `rs_baxter`
+   - `rs_mobile_tiago`
+10. 已经支持 `source-copy / oracle / llm` 三种迁移 planner。
+11. 已经生成中文项目说明、老师演示文档和简要 PPT。
+
+---
+
+## 12. 当前进度判断
+
+当前项目适合定位为：
+
+```text
+研究原型 / 课程论文 / 毕设初步系统 / workshop demo
+```
+
+如果目标是 ICRA / IROS / CoRL 主会，还需要继续加强：
+
+1. 更严格的实验矩阵：
+   - 更多任务
+   - 更多 seed
+   - 更多机器人目标
+   - 更多 LLM 模型
+2. 更强 baseline：
+   - source-copy
+   - prompt-only
+   - few-shot
+   - capability-card only
+   - failure-report only
+   - card + failure-report
+3. 更可靠的真实控制：
+   - 减少 assisted grasp
+   - 增强 robosuite 接触控制
+   - 或接入 robomimic / demonstration policy
+4. 更完整的失败分类：
+   - reachability failure
+   - API mismatch
+   - synchronization failure
+   - force/grip mismatch
+   - invalid code
+   - unsafe/refusal failure
+5. 更完整的统计分析：
+   - success rate
+   - attempts to success
+   - code edit distance
+   - API-call difference
+   - failure distribution
+
+---
+
+## 13. 常见问题
+
+### 13.1 没有 API key 能跑吗？
+
+可以。以下命令不需要 API key：
+
+```bash
+python -m examples.smoke_test --robot dual_arm --gui
+python -m examples.robosuite_migration_demo --planner oracle
+python -m examples.robosuite_migration_demo --planner source-copy
+```
+
+只有 `--planner llm` 和 `main.py` 交互式 LLM 模式需要 API key。
+
+### 13.2 robosuite warning 是错误吗？
+
+通常不是。只要最后出现：
+
+```text
+robosuite backend is available
+```
+
+就说明当前 demo 可以继续跑。
+
+### 13.3 macOS GUI 闪退怎么办？
+
+robosuite/MuJoCo GUI 在 macOS 上建议用：
+
+```bash
+mjpython -m examples.robosuite_migration_demo ...
+```
+
+Ubuntu 原生系统一般可以直接用：
+
+```bash
+python -m examples.robosuite_migration_demo ...
+```
+
+### 13.4 代码迁移到底体现在哪里？
+
+不要只看“机器人有没有动”。重点看生成代码是否因为目标机器人不同而改变：
+
+```text
+mobile_dual_arm 需要 navigate_to
+dual_iiwa 需要 set_grip_force
+baxter handover 需要 clearance pose
+mobile_tiago 不能做真实双臂同步任务
+```
+
+代码迁移的证据应该来自：
+
+```text
+同一个任务 / 源程序
+不同目标机器人
+不同生成代码
+不同 API 调用
+不同失败类型
+不同成功率
+```
+
+---
+
+## 14. 下一步建议
+
+短期继续做：
+
+1. 固定 robosuite 作为正式实验平台。
+2. 把 `two_arm_lift` 做成最稳定的主 demo。
+3. 扩展 `two_arm_handover` 和 `two_arm_peg_in_hole` 的真实控制轨迹。
+4. 跑完整 benchmark，生成统计表和失败案例。
+5. 把论文主线收紧为：
+
+```text
+Capability Card 解决目标机器人能力差异；
+Failure Report 解决第一次生成代码后的执行失败；
+二者结合提升 LLM 机器人程序跨具身迁移成功率。
+```
+
