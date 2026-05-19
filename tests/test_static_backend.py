@@ -4,13 +4,13 @@ import numpy as np
 
 from lmp.executor import execute_lmp
 from maniskill_backend.env_adapter import can_import_maniskill
-from maniskill_backend.evaluation import classify_failure
+from maniskill_backend.evaluation import TrialRecord, classify_failure
 from maniskill_backend.migration import MigrationRequest, build_migration_prompt
 from maniskill_backend.profiles import get_robot_profile
 from maniskill_backend.sim_check import run_check, summarize_value
 from maniskill_backend.skill_adapter import ManiSkillPickCubeRobot, ManiSkillSceneAdapter
 from maniskill_backend.static_benchmark import run_static_benchmark, summarize_records
-from maniskill_backend.static_runner import run_static_trial
+from maniskill_backend.static_runner import build_static_report, run_static_trial
 from maniskill_backend.tasks import get_task_spec
 from maniskill_backend.view import records_to_md
 
@@ -326,6 +326,45 @@ class StaticBackendTest(unittest.TestCase):
         self.assertNotIn("speed=0.008", record.failure_report)
         self.assertEqual(record.info["report_source_method"], "source-copy")
         self.assertFalse(record.info["report_source_log"][-1]["ok"])
+
+    def test_pick_cube_report_mentions_real_grasp_failure(self):
+        task = get_task_spec("PickCube-v1")
+        profile = get_robot_profile("xarm6_robotiq")
+        failed = TrialRecord(
+            task_id=task.task_id,
+            source_robot=task.source_robot,
+            target_robot=profile.name,
+            method="source-copy",
+            seed=0,
+            generated_code=task.source_program,
+            success=False,
+            failure_type="gripper/force failure",
+            message="cube was not grasped",
+            prompt="",
+            info={
+                "execution_log": [
+                    {
+                        "step": 1,
+                        "api": "grasp",
+                        "args": {"obj": "cube"},
+                        "result": False,
+                        "ok": False,
+                        "message": "cube was not grasped",
+                        "failure_type": "execution failure",
+                    }
+                ]
+            },
+        )
+        report = build_static_report(
+            task=task,
+            target_profile=profile,
+            failed_record=failed,
+        ).to_prompt_section()
+        self.assertIn("grasp_cube", report)
+        self.assertIn("cube was not grasped", report)
+        self.assertIn("real high-level skill wrapper", report)
+        self.assertIn("control mode", report)
+        self.assertNotIn("insert(...", report)
 
     def test_plug_multi_source_copy_and_oracle(self):
         source_copy = run_static_trial(

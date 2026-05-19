@@ -44,6 +44,11 @@ python -m maniskill_backend.real_runner \
 On the current WSL setup this may still fail at Vulkan/SAPIEN environment
 creation. On native Ubuntu with working Vulkan, this is the first command to try.
 
+For report-based real trials, `real_runner` first runs a real `source-copy`
+attempt with the same task, robot, seed, and simulator settings. If that prior
+attempt fails, its execution log is converted into the Failure Report that is
+shown to the LLM and written into the result.
+
 ## Run One Trial
 
 ```bash

@@ -46,6 +46,7 @@ def _result_to_record(result: Dict[str, Any], *, source_robot: str, seed: int) -
         message=str(result.get("message", "")),
         prompt=result.get("prompt", ""),
         info=info,
+        failure_report=result.get("failure_report", ""),
     )
 
 

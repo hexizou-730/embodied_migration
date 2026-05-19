@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 from lmp.executor import execute_lmp
 
 from .env_adapter import ManiSkillEnvAdapter
-from .evaluation import classify_failure
+from .evaluation import TrialRecord, classify_failure
 from .llm import gen_code
 from .migration import MigrationRequest, build_migration_prompt, get_source_copy_code, norm_method
 from .sim_check import diagnose_graphics_stack
@@ -23,7 +23,7 @@ from .skill_adapter import (
     ManiSkillPickCubeRobot,
     ManiSkillSceneAdapter,
 )
-from .static_runner import _success_from_ret_val, build_oracle_code
+from .static_runner import _success_from_ret_val, build_oracle_code, build_static_report
 from .tasks import get_task_spec
 
 
@@ -81,6 +81,34 @@ def run_real_trial(
         target_robot=robot_uid,
         method=method,
     )
+    report_source_result = None
+    report = None
+    if method in {"llm_report_only", "llm_card_report"}:
+        report_source_result = run_real_trial(
+            task_id=task_id,
+            robot_uid=robot_uid,
+            method="source-copy",
+            seed=seed,
+            control_mode=control_mode,
+            obs_mode=obs_mode,
+            sim_backend=sim_backend,
+            render_backend=render_backend,
+            max_episode_steps=max_episode_steps,
+            dry_run=True,
+        )
+        if not bool(report_source_result.get("success", False)):
+            report = build_static_report(
+                task=request.task,
+                target_profile=request.target_profile,
+                failed_record=_result_to_report_record(report_source_result, source_robot=task.source_robot),
+            )
+            request = MigrationRequest(
+                task=request.task,
+                source_profile=request.source_profile,
+                target_profile=request.target_profile,
+                method=method,
+                failure_report=report,
+            )
     prompt = build_migration_prompt(request)
     if method == "source-copy":
         code = get_source_copy_code(task_id)
@@ -139,6 +167,7 @@ def run_real_trial(
             reset_info_keys=sorted(str(k) for k in getattr(reset_info, "keys", lambda: [])()),
             execution_log=robot.execution_log(),
             final_info=_jsonable(robot.last_info),
+            **_report_info(report_source_result, report),
             **llm_info,
         )
     except Exception as exc:  # pragma: no cover - depends on local Vulkan/GPU stack
@@ -149,6 +178,7 @@ def run_real_trial(
             generated_code=code,
             prompt=prompt,
             graphics_diagnosis=diagnose_graphics_stack(),
+            **_report_info(report_source_result, report),
             **llm_info,
         )
     finally:
@@ -161,6 +191,40 @@ def _failure_message(robot: Any, fallback: str) -> str:
         if not event.get("ok"):
             return str(event.get("message") or fallback)
     return fallback
+
+
+def _result_to_report_record(result: Dict[str, Any], *, source_robot: str) -> TrialRecord:
+    return TrialRecord(
+        task_id=str(result.get("task_id", "")),
+        source_robot=source_robot,
+        target_robot=str(result.get("robot_uid", "")),
+        method=str(result.get("method", "source-copy")),
+        seed=int(result.get("seed", 0)),
+        generated_code=str(result.get("generated_code", "")),
+        success=bool(result.get("success", False)),
+        failure_type=str(result.get("failure_type", "unknown failure")),
+        message=str(result.get("message", "")),
+        prompt=str(result.get("prompt", "")),
+        info={
+            "execution_log": result.get("execution_log", []),
+            "final_info": result.get("final_info", {}),
+            "real_runner": True,
+        },
+    )
+
+
+def _report_info(report_source_result: Optional[Dict[str, Any]], report: Any) -> Dict[str, Any]:
+    info: Dict[str, Any] = {}
+    if report_source_result is not None:
+        info.update(
+            report_source_method=report_source_result.get("method"),
+            report_source_failure_type=report_source_result.get("failure_type"),
+            report_source_message=report_source_result.get("message"),
+            report_source_log=report_source_result.get("execution_log", []),
+        )
+    if report is not None:
+        info["failure_report"] = report.to_prompt_section()
+    return info
 
 
 def _jsonable(value: Any) -> Any:

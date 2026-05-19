@@ -439,6 +439,39 @@ def build_static_report(
         )
     )
     failed_step = _format_failed_step(failed_event)
+    if "PickCube" in task.task_id:
+        failed_api = str((failed_event or {}).get("api", "unknown skill"))
+        return FailureReport(
+            task_name=task.task_id,
+            instruction=task.instruction,
+            robot_name=target_profile.name,
+            expected={
+                "execution_result": "success",
+                "grasp_cube": "robot.grasp(cube) returns True",
+                "place_cube": "robot.place(cube, goal) returns True after grasp succeeds",
+            },
+            actual={
+                "execution_result": "failure",
+                "failure_type": failed_record.failure_type,
+                "message": message,
+                "failed_skill_call": failed_step,
+            },
+            diagnosis=[
+                f"Execution log failed at {failed_step}.",
+                message,
+                (
+                    "The failure happened inside a real high-level skill wrapper, "
+                    f"not in object lookup or distance math. The failing API was {failed_api}."
+                ),
+            ],
+            suggestions=[
+                "Keep the grasp guard: only call place after robot.grasp(cube) returns True.",
+                "If grasp fails, set ret_val to a clear failure string instead of pretending the task succeeded.",
+                "Do not invent object pose APIs or direct distance calculations; use only the allowed high-level skill API.",
+                "For persistent grasp failures, tune the target robot skill wrapper or control mode rather than only rewriting LMP code.",
+            ],
+        )
+
     if "PullCubeTool" in task.task_id:
         return FailureReport(
             task_name=task.task_id,
