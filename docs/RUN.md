@@ -50,6 +50,14 @@ route. Passing `--control-mode pd_ee_delta_pos` keeps the lower-level delta-EE
 control path, which is useful as a failure/control-portability baseline but may
 not place the cube successfully.
 
+The xarm6 planner imports `mplib`/`toppra`, whose current binary wheels require
+NumPy 1.x. If the planner fails with `numpy.core.multiarray failed to import`,
+run:
+
+```bash
+pip install "numpy>=1.24,<2" --force-reinstall
+```
+
 For report-based real trials, `real_runner` first runs a real `source-copy`
 attempt with the same task, robot, seed, and simulator settings. If that prior
 attempt fails, its execution log is converted into the Failure Report that is
