@@ -67,6 +67,25 @@ class StaticBackendTest(unittest.TestCase):
         self.assertFalse(robot.insert(cube, goal, speed=0.1))
         self.assertEqual(robot.execution_log()[-1]["api"], "insert")
 
+    def test_pick_cube_adapter_allows_robot_specific_gripper_signs(self):
+        class Space:
+            shape = (4,)
+            dtype = np.float32
+            low = -np.ones(4, dtype=np.float32)
+            high = np.ones(4, dtype=np.float32)
+
+        class Env:
+            action_space = Space()
+
+            def step(self, action):
+                return None, 0.0, False, False, {}
+
+        robot = ManiSkillPickCubeRobot(Env(), gripper_open=-1.0, gripper_close=1.0)
+        open_action = robot._make_action(np.zeros(3), gripper=robot.gripper_open)
+        close_action = robot._make_action(np.zeros(3), gripper=robot.gripper_close)
+        self.assertEqual(open_action[-1], -1.0)
+        self.assertEqual(close_action[-1], 1.0)
+
     def test_pick_cube_adapter_rejects_bad_control_mode(self):
         class Space:
             shape = (4,)

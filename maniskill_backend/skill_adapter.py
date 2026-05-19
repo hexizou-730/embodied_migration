@@ -35,7 +35,8 @@ class ManiSkillPickCubeRobot:
     - the environment is PickCube-v1 or one of its robot-specific variants;
     - the control mode accepts an end-effector delta-position style Box action;
     - the first three action dimensions control xyz delta and the last dimension
-      controls the gripper, with +1 as open and -1 as close.
+      controls the gripper. Different robot controllers use different gripper
+      signs, so open/close commands are configurable.
     """
 
     def __init__(
@@ -49,6 +50,8 @@ class ManiSkillPickCubeRobot:
         pregrasp_clearance_m: float = 0.02,
         release_clearance_m: float = 0.035,
         above_clearance_m: float = 0.10,
+        gripper_open: float = 1.0,
+        gripper_close: float = -1.0,
         control_mode: Optional[str] = None,
     ) -> None:
         self.env = env
@@ -59,6 +62,8 @@ class ManiSkillPickCubeRobot:
         self.pregrasp_clearance_m = pregrasp_clearance_m
         self.release_clearance_m = release_clearance_m
         self.above_clearance_m = above_clearance_m
+        self.gripper_open = gripper_open
+        self.gripper_close = gripper_close
         self.control_mode = control_mode
         self.last_info: Dict[str, Any] = {}
         self.terminated: bool = False
@@ -89,9 +94,9 @@ class ManiSkillPickCubeRobot:
         cube_pos = self._actor_pos("cube")
         above = cube_pos + np.array([0.0, 0.0, self.above_clearance_m])
         pregrasp = cube_pos + np.array([0.0, 0.0, self.pregrasp_clearance_m])
-        self._move_towards(above, gripper=1.0, steps=self.move_steps)
-        self._move_towards(pregrasp, gripper=1.0, steps=self.move_steps)
-        self._repeat_action(np.zeros(3), gripper=-1.0, steps=self.grip_steps)
+        self._move_towards(above, gripper=self.gripper_open, steps=self.move_steps)
+        self._move_towards(pregrasp, gripper=self.gripper_open, steps=self.move_steps)
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.grip_steps)
 
         grasped_after_close = self._info_bool("is_grasped") or self._agent_is_grasping("cube")
         self._log(
@@ -102,7 +107,7 @@ class ManiSkillPickCubeRobot:
             "" if grasped_after_close else "gripper closed but cube not held",
         )
 
-        self._move_towards(above, gripper=-1.0, steps=self.move_steps)
+        self._move_towards(above, gripper=self.gripper_close, steps=self.move_steps)
         grasped_after_lift = self._info_bool("is_grasped") or self._agent_is_grasping("cube")
 
         if grasped_after_lift:
@@ -122,18 +127,22 @@ class ManiSkillPickCubeRobot:
         goal_pos = self._region_pos(target.name)
         above = goal_pos + np.array([0.0, 0.0, self.above_clearance_m])
         release = goal_pos + np.array([0.0, 0.0, self.release_clearance_m])
-        self._move_towards(above, gripper=-1.0, steps=self.move_steps)
-        self._move_towards(release, gripper=-1.0, steps=self.move_steps)
-        self._repeat_action(np.zeros(3), gripper=1.0, steps=self.grip_steps)
-        self._move_towards(above, gripper=1.0, steps=self.move_steps)
-        self._repeat_action(np.zeros(3), gripper=1.0, steps=self.settle_steps)
+        self._move_towards(above, gripper=self.gripper_close, steps=self.move_steps)
+        self._move_towards(release, gripper=self.gripper_close, steps=self.move_steps)
+        self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=self.grip_steps)
+        self._move_towards(above, gripper=self.gripper_open, steps=self.move_steps)
+        self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=self.settle_steps)
 
         ok = self._info_bool("success") or self._info_bool("is_obj_placed")
         return self._log("place", {"obj": obj.name, "target": target.name}, ok, ok, "" if ok else "cube was not placed at goal")
 
     def align_to_target(self, obj: SkillTarget, target: SkillTarget, tolerance: float) -> bool:
         target_pos = self._region_pos(target.name) if target.kind == "region" else self._actor_pos(target.name)
-        self._move_towards(target_pos + np.array([0.0, 0.0, 0.08]), gripper=-1.0, steps=self.move_steps)
+        self._move_towards(
+            target_pos + np.array([0.0, 0.0, 0.08]),
+            gripper=self.gripper_close,
+            steps=self.move_steps,
+        )
         obj_pos = self._actor_pos(obj.name)
         ok = float(np.linalg.norm(obj_pos - target_pos)) <= float(tolerance)
         return self._log(

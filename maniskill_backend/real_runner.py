@@ -35,8 +35,16 @@ DEFAULT_CONTROL_MODE: Dict[str, str] = {
 }
 
 
-def _build_robot_adapter(task_id: str, env: Any, control_mode: str) -> Any:
+def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: str) -> Any:
     if task_id == "PickCube-v1":
+        if robot_uid.startswith("xarm6"):
+            return ManiSkillPickCubeRobot(
+                env,
+                control_mode=control_mode,
+                gripper_open=-1.0,
+                gripper_close=1.0,
+                grip_steps=10,
+            )
         return ManiSkillPickCubeRobot(env, control_mode=control_mode)
     if task_id == "PegInsertionSide-v1":
         return ManiSkillPegInsertionRobot(env, control_mode=control_mode)
@@ -142,7 +150,7 @@ def run_real_trial(
     try:
         env = adapter.make()
         obs, reset_info = adapter.reset(seed=seed)
-        robot = _build_robot_adapter(task_id, env, control_mode)
+        robot = _build_robot_adapter(task_id, env, control_mode, robot_uid)
         scene = ManiSkillSceneAdapter()
         code_ok, message, locals_dict = execute_lmp(
             code,
