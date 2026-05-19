@@ -1,30 +1,36 @@
-"""
-Capability Card v5: 加入 mobile-aware 与 dual-arm 字段。
-"""
-from dataclasses import dataclass, field, asdict
-from typing import Any, Dict
+"""Capability Card for cross-embodiment migration prompts."""
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
 
 
 @dataclass
 class CapabilityCard:
-    # ---- 抓取 ----
+    # ---- Official / nominal robot specs ----
+    reach_m: float = 0.85
+    payload_kg: float = 3.0
+    repeatability_m: float = 0.001
+    dof: int = 7
+    gripper_type: str = "unknown"
+    mobile_base: bool = False
+
+    # ---- Derived task priors used by migration code ----
+    workspace_radius_m: float = 0.85
+    ik_accuracy_m: float = 0.03
+    insertion_speed_limit_mps: float = 0.015
+    recommended_alignment_tolerance_m: float = 0.01
+    refusal_conditions: List[str] = field(default_factory=list)
+
+    # ---- Backward-compatible and task-specific metadata ----
     grasp_mechanism: str = "unknown"
     stable_when_stacked: bool = False
     release_must_be_low: bool = False
     recommended_release_height_m: float = 0.05
     can_rotate_object: bool = False
     max_payload_kg: float = 3.0
-
-    # ---- 工作空间 ----
-    workspace_radius_m: float = 0.85
-    ik_accuracy_m: float = 0.03
-
-    # ---- v4 新增: mobile ----
     has_mobile_base: bool = False
     global_reachable: bool = False
     nav_min_clearance_m: float = 0.4
-
-    # ---- v5 新增: dual-arm ----
     has_dual_arms: bool = False
     can_bimanual: bool = False
     can_hold_object: bool = False
@@ -35,16 +41,16 @@ class CapabilityCard:
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def to_prompt_section(self) -> str:
-        d = asdict(self)
-        extra = d.pop("extra", {})
+        lines = ["# Capability Card"]
+        lines.append("")
+        lines.append("## Official Specs")
+        for key in _OFFICIAL_SPEC_FIELDS:
+            lines.append(_format_field(key, getattr(self, key)))
 
-        lines = ["# Capability Card (embodiment-specific priors)"]
-        for k, v in d.items():
-            comment = _COMMENTS.get(k, "")
-            comment = f"   # {comment}" if comment else ""
-            lines.append(f"  {k}: {v!r}{comment}")
-        for k, v in extra.items():
-            lines.append(f"  {k}: {v!r}")
+        lines.append("")
+        lines.append("## Derived Task Priors")
+        for key in _DERIVED_PRIOR_FIELDS:
+            lines.append(_format_field(key, getattr(self, key)))
 
         lines.append("")
         lines.append("# Implications for code generation:")
@@ -64,9 +70,10 @@ class CapabilityCard:
                 "Objects tend to roll off after release during stacking. "
                 "Consider using a wider-base target, or hold longer before releasing."
             )
-        if self.grasp_mechanism == "suction":
+        gripper_type = self.gripper_type or self.grasp_mechanism
+        if gripper_type == "suction":
             hints.append("Suction grasps the TOP of objects. Approach from directly above.")
-        elif self.grasp_mechanism == "parallel_jaw":
+        elif gripper_type == "parallel_jaw":
             hints.append("Parallel jaws grasp from the SIDES. Object must fit between fingers.")
         if self.ik_accuracy_m > 0.02:
             hints.append(
@@ -74,8 +81,8 @@ class CapabilityCard:
                 f"do not rely on sub-cm precision."
             )
 
-        # ---- mobile-aware / dual-arm-aware ----
-        if self.has_mobile_base:
+        has_mobile_base = self.mobile_base or self.has_mobile_base
+        if has_mobile_base:
             hints.append(
                 f"You have a MOBILE BASE. Arm single-point reach is only "
                 f"{self.workspace_radius_m:.2f}m, but you can navigate anywhere on the floor."
@@ -115,16 +122,49 @@ class CapabilityCard:
                     "instead of two separate sequential `pick_with_arm` calls. "
                     "Use `robot.place_two_objects(target_a, target_b)` for coordinated placement."
                 )
-        if not self.has_mobile_base and not self.has_dual_arms:
+        if not has_mobile_base and not self.has_dual_arms:
             hints.append(
                 f"You have a FIXED base. Targets outside the {self.workspace_radius_m:.2f}m "
-                f"radius from the base are physically UNREACHABLE — refuse such tasks."
+                f"radius from the base are physically UNREACHABLE - refuse such tasks."
             )
 
         return hints
 
 
+_OFFICIAL_SPEC_FIELDS = (
+    "reach_m",
+    "payload_kg",
+    "repeatability_m",
+    "dof",
+    "gripper_type",
+    "mobile_base",
+)
+
+_DERIVED_PRIOR_FIELDS = (
+    "workspace_radius_m",
+    "ik_accuracy_m",
+    "insertion_speed_limit_mps",
+    "recommended_alignment_tolerance_m",
+    "refusal_conditions",
+)
+
+
+def _format_field(key: str, value: Any) -> str:
+    comment = _COMMENTS.get(key, "")
+    comment = f"   # {comment}" if comment else ""
+    return f"  {key}: {value!r}{comment}"
+
+
 _COMMENTS = {
+    "reach_m": "nominal maximum reach from official specs (meters)",
+    "payload_kg": "nominal maximum payload from official specs (kg)",
+    "repeatability_m": "nominal repeatability from official specs (meters)",
+    "dof": "degrees of freedom",
+    "gripper_type": "end-effector / gripper type",
+    "mobile_base": "whether the platform includes a mobile base",
+    "recommended_alignment_tolerance_m": "recommended control tolerance, not the task success requirement",
+    "insertion_speed_limit_mps": "task-level safe insertion speed limit",
+    "refusal_conditions": "conditions where generated code should refuse or avoid the task",
     "grasp_mechanism": "how the gripper holds objects",
     "stable_when_stacked": "whether released objects stay put on stacks",
     "release_must_be_low": "whether release height must be near the target",

@@ -7,7 +7,8 @@ venv/
 .DS_Store
 *.log
 MUJOCO_LOG.TXT
-results/
+results/*
+!results/.gitkeep
 
 # Local legacy PyBullet prototype kept outside GitHub.
 # These files are still useful for personal reference, but the public
@@ -26,7 +27,12 @@ results/
 /benchmark/build_paper_assets.py
 /benchmark/experiment_logging.py
 /benchmark/llm_cache.py
-/scripts/
+/scripts/*
+!/scripts/setup_ubuntu_maniskill.sh
+!/scripts/windows_prepare_virtualbox_vm.ps1
+!/scripts/ubuntu_vm_bootstrap_dev.sh
+!/scripts/windows_prepare_wsl2.ps1
+!/scripts/wsl2_bootstrap_dev.sh
 /paper/
 /docs/PROJECT_USAGE_CN.md
 /docs/STAGE3_MOBILE_DUAL_TASKS_CN.md
