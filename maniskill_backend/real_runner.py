@@ -43,7 +43,9 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
                 control_mode=control_mode,
                 gripper_open=-1.0,
                 gripper_close=1.0,
+                move_steps=36,
                 grip_steps=10,
+                settle_steps=12,
             )
         return ManiSkillPickCubeRobot(env, control_mode=control_mode)
     if task_id == "PegInsertionSide-v1":

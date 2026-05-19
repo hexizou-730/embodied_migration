@@ -7,6 +7,7 @@ from maniskill_backend.env_adapter import can_import_maniskill
 from maniskill_backend.evaluation import TrialRecord, classify_failure
 from maniskill_backend.migration import MigrationRequest, build_migration_prompt
 from maniskill_backend.profiles import get_robot_profile
+from maniskill_backend.real_runner import _build_robot_adapter
 from maniskill_backend.sim_check import run_check, summarize_value
 from maniskill_backend.skill_adapter import ManiSkillPickCubeRobot, ManiSkillSceneAdapter
 from maniskill_backend.static_benchmark import run_static_benchmark, summarize_records
@@ -85,6 +86,24 @@ class StaticBackendTest(unittest.TestCase):
         close_action = robot._make_action(np.zeros(3), gripper=robot.gripper_close)
         self.assertEqual(open_action[-1], -1.0)
         self.assertEqual(close_action[-1], 1.0)
+
+    def test_real_runner_uses_longer_xarm_pick_cube_moves(self):
+        class Space:
+            shape = (4,)
+            dtype = np.float32
+            low = -np.ones(4, dtype=np.float32)
+            high = np.ones(4, dtype=np.float32)
+
+        class Env:
+            action_space = Space()
+
+            def step(self, action):
+                return None, 0.0, False, False, {}
+
+        robot = _build_robot_adapter("PickCube-v1", Env(), "pd_ee_delta_pos", "xarm6_robotiq")
+        self.assertEqual(robot.gripper_open, -1.0)
+        self.assertEqual(robot.gripper_close, 1.0)
+        self.assertGreaterEqual(robot.move_steps, 36)
 
     def test_pick_cube_place_accepts_success_while_held(self):
         class Space:
