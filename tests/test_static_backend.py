@@ -128,6 +128,41 @@ class StaticBackendTest(unittest.TestCase):
         self.assertEqual(robot.execution_log()[-1]["message"], "cube moved to goal while held")
         self.assertTrue(all(action[-1] == 1.0 for action in env.actions))
 
+    def test_pick_cube_place_compensates_tcp_object_offset(self):
+        class Space:
+            shape = (4,)
+            dtype = np.float32
+            low = -np.ones(4, dtype=np.float32)
+            high = np.ones(4, dtype=np.float32)
+
+        class Pose:
+            def __init__(self, p):
+                self.p = np.array(p, dtype=np.float32)
+
+        class Entity:
+            def __init__(self, p):
+                self.pose = Pose(p)
+
+        class Agent:
+            tcp_pose = Pose([0.0, 0.0, 0.0])
+
+        class Env:
+            action_space = Space()
+            cube = Entity([0.0, 0.0, 0.0])
+            goal_site = Entity([0.2, 0.0, 0.05])
+            agent = Agent()
+
+            @property
+            def unwrapped(self):
+                return self
+
+            def step(self, action):
+                return None, 0.0, False, False, {}
+
+        robot = ManiSkillPickCubeRobot(Env())
+        robot.tcp_to_obj_at_grasp = np.array([0.0, 0.0, 0.04], dtype=np.float32)
+        self.assertTrue(np.allclose(robot._held_tcp_offset(), [0.0, 0.0, 0.04]))
+
     def test_pick_cube_adapter_rejects_bad_control_mode(self):
         class Space:
             shape = (4,)

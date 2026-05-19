@@ -69,6 +69,7 @@ class ManiSkillPickCubeRobot:
         self.terminated: bool = False
         self.truncated: bool = False
         self.events: List[Dict[str, Any]] = []
+        self.tcp_to_obj_at_grasp: Optional[np.ndarray] = None
         self._validate_action_space()
 
     def _validate_action_space(self) -> None:
@@ -116,6 +117,8 @@ class ManiSkillPickCubeRobot:
             message = "cube slipped during lift"
         else:
             message = "cube was not grasped"
+        if grasped_after_lift:
+            self.tcp_to_obj_at_grasp = self._tcp_pos() - self._actor_pos("cube")
         return self._log("grasp", {"obj": obj.name}, grasped_after_lift, grasped_after_lift, message)
 
     def place(self, obj: SkillTarget, target: SkillTarget) -> bool:
@@ -125,10 +128,10 @@ class ManiSkillPickCubeRobot:
             return self._fail("place", {"obj": obj.name, "target": target.name}, "PickCube target must be goal.")
 
         goal_pos = self._region_pos(target.name)
-        above = goal_pos + np.array([0.0, 0.0, self.above_clearance_m])
-        release = goal_pos + np.array([0.0, 0.0, self.release_clearance_m])
+        tcp_goal = goal_pos + self._held_tcp_offset()
+        above = tcp_goal + np.array([0.0, 0.0, self.above_clearance_m])
         self._move_towards(above, gripper=self.gripper_close, steps=self.move_steps)
-        self._move_towards(release, gripper=self.gripper_close, steps=self.move_steps)
+        self._move_towards(tcp_goal, gripper=self.gripper_close, steps=self.move_steps)
 
         # PickCube's official success condition is "object at goal"; it does
         # not require dropping the cube. Some grippers, especially Robotiq on
@@ -148,7 +151,9 @@ class ManiSkillPickCubeRobot:
         self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=self.settle_steps)
 
         ok = self._pick_cube_success()
-        return self._log("place", {"obj": obj.name, "target": target.name}, ok, ok, "" if ok else "cube was not placed at goal")
+        diagnostics = self._placement_diagnostics(goal_pos)
+        message = "" if ok else f"cube was not placed at goal; {diagnostics}"
+        return self._log("place", {"obj": obj.name, "target": target.name}, ok, ok, message)
 
     def align_to_target(self, obj: SkillTarget, target: SkillTarget, tolerance: float) -> bool:
         target_pos = self._region_pos(target.name) if target.kind == "region" else self._actor_pos(target.name)
@@ -272,6 +277,26 @@ class ManiSkillPickCubeRobot:
         except Exception:
             pass
         return False
+
+    def _held_tcp_offset(self) -> np.ndarray:
+        if self.tcp_to_obj_at_grasp is not None:
+            return np.asarray(self.tcp_to_obj_at_grasp, dtype=np.float32)
+        return np.array([0.0, 0.0, self.release_clearance_m], dtype=np.float32)
+
+    def _placement_diagnostics(self, goal_pos: np.ndarray) -> str:
+        try:
+            cube_pos = self._actor_pos("cube")
+            tcp_pos = self._tcp_pos()
+            obj_goal_dist = float(np.linalg.norm(goal_pos - cube_pos))
+            tcp_goal_dist = float(np.linalg.norm(goal_pos - tcp_pos))
+            offset = self._held_tcp_offset()
+            return (
+                f"obj_goal_dist={obj_goal_dist:.4f}, "
+                f"tcp_goal_dist={tcp_goal_dist:.4f}, "
+                f"tcp_to_obj_offset={np.round(offset, 4).tolist()}"
+            )
+        except Exception:
+            return "placement diagnostics unavailable"
 
     def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
         self.events.append(
