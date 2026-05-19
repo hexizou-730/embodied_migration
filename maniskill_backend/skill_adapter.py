@@ -316,6 +316,224 @@ class ManiSkillPickCubeRobot:
         return self._log(api, args, False, False, message)
 
 
+class ManiSkillXArmPickCubePlannerRobot:
+    """PickCube-v1 xarm6 wrapper backed by ManiSkill's official planner.
+
+    The delta-EE wrapper is useful for testing raw control portability, but
+    xarm6's official PickCube solution uses pd_joint_pos with a motion planner.
+    This adapter keeps the same LMP-facing skill API while delegating the
+    low-level path generation to ManiSkill's xarm6 planner.
+    """
+
+    def __init__(
+        self,
+        env: Any,
+        *,
+        control_mode: Optional[str] = None,
+        debug: bool = False,
+        vis: bool = False,
+    ) -> None:
+        if control_mode not in {None, "pd_joint_pos", "pd_joint_pos_vel"}:
+            raise ValueError(
+                "xarm6 planner PickCube adapter requires control_mode "
+                f"'pd_joint_pos' or 'pd_joint_pos_vel', got {control_mode!r}."
+            )
+        self.env = env
+        self.control_mode = control_mode
+        self.debug = debug
+        self.vis = vis
+        self.planner: Any = None
+        self.grasp_pose: Any = None
+        self.last_info: Dict[str, Any] = {}
+        self.events: List[Dict[str, Any]] = []
+
+    def grasp(self, obj: SkillTarget) -> bool:
+        if obj.name != "cube":
+            return self._fail("grasp", {"obj": obj.name}, "PickCube planner only supports cube grasp.")
+
+        import sapien
+        from mani_skill.examples.motionplanning.base_motionplanner.utils import (
+            compute_grasp_info_by_obb,
+            get_actor_obb,
+        )
+
+        base = self._base_env()
+        planner = self._ensure_planner()
+        obb = get_actor_obb(base.cube)
+        approaching = np.array([0.0, 0.0, -1.0])
+        target_closing = _pose_matrix(base.agent.tcp.pose)[:3, 1]
+        grasp_info = compute_grasp_info_by_obb(
+            obb,
+            approaching=approaching,
+            target_closing=target_closing,
+            depth=0.025,
+        )
+        self.grasp_pose = base.agent.build_grasp_pose(
+            approaching,
+            grasp_info["closing"],
+            _sapien_pose_from_any(base.cube.pose).p,
+        )
+
+        reach_pose = self.grasp_pose * sapien.Pose([0.0, 0.0, -0.05])
+        if not self._capture(planner.move_to_pose_with_RRTStar(reach_pose), "reach"):
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed while reaching cube")
+        if not self._capture(planner.move_to_pose_with_screw(self.grasp_pose), "pregrasp"):
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed at grasp pose")
+        if not self._capture(planner.close_gripper(), "close_gripper"):
+            return self._fail("grasp", {"obj": obj.name}, "close gripper command failed")
+
+        ok = self._agent_is_grasping_cube()
+        self._log(
+            "grasp_check_after_close",
+            {"obj": obj.name},
+            ok,
+            ok,
+            "" if ok else "gripper closed but cube not held",
+        )
+        return self._log(
+            "grasp",
+            {"obj": obj.name},
+            ok,
+            ok,
+            "" if ok else "cube was not grasped",
+        )
+
+    def place(self, obj: SkillTarget, target: SkillTarget) -> bool:
+        if obj.name != "cube":
+            return self._fail("place", {"obj": obj.name, "target": target.name}, "PickCube planner only supports cube.")
+        if target.name not in {"goal", "goal_site"}:
+            return self._fail("place", {"obj": obj.name, "target": target.name}, "PickCube target must be goal.")
+        if self.grasp_pose is None:
+            return self._fail("place", {"obj": obj.name, "target": target.name}, "place called before grasp.")
+
+        import sapien
+
+        base = self._base_env()
+        planner = self._ensure_planner()
+        goal_pose = sapien.Pose(_sapien_pose_from_any(base.goal_site.pose).p, self.grasp_pose.q)
+        if not self._capture(planner.move_to_pose_with_screw(goal_pose), "place"):
+            return self._fail("place", {"obj": obj.name, "target": target.name}, "motion planning failed while moving to goal")
+        ok = self._pick_cube_success()
+        if not ok:
+            self._capture(planner.move_to_pose_with_screw(goal_pose), "place_retry")
+            ok = self._pick_cube_success()
+        diagnostics = self._placement_diagnostics()
+        return self._log(
+            "place",
+            {"obj": obj.name, "target": target.name},
+            ok,
+            ok,
+            "" if ok else f"cube was not placed at goal; {diagnostics}",
+        )
+
+    def align_to_target(self, obj: SkillTarget, target: SkillTarget, tolerance: float) -> bool:
+        return self._fail(
+            "align_to_target",
+            {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+            "align_to_target is not implemented for PickCube-v1 planner path",
+        )
+
+    def insert(self, obj: SkillTarget, target: SkillTarget, speed: float) -> bool:
+        return self._fail(
+            "insert",
+            {"obj": obj.name, "target": target.name, "speed": float(speed)},
+            "insert is not implemented for PickCube-v1",
+        )
+
+    def hook_object(self, tool: SkillTarget, obj: SkillTarget) -> bool:
+        return self._fail("hook_object", {"tool": tool.name, "obj": obj.name}, "tool use is not implemented for PickCube-v1")
+
+    def pull_with_tool(self, tool: SkillTarget, obj: SkillTarget, target: SkillTarget) -> bool:
+        return self._fail(
+            "pull_with_tool",
+            {"tool": tool.name, "obj": obj.name, "target": target.name},
+            "tool use is not implemented for PickCube-v1",
+        )
+
+    def execution_log(self) -> List[Dict[str, Any]]:
+        return list(self.events)
+
+    def close(self) -> None:
+        if self.planner is not None and hasattr(self.planner, "close"):
+            self.planner.close()
+
+    def _ensure_planner(self) -> Any:
+        if self.planner is None:
+            from mani_skill.examples.motionplanning.xarm6.motionplanner import (
+                XArm6RobotiqMotionPlanningSolver,
+            )
+
+            base = self._base_env()
+            self.planner = XArm6RobotiqMotionPlanningSolver(
+                self.env,
+                debug=self.debug,
+                vis=self.vis,
+                base_pose=base.agent.robot.pose,
+                visualize_target_grasp_pose=False,
+                print_env_info=False,
+                joint_acc_limits=0.5,
+                joint_vel_limits=0.5,
+            )
+        return self.planner
+
+    def _capture(self, result: Any, label: str) -> bool:
+        if result == -1:
+            self.last_info = {"planner_status": "failed", "planner_stage": label}
+            return False
+        if isinstance(result, tuple) and len(result) >= 5:
+            self.last_info = dict(result[4] or {})
+            return True
+        return True
+
+    def _base_env(self) -> Any:
+        return getattr(self.env, "unwrapped", self.env)
+
+    def _agent_is_grasping_cube(self) -> bool:
+        try:
+            value = self._base_env().agent.is_grasping(self._base_env().cube)
+            return bool(_to_numpy(value)[0])
+        except Exception:
+            return False
+
+    def _pick_cube_success(self) -> bool:
+        try:
+            result = self._base_env().evaluate()
+            self.last_info = dict(result or {})
+            return _dict_bool(result, "success") or _dict_bool(result, "is_obj_placed")
+        except Exception:
+            return False
+
+    def _placement_diagnostics(self) -> str:
+        try:
+            base = self._base_env()
+            goal = _to_numpy(base.goal_site.pose.p)
+            cube = _to_numpy(base.cube.pose.p)
+            tcp = _to_numpy(base.agent.tcp.pose.p)
+            return (
+                f"obj_goal_dist={float(np.linalg.norm(goal - cube)):.4f}, "
+                f"tcp_goal_dist={float(np.linalg.norm(goal - tcp)):.4f}"
+            )
+        except Exception:
+            return "placement diagnostics unavailable"
+
+    def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
+        self.events.append(
+            {
+                "step": len(self.events) + 1,
+                "api": api,
+                "args": dict(args),
+                "result": bool(result),
+                "ok": bool(ok),
+                "message": message,
+                "failure_type": "" if ok else "execution failure",
+            }
+        )
+        return bool(ok)
+
+    def _fail(self, api: str, args: Dict[str, Any], message: str) -> bool:
+        return self._log(api, args, False, False, message)
+
+
 def _to_numpy(value: Any) -> np.ndarray:
     if hasattr(value, "detach"):
         value = value.detach().cpu().numpy()
@@ -323,6 +541,16 @@ def _to_numpy(value: Any) -> np.ndarray:
     if array.ndim > 1:
         array = array.reshape((-1, array.shape[-1]))[0]
     return array.reshape(-1)
+
+
+def _pose_matrix(pose: Any) -> np.ndarray:
+    matrix = pose.to_transformation_matrix()
+    if hasattr(matrix, "detach"):
+        matrix = matrix.detach().cpu().numpy()
+    matrix = np.asarray(matrix, dtype=np.float32)
+    if matrix.ndim == 3:
+        return matrix[0]
+    return matrix
 
 
 def _scalar_bool(value: Any) -> bool:

@@ -44,6 +44,12 @@ python -m maniskill_backend.real_runner \
 On the current WSL setup this may still fail at Vulkan/SAPIEN environment
 creation. On native Ubuntu with working Vulkan, this is the first command to try.
 
+For `PickCube-v1` with `xarm6_robotiq`, omit `--control-mode` or use
+`--control-mode pd_joint_pos` to use ManiSkill's official xarm6 motion-planning
+route. Passing `--control-mode pd_ee_delta_pos` keeps the lower-level delta-EE
+control path, which is useful as a failure/control-portability baseline but may
+not place the cube successfully.
+
 For report-based real trials, `real_runner` first runs a real `source-copy`
 attempt with the same task, robot, seed, and simulator settings. If that prior
 attempt fails, its execution log is converted into the Failure Report that is

@@ -9,7 +9,11 @@ from maniskill_backend.migration import MigrationRequest, build_migration_prompt
 from maniskill_backend.profiles import get_robot_profile
 from maniskill_backend.real_runner import _build_robot_adapter
 from maniskill_backend.sim_check import run_check, summarize_value
-from maniskill_backend.skill_adapter import ManiSkillPickCubeRobot, ManiSkillSceneAdapter
+from maniskill_backend.skill_adapter import (
+    ManiSkillPickCubeRobot,
+    ManiSkillSceneAdapter,
+    ManiSkillXArmPickCubePlannerRobot,
+)
 from maniskill_backend.static_benchmark import run_static_benchmark, summarize_records
 from maniskill_backend.static_runner import build_static_report, run_static_trial
 from maniskill_backend.tasks import get_task_spec
@@ -104,6 +108,13 @@ class StaticBackendTest(unittest.TestCase):
         self.assertEqual(robot.gripper_open, -1.0)
         self.assertEqual(robot.gripper_close, 1.0)
         self.assertGreaterEqual(robot.move_steps, 36)
+
+    def test_real_runner_uses_xarm_planner_for_joint_pos(self):
+        class Env:
+            pass
+
+        robot = _build_robot_adapter("PickCube-v1", Env(), "pd_joint_pos", "xarm6_robotiq")
+        self.assertIsInstance(robot, ManiSkillXArmPickCubePlannerRobot)
 
     def test_pick_cube_place_accepts_success_while_held(self):
         class Space:

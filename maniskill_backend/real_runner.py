@@ -22,6 +22,7 @@ from .skill_adapter import (
     ManiSkillPegInsertionRobot,
     ManiSkillPickCubeRobot,
     ManiSkillSceneAdapter,
+    ManiSkillXArmPickCubePlannerRobot,
 )
 from .static_runner import _success_from_ret_val, build_oracle_code, build_static_report
 from .tasks import get_task_spec
@@ -35,9 +36,17 @@ DEFAULT_CONTROL_MODE: Dict[str, str] = {
 }
 
 
+def _default_control_mode(task_id: str, robot_uid: str) -> str:
+    if task_id == "PickCube-v1" and robot_uid.startswith("xarm6"):
+        return "pd_joint_pos"
+    return DEFAULT_CONTROL_MODE.get(task_id, "pd_ee_delta_pos")
+
+
 def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: str) -> Any:
     if task_id == "PickCube-v1":
         if robot_uid.startswith("xarm6"):
+            if control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
+                return ManiSkillXArmPickCubePlannerRobot(env, control_mode=control_mode)
             return ManiSkillPickCubeRobot(
                 env,
                 control_mode=control_mode,
@@ -69,7 +78,7 @@ def run_real_trial(
     method = norm_method(method)
     task = get_task_spec(task_id)
     if control_mode is None:
-        control_mode = DEFAULT_CONTROL_MODE.get(task_id, "pd_ee_delta_pos")
+        control_mode = _default_control_mode(task_id, robot_uid)
     result: Dict[str, Any] = {
         "task_id": task_id,
         "env_id": task.maniskill_env_id,
@@ -149,6 +158,7 @@ def run_real_trial(
         render_backend=render_backend,
         max_episode_steps=max_episode_steps,
     )
+    robot = None
     try:
         env = adapter.make()
         obs, reset_info = adapter.reset(seed=seed)
@@ -192,6 +202,8 @@ def run_real_trial(
             **llm_info,
         )
     finally:
+        if robot is not None and hasattr(robot, "close"):
+            robot.close()
         adapter.close()
     return result
 
