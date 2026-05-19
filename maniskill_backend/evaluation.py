@@ -79,6 +79,8 @@ def classify_failure(
         return "alignment failure"
     if "speed" in text or "too fast" in text:
         return "insertion speed failure"
+    if "not placed" in text or "not at goal" in text or "place" in text:
+        return "execution failure"
     if (
         "impossible" in text
         or "unsafe" in text

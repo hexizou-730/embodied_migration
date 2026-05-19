@@ -129,11 +129,25 @@ class ManiSkillPickCubeRobot:
         release = goal_pos + np.array([0.0, 0.0, self.release_clearance_m])
         self._move_towards(above, gripper=self.gripper_close, steps=self.move_steps)
         self._move_towards(release, gripper=self.gripper_close, steps=self.move_steps)
+
+        # PickCube's official success condition is "object at goal"; it does
+        # not require dropping the cube. Some grippers, especially Robotiq on
+        # xarm6, can disturb the cube during opening, so check while still held.
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.settle_steps)
+        if self._pick_cube_success():
+            return self._log(
+                "place",
+                {"obj": obj.name, "target": target.name},
+                True,
+                True,
+                "cube moved to goal while held",
+            )
+
         self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=self.grip_steps)
         self._move_towards(above, gripper=self.gripper_open, steps=self.move_steps)
         self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=self.settle_steps)
 
-        ok = self._info_bool("success") or self._info_bool("is_obj_placed")
+        ok = self._pick_cube_success()
         return self._log("place", {"obj": obj.name, "target": target.name}, ok, ok, "" if ok else "cube was not placed at goal")
 
     def align_to_target(self, obj: SkillTarget, target: SkillTarget, tolerance: float) -> bool:
@@ -248,6 +262,17 @@ class ManiSkillPickCubeRobot:
         except Exception:
             return bool(value)
 
+    def _pick_cube_success(self) -> bool:
+        if self._info_bool("success") or self._info_bool("is_obj_placed"):
+            return True
+        try:
+            result = self._base_env().evaluate()
+            if isinstance(result, dict):
+                return _dict_bool(result, "success") or _dict_bool(result, "is_obj_placed")
+        except Exception:
+            pass
+        return False
+
     def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
         self.events.append(
             {
@@ -284,6 +309,16 @@ def _scalar_bool(value: Any) -> bool:
         return bool(array[0]) if array.size else False
     except Exception:
         return bool(value)
+
+
+def _dict_bool(value: Dict[str, Any], key: str) -> bool:
+    if key not in value:
+        return False
+    try:
+        array = _to_numpy(value[key])
+        return bool(array[0]) if array.size else False
+    except Exception:
+        return bool(value[key])
 
 
 def _quat_to_rotmat(q: np.ndarray) -> np.ndarray:

@@ -86,6 +86,48 @@ class StaticBackendTest(unittest.TestCase):
         self.assertEqual(open_action[-1], -1.0)
         self.assertEqual(close_action[-1], 1.0)
 
+    def test_pick_cube_place_accepts_success_while_held(self):
+        class Space:
+            shape = (4,)
+            dtype = np.float32
+            low = -np.ones(4, dtype=np.float32)
+            high = np.ones(4, dtype=np.float32)
+
+        class Pose:
+            def __init__(self, p):
+                self.p = np.array(p, dtype=np.float32)
+
+        class Entity:
+            def __init__(self, p):
+                self.pose = Pose(p)
+
+        class Agent:
+            tcp_pose = Pose([0.0, 0.0, 0.0])
+
+        class Env:
+            action_space = Space()
+            cube = Entity([0.0, 0.0, 0.0])
+            goal_site = Entity([0.0, 0.0, 0.0])
+            agent = Agent()
+
+            @property
+            def unwrapped(self):
+                return self
+
+            def __init__(self):
+                self.actions = []
+
+            def step(self, action):
+                self.actions.append(np.asarray(action).copy())
+                return None, 0.0, False, False, {"success": [True], "is_obj_placed": [True]}
+
+        scene = ManiSkillSceneAdapter()
+        env = Env()
+        robot = ManiSkillPickCubeRobot(env, gripper_open=-1.0, gripper_close=1.0)
+        self.assertTrue(robot.place(scene.get_object("cube"), scene.get_region("goal")))
+        self.assertEqual(robot.execution_log()[-1]["message"], "cube moved to goal while held")
+        self.assertTrue(all(action[-1] == 1.0 for action in env.actions))
+
     def test_pick_cube_adapter_rejects_bad_control_mode(self):
         class Space:
             shape = (4,)
