@@ -1,9 +1,4 @@
-"""Real-physics benchmark runner: real_runner equivalent of static_benchmark/run.
-
-Iterates over (task, robot, method) and calls `run_real_trial`, converts each
-result dict into a `TrialRecord` so it can flow through `summarize_records`
-and `records_to_md` (the same pipeline static `run.py` uses).
-"""
+"""Real-physics benchmark runner for ManiSkill trials."""
 
 from __future__ import annotations
 
@@ -13,8 +8,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 from .evaluation import TrialRecord
 from .real_runner import run_real_trial
-from .static_benchmark import summarize_records, write_summary_csv
-from .static_runner import append_jsonl
+from .results import append_jsonl, summarize_records, write_summary_csv
 from .tasks import get_task_spec
 from .view import records_to_md
 
@@ -32,6 +26,10 @@ def _result_to_record(result: Dict[str, Any], *, source_robot: str, seed: int) -
         "llm_reason",
         "llm_raw_text",
         "graphics_diagnosis",
+        "report_source_method",
+        "report_source_failure_type",
+        "report_source_message",
+        "report_source_log",
     )
     info: Dict[str, Any] = {k: result[k] for k in info_keys if k in result}
     return TrialRecord(
@@ -92,13 +90,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--robot", default="panda")
     parser.add_argument(
         "--methods",
-        default="source-copy,llm_no_card,llm_card_only,llm_report_only,llm_card_report,oracle",
+        default="source-copy,llm_card_report,oracle",
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--control-mode", default=None)
     parser.add_argument("--obs-mode", default="state")
-    parser.add_argument("--sim-backend", default="cpu")
-    parser.add_argument("--render-backend", default="none")
+    parser.add_argument("--sim-backend", default="auto")
+    parser.add_argument("--render-backend", default="gpu")
     parser.add_argument("--max-episode-steps", type=int, default=500)
     parser.add_argument("--jsonl", default="results/real_trials.jsonl")
     parser.add_argument("--md", default="results/real_trials.md")

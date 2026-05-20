@@ -1,12 +1,25 @@
-# Run
+# Run Real ManiSkill Experiments
 
-Current WSL2 workflow for the static migration prototype.
+This project now keeps only the real ManiSkill simulation path. The old static
+fake runner and text-only benchmark have been removed.
 
-## Setup
+## Remote GPU Setup
+
+On the Polytechnique GPU machine:
 
 ```bash
 cd ~/Embodied/embodied_migration
+git pull
+source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate em-ms
+export VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json
+```
+
+The xarm6 motion planner uses `mplib`/`toppra`, whose current wheels require
+NumPy 1.x:
+
+```bash
+pip install "numpy>=1.24,<2" --force-reinstall
 ```
 
 ## Test
@@ -17,119 +30,101 @@ python -m unittest discover -s tests -v
 
 ## Check ManiSkill
 
-Use this before writing a real simulation runner:
-
 ```bash
 python -m maniskill_backend.sim_check \
-  --env PegInsertionSide-v1 \
-  --obs-mode state
+  --env PickCube-v1 \
+  --robot panda \
+  --obs-mode state \
+  --control-mode pd_ee_delta_pos
 ```
 
-Add `--render` only after reset/step works.
+## One Real Trial
 
-## Real ManiSkill Smoke Task
-
-`PickCube-v1` is the first task wired toward the real ManiSkill action API.
-It uses `ManiSkillPickCubeRobot` to translate high-level LMP calls such as
-`robot.grasp(cube)` and `robot.place(cube, goal)` into `env.step(action)` calls.
+Panda smoke test:
 
 ```bash
 python -m maniskill_backend.real_runner \
   --task PickCube-v1 \
   --robot panda \
   --method source-copy \
-  --control-mode pd_ee_delta_pos
+  --seed 0 \
+  --control-mode pd_ee_delta_pos \
+  --sim-backend auto \
+  --render-backend gpu
 ```
 
-On the current WSL setup this may still fail at Vulkan/SAPIEN environment
-creation. On native Ubuntu with working Vulkan, this is the first command to try.
-
-For `PickCube-v1` with `xarm6_robotiq`, omit `--control-mode` or use
-`--control-mode pd_joint_pos` to use ManiSkill's official xarm6 motion-planning
-route. Passing `--control-mode pd_ee_delta_pos` keeps the lower-level delta-EE
-control path, which is useful as a failure/control-portability baseline but may
-not place the cube successfully.
-
-The xarm6 planner imports `mplib`/`toppra`, whose current binary wheels require
-NumPy 1.x. If the planner fails with `numpy.core.multiarray failed to import`,
-run:
+xarm6 with ManiSkill's official planner path:
 
 ```bash
-pip install "numpy>=1.24,<2" --force-reinstall
+python -m maniskill_backend.real_runner \
+  --task PickCube-v1 \
+  --robot xarm6_robotiq \
+  --method source-copy \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu
 ```
 
-For report-based real trials, `real_runner` first runs a real `source-copy`
-attempt with the same task, robot, seed, and simulator settings. If that prior
-attempt fails, its execution log is converted into the Failure Report that is
-shown to the LLM and written into the result.
-
-## Run One Trial
-
-```bash
-python -m maniskill_backend.static_runner \
-  --task PegInsertionSide-v1 \
-  --target so100 \
-  --method llm_card_report
-```
-
-Common methods:
+For `PickCube-v1`, omitting `--control-mode` automatically selects:
 
 ```text
-source-copy
-llm_no_card
-llm_card_only
-llm_report_only
-llm_card_report
-oracle
+panda -> pd_ee_delta_pos
+xarm6_robotiq -> pd_joint_pos
 ```
 
-Old names still work as aliases:
+Passing `--control-mode pd_ee_delta_pos` for xarm6 forces the raw delta-EE path.
+That path is useful for diagnosing controller portability, but it may fail even
+when the same high-level program succeeds through the official planner.
 
-```text
-llm_failure_only -> llm_report_only
-llm_card_failure -> llm_card_report
-```
+## LLM Repair Trial
 
-## Run Current Comparison
+`llm_card_report` is the only LLM adaptation method kept for real simulation.
+It first runs a real `source-copy` attempt with the same task, robot, seed, and
+sim settings. If that attempt fails, the execution log becomes the Failure
+Report shown to the LLM.
 
 ```bash
-python -m maniskill_backend.run \
-  --tasks PegInsertionSide-v1,PlugCharger-v1,PlugMulti-v1,PullCubeTool-v1,PegMulti-v1 \
-  --targets so100 \
-  --methods source-copy,llm_no_card,llm_card_only,llm_report_only,llm_card_report,oracle
+python -m maniskill_backend.real_runner \
+  --task PickCube-v1 \
+  --robot xarm6_robotiq \
+  --method llm_card_report \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+## Real Benchmark
+
+```bash
+python -m maniskill_backend.real_benchmark \
+  --task PickCube-v1 \
+  --robot xarm6_robotiq \
+  --methods source-copy,llm_card_report,oracle \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu
 ```
 
 Outputs:
 
 ```text
-results/trials.jsonl   # full append-only trial log
-results/trials.md      # readable report, overwritten each run
-results/summary.csv    # summary table, overwritten each run
+results/real_trials.jsonl
+results/real_trials.md
+results/real_summary.csv
 ```
 
-Open `results/trials.md` to see each trial's Capability Card, Failure Report,
-generated code, and raw LLM output.
+Open `results/real_trials.md` to inspect the Capability Card, Failure Report,
+generated code, raw LLM output, and real execution log.
 
-Capability Cards separate nominal specs from migration priors. In particular,
-`recommended_alignment_tolerance_m` is a recommended control tolerance for the
-target robot; it is not the task's physical success requirement.
+## Current Validated Result
 
-For `llm_report_only` and `llm_card_report`, the Failure Report is generated
-from the previous failed source-copy execution log. The readable markdown shows:
+The current validated real simulation slice is:
 
 ```text
-Report Source Log   # failed attempt used to generate the report
-Execution Log       # current generated code run
-```
-
-## Dry Run
-
-Use this when you do not want to spend API calls:
-
-```bash
-python -m maniskill_backend.run \
-  --tasks PegInsertionSide-v1,PlugCharger-v1,PlugMulti-v1,PullCubeTool-v1,PegMulti-v1 \
-  --targets so100 \
-  --methods source-copy,llm_no_card,llm_card_only,llm_report_only,llm_card_report,oracle \
-  --dry-run
+PickCube-v1 + panda + pd_ee_delta_pos -> success
+PickCube-v1 + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
+PickCube-v1 + xarm6_robotiq + pd_joint_pos planner -> success
 ```

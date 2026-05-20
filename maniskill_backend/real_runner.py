@@ -1,9 +1,4 @@
-"""Run LMP code against a real ManiSkill environment.
-
-The first supported real task is PickCube-v1. This command is expected to fail
-gracefully on WSL machines where Vulkan/SAPIEN is unavailable, while remaining
-ready for native Ubuntu execution.
-"""
+"""Run LMP code against a real ManiSkill environment."""
 
 from __future__ import annotations
 
@@ -17,6 +12,7 @@ from .env_adapter import ManiSkillEnvAdapter
 from .evaluation import TrialRecord, classify_failure
 from .llm import gen_code
 from .migration import MigrationRequest, build_migration_prompt, get_source_copy_code, norm_method
+from .reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
 from .sim_check import diagnose_graphics_stack
 from .skill_adapter import (
     ManiSkillPegInsertionRobot,
@@ -24,7 +20,6 @@ from .skill_adapter import (
     ManiSkillSceneAdapter,
     ManiSkillXArmPickCubePlannerRobot,
 )
-from .static_runner import _success_from_ret_val, build_oracle_code, build_static_report
 from .tasks import get_task_spec
 
 
@@ -102,7 +97,7 @@ def run_real_trial(
     )
     report_source_result = None
     report = None
-    if method in {"llm_report_only", "llm_card_report"}:
+    if method == "llm_card_report":
         report_source_result = run_real_trial(
             task_id=task_id,
             robot_uid=robot_uid,
@@ -116,7 +111,7 @@ def run_real_trial(
             dry_run=True,
         )
         if not bool(report_source_result.get("success", False)):
-            report = build_static_report(
+            report = build_real_failure_report(
                 task=request.task,
                 target_profile=request.target_profile,
                 failed_record=_result_to_report_record(report_source_result, source_robot=task.source_robot),
@@ -170,7 +165,7 @@ def run_real_trial(
             verbose=False,
         )
         ret_val = locals_dict.get("ret_val")
-        success = bool(code_ok and _success_from_ret_val(ret_val))
+        success = bool(code_ok and success_from_ret_val(ret_val))
         failure_message = message if success else _failure_message(robot, message)
         failure_type = classify_failure(
             success=success,

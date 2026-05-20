@@ -95,9 +95,9 @@ def records_to_md(records: Iterable[Dict[str, Any]]) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Format JSONL trial logs.")
-    parser.add_argument("path", nargs="?", default="results/trials.jsonl")
+    parser.add_argument("path", nargs="?", default="results/real_trials.jsonl")
     parser.add_argument("--limit", type=int, default=5)
-    parser.add_argument("--out", default="results/trials.md")
+    parser.add_argument("--out", default="results/real_trials.md")
     parser.add_argument("--json", action="store_true", help="Pretty-print JSON instead of Markdown.")
     return parser.parse_args()
 

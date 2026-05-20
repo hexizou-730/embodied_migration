@@ -1,4 +1,4 @@
-"""Prompt construction and method definitions for code migration."""
+"""Prompt construction for real ManiSkill migration trials."""
 
 from __future__ import annotations
 
@@ -13,18 +13,11 @@ from .tasks import TaskSpec, get_task_spec
 
 METHODS = (
     "source-copy",
-    "llm_no_card",
-    "llm_card_only",
-    "llm_report_only",
     "llm_card_report",
-    "llm_static_feedback",
     "oracle",
 )
 
-METHOD_ALIASES = {
-    "llm_failure_only": "llm_report_only",
-    "llm_card_failure": "llm_card_report",
-}
+METHOD_ALIASES = {}
 
 
 def norm_method(method: str) -> str:
@@ -93,12 +86,12 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         f"# Target Robot: {request.target_profile.name}",
     ]
 
-    if method in {"llm_card_only", "llm_card_report", "llm_static_feedback"}:
+    if method == "llm_card_report":
         lines.append(request.target_profile.to_prompt_section())
     else:
         lines.append("No target Capability Card is provided for this baseline.")
 
-    if method in {"llm_report_only", "llm_card_report"}:
+    if method == "llm_card_report":
         if request.failure_report is None:
             lines.append("")
             lines.append("# Failure Report")
@@ -106,17 +99,6 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         else:
             lines.append("")
             lines.append(request.failure_report.to_prompt_section())
-
-    if method == "llm_static_feedback":
-        lines.extend(
-            [
-                "",
-                "# Static feedback instruction",
-                "Before writing corrected code, inspect whether the source code calls",
-                "unavailable skills, ignores workspace limits, exceeds precision limits,",
-                "or uses unsafe insertion speed. Then output corrected code only.",
-            ]
-        )
 
     lines.extend(
         [
