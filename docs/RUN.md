@@ -118,6 +118,58 @@ python -m maniskill_backend.real_benchmark \
   --render-backend gpu
 ```
 
+## Second Task: Peg Insertion
+
+Use `peg_insertion` to decide whether the next research direction should focus
+on high-level LMP migration, skill-wrapper migration, or controller/planner
+selection.
+
+First verify the Panda source task:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task peg_insertion \
+  --robot panda \
+  --method source-copy \
+  --seed 0 \
+  --control-mode pd_ee_pose \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 500
+```
+
+Then check whether ManiSkill can even create the same task with xarm6:
+
+```bash
+python -m maniskill_backend.sim_check \
+  --env PegInsertionSide-v1 \
+  --robot xarm6_robotiq \
+  --obs-mode state \
+  --control-mode pd_ee_pose
+```
+
+If xarm6 creation works, try the real target run:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task peg_insertion \
+  --robot xarm6_robotiq \
+  --method source-copy \
+  --seed 0 \
+  --control-mode pd_ee_pose \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 500
+```
+
+Interpretation:
+
+```text
+panda succeeds, xarm6 fails in align/insert -> high-level parameters or target skill wrapper matter
+panda fails -> fix the Panda peg_insertion wrapper before using it for migration
+xarm6 env creation fails -> task is not yet a cross-robot ManiSkill experiment
+```
+
 Outputs:
 
 ```text

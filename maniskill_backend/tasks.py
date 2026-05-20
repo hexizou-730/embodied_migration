@@ -95,7 +95,7 @@ TASK_SPECS: Dict[str, TaskSpec] = {
         instruction="Insert the peg into the side hole.",
         instruction_cn="抓住 peg，并从侧面插入孔中。",
         source_robot="panda",
-        target_robots=("panda",),
+        target_robots=("panda", "xarm6_robotiq"),
         source_program=PEG_INSERTION_SOURCE,
         expected_failure_modes=(
             "reachability failure",

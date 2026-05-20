@@ -83,6 +83,7 @@ class RealBackendTest(unittest.TestCase):
 
     def test_oracle_code_is_real_source_program(self):
         task = get_task_spec("peg_insertion")
+        self.assertIn("xarm6_robotiq", task.target_robots)
         oracle = build_oracle_code(task)
         self.assertIn("robot.align_to_target", oracle)
         self.assertNotIn("robot.recommended_alignment_tolerance", oracle)

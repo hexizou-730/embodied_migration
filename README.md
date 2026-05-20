@@ -44,7 +44,7 @@ real simulator re-execution
 | Task name | 中文任务 | ManiSkill env | Status |
 |---|---|---|---|
 | `pick_cube` | 抓取方块 | `PickCube-v1` | validated smoke and controller-portability task |
-| `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | contact-rich task under development |
+| `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | second task to validate next |
 
 ## Current Robots
 

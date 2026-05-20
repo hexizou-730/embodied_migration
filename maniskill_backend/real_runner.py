@@ -83,6 +83,11 @@ def run_real_trial(
         "robot_uid": robot_uid,
         "method": method,
         "seed": seed,
+        "control_mode": control_mode,
+        "obs_mode": obs_mode,
+        "sim_backend": sim_backend,
+        "render_backend": render_backend,
+        "max_episode_steps": max_episode_steps,
         "real_runner": True,
     }
     if task_id not in SUPPORTED_REAL_TASKS:
