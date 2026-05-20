@@ -69,7 +69,7 @@ def build_iterative_prompt(
                 "",
                 "# Extra tunable API for this task",
                 "- robot.hook_object(tool, cube, hook_y_offset=-0.067, behind_margin=0.0, approach_extra=0.08, lift_height=0.35)",
-                '- robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="world")',
+                '- robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="toward_base")',
                 '- pull_frame can be "tool", "world", or "toward_base".',
                 "- For xarm6, you may tune hook_y_offset, behind_margin, pull distance, stages, and pull_frame.",
                 "- hook_object already grasps the L-shaped tool and positions it behind the cube.",

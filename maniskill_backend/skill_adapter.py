@@ -840,6 +840,8 @@ class ManiSkillPullCubeToolPlannerRobot:
         self.planner: Any = None
         self.grasp_pose: Any = None
         self.hook_pose: Any = None
+        self.hook_tool_pose: Any = None
+        self.tool_to_tcp: Any = None
         self.pull_start_cube_pos: Optional[np.ndarray] = None
         self.last_info: Dict[str, Any] = {}
         self.events: List[Dict[str, Any]] = []
@@ -935,16 +937,18 @@ class ManiSkillPullCubeToolPlannerRobot:
                 {"tool": tool.name, "obj": obj.name},
                 "motion planning failed while lifting the tool",
             )
+        self.tool_to_tcp = self._tool_to_tcp_transform()
 
         cube_pos = np.asarray(_sapien_pose_from_any(base.cube.pose).p, dtype=np.float64)
         hook_length = float(_to_numpy(base.hook_length)[0])
         cube_half_size = float(_to_numpy(base.cube_half_size)[0])
         behind_distance = hook_length + cube_half_size + behind_margin
 
-        approach_pose = sapien.Pose(
+        approach_tool_pose = sapien.Pose(
             cube_pos + np.array([-(behind_distance + approach_extra), 0.0, lift_height - 0.05]),
-            self.grasp_pose.q,
+            _sapien_pose_from_any(base.l_shape_tool.pose).q,
         )
+        approach_pose = self._tcp_pose_for_tool_pose(approach_tool_pose)
         if not self._capture(self._move_to_pose(approach_pose, prefer_rrt=True), "approach_cube_with_tool"):
             return self._fail(
                 "hook_object",
@@ -952,10 +956,11 @@ class ManiSkillPullCubeToolPlannerRobot:
                 "motion planning failed while approaching cube with tool",
             )
 
-        self.hook_pose = sapien.Pose(
+        self.hook_tool_pose = sapien.Pose(
             cube_pos + np.array([-behind_distance, hook_y_offset, 0.0]),
-            self.grasp_pose.q,
+            _sapien_pose_from_any(base.l_shape_tool.pose).q,
         )
+        self.hook_pose = self._tcp_pose_for_tool_pose(self.hook_tool_pose)
         if not self._capture(planner.move_to_pose_with_screw(self.hook_pose), "hook_cube"):
             return self._fail(
                 "hook_object",
@@ -994,7 +999,7 @@ class ManiSkillPullCubeToolPlannerRobot:
                 {"tool": tool.name, "obj": obj.name, "target": target.name},
                 "PullCubeTool planner only supports pulling cube with l_shape_tool.",
             )
-        if self.hook_pose is None:
+        if self.hook_pose is None or self.hook_tool_pose is None:
             return self._fail(
                 "pull_with_tool",
                 {"tool": tool.name, "obj": obj.name, "target": target.name},
@@ -1142,7 +1147,7 @@ class ManiSkillPullCubeToolPlannerRobot:
 
     def _default_pull_frame(self, pull_frame: Optional[str]) -> str:
         if pull_frame is None:
-            return "world" if self.robot_uid == "xarm6_robotiq" else "tool"
+            return "toward_base" if self.robot_uid == "xarm6_robotiq" else "tool"
         normalized = str(pull_frame).strip().lower().replace("-", "_")
         aliases = {
             "local": "tool",
@@ -1159,14 +1164,30 @@ class ManiSkillPullCubeToolPlannerRobot:
         import sapien
 
         assert self.hook_pose is not None
+        assert self.hook_tool_pose is not None
         if pull_frame == "tool":
-            return self.hook_pose * sapien.Pose([-depth, 0.0, 0.0])
+            return self._tcp_pose_for_tool_pose(self.hook_tool_pose * sapien.Pose([-depth, 0.0, 0.0]))
 
         if pull_frame == "toward_base":
             direction = self._cube_to_base_direction()
         else:
             direction = np.array([-1.0, 0.0, 0.0], dtype=np.float64)
-        return sapien.Pose(np.asarray(self.hook_pose.p, dtype=np.float64) + direction * depth, self.hook_pose.q)
+        tool_target = sapien.Pose(
+            np.asarray(self.hook_tool_pose.p, dtype=np.float64) + direction * depth,
+            self.hook_tool_pose.q,
+        )
+        return self._tcp_pose_for_tool_pose(tool_target)
+
+    def _tool_to_tcp_transform(self) -> Any:
+        base = self._base_env()
+        tool_pose = _sapien_pose_from_any(base.l_shape_tool.pose)
+        tcp_pose = _sapien_pose_from_any(base.agent.tcp.pose)
+        return tool_pose.inv() * tcp_pose
+
+    def _tcp_pose_for_tool_pose(self, tool_pose: Any) -> Any:
+        if self.tool_to_tcp is None:
+            return tool_pose
+        return tool_pose * self.tool_to_tcp
 
     def _cube_position(self) -> Optional[np.ndarray]:
         try:
@@ -1216,6 +1237,12 @@ class ManiSkillPullCubeToolPlannerRobot:
                 if self.pull_start_cube_pos is not None:
                     cube_delta = cube_pos - self.pull_start_cube_pos
                     parts.append(f"cube_delta={np.round(cube_delta, 4).tolist()}")
+                try:
+                    tool_pos = np.asarray(_sapien_pose_from_any(base.l_shape_tool.pose).p, dtype=np.float64)
+                    parts.append(f"tool_pos={np.round(tool_pos, 4).tolist()}")
+                    parts.append(f"tool_cube_xy={float(np.linalg.norm(tool_pos[:2] - cube_pos[:2])):.4f}")
+                except Exception:
+                    pass
                 try:
                     base_pos = np.asarray(
                         _sapien_pose_from_any(base.agent.robot.get_links()[0].pose).p,

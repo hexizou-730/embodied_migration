@@ -220,7 +220,7 @@ class RealBackendTest(unittest.TestCase):
         panda = ManiSkillPullCubeToolPlannerRobot(Env(), robot_uid="panda", control_mode="pd_joint_pos")
         xarm = ManiSkillPullCubeToolPlannerRobot(Env(), robot_uid="xarm6_robotiq", control_mode="pd_joint_pos")
         self.assertEqual(panda._default_pull_frame(None), "tool")
-        self.assertEqual(xarm._default_pull_frame(None), "world")
+        self.assertEqual(xarm._default_pull_frame(None), "toward_base")
         self.assertEqual(xarm._default_pull_frame("tool-local"), "tool")
         self.assertEqual(xarm._default_pull_frame("towards_base"), "toward_base")
 
