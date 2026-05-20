@@ -224,6 +224,16 @@ class RealBackendTest(unittest.TestCase):
         self.assertEqual(xarm._default_pull_frame("tool-local"), "tool")
         self.assertEqual(xarm._default_pull_frame("towards_base"), "toward_base")
 
+    def test_iterative_prompt_exposes_xarm_tool_grasp_offset(self):
+        task = get_task_spec("pull_cube_tool")
+        prompt = build_iterative_prompt(
+            task=task,
+            source_robot="panda",
+            target_robot="xarm6_robotiq",
+            previous_attempts=[],
+        )
+        self.assertIn("tool_grasp_x_offset=0.08", prompt)
+
     def test_pick_cube_place_accepts_success_while_held(self):
         class Space:
             shape = (4,)

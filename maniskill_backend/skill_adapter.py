@@ -856,6 +856,7 @@ class ManiSkillPullCubeToolPlannerRobot:
         behind_margin: float = 0.0,
         approach_extra: float = 0.08,
         lift_height: float = 0.35,
+        tool_grasp_x_offset: Optional[float] = None,
     ) -> bool:
         if tool.name != "l_shape_tool" or obj.name != "cube":
             return self._fail(
@@ -876,6 +877,9 @@ class ManiSkillPullCubeToolPlannerRobot:
         behind_margin = float(np.clip(behind_margin, -0.02, 0.10))
         approach_extra = float(np.clip(approach_extra, 0.02, 0.20))
         lift_height = float(np.clip(lift_height, 0.20, 0.50))
+        if tool_grasp_x_offset is None:
+            tool_grasp_x_offset = 0.08 if self.robot_uid == "xarm6_robotiq" else 0.02
+        tool_grasp_x_offset = float(np.clip(tool_grasp_x_offset, 0.0, 0.14))
         tool_obb = get_actor_obb(base.l_shape_tool)
         approaching = np.array([0.0, 0.0, -1.0])
         target_closing = _pose_matrix(base.agent.tcp.pose)[:3, 1]
@@ -885,13 +889,24 @@ class ManiSkillPullCubeToolPlannerRobot:
             target_closing=target_closing,
             depth=0.03,
         )
-        self.grasp_pose = _sapien_pose_from_any(
-            base.agent.build_grasp_pose(
-                approaching,
-                grasp_info["closing"],
-                _sapien_pose_from_any(base.l_shape_tool.pose).p,
+        tool_pose = _sapien_pose_from_any(base.l_shape_tool.pose)
+        if self.robot_uid == "xarm6_robotiq":
+            grasp_center = (tool_pose * sapien.Pose([tool_grasp_x_offset, 0.0, 0.0])).p
+            self.grasp_pose = _sapien_pose_from_any(
+                base.agent.build_grasp_pose(
+                    approaching,
+                    grasp_info["closing"],
+                    grasp_center,
+                )
             )
-        ) * sapien.Pose([0.02, 0.0, 0.0])
+        else:
+            self.grasp_pose = _sapien_pose_from_any(
+                base.agent.build_grasp_pose(
+                    approaching,
+                    grasp_info["closing"],
+                    tool_pose.p,
+                )
+            ) * sapien.Pose([tool_grasp_x_offset, 0.0, 0.0])
 
         reach_pose = self.grasp_pose * sapien.Pose([0.0, 0.0, -0.05])
         if not self._capture(self._move_to_pose(reach_pose, prefer_rrt=True), "reach_tool"):
@@ -906,7 +921,8 @@ class ManiSkillPullCubeToolPlannerRobot:
                 {"tool": tool.name, "obj": obj.name},
                 "motion planning failed at the tool grasp pose",
             )
-        if not self._capture(planner.close_gripper(), "close_gripper"):
+        close_steps = 20 if self.robot_uid == "xarm6_robotiq" else 6
+        if not self._capture(planner.close_gripper(t=close_steps), "close_gripper"):
             return self._fail(
                 "hook_object",
                 {"tool": tool.name, "obj": obj.name},
@@ -987,6 +1003,7 @@ class ManiSkillPullCubeToolPlannerRobot:
                 "behind_margin": behind_margin,
                 "approach_extra": approach_extra,
                 "lift_height": lift_height,
+                "tool_grasp_x_offset": tool_grasp_x_offset,
                 "tool_tcp_scale": round(float(self.tool_tcp_scale), 3),
             },
             True,

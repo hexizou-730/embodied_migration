@@ -117,7 +117,7 @@ For `pull_cube_tool`, the iterative runner exposes tunable target-code
 parameters:
 
 ```python
-robot.hook_object(tool, cube, hook_y_offset=-0.067, behind_margin=0.0)
+robot.hook_object(tool, cube, hook_y_offset=-0.067, behind_margin=0.0, tool_grasp_x_offset=0.08)
 robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="toward_base")
 ```
 
@@ -125,6 +125,8 @@ robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame=
 official tool-local pull by default; xarm6 defaults to pulling toward its base.
 The wrapper also compensates for the held tool's actual offset from the TCP, so
 tool-contact targets are not treated as gripper-center targets.
+`tool_grasp_x_offset` lets xarm6 grasp deeper along the L-shaped tool handle
+when the Robotiq gripper cannot stably carry the official Panda grasp point.
 
 Run:
 

@@ -92,6 +92,7 @@ def build_migration_prompt(request: MigrationRequest) -> str:
                 "",
                 "# Task-specific API note",
                 "- For pull_cube_tool, robot.hook_object(tool, cube) already grasps the L-shaped tool and positions it behind the cube.",
+                "- For xarm6, robot.hook_object(tool, cube, tool_grasp_x_offset=0.08) grasps deeper along the tool handle.",
                 "- Do not call robot.grasp(tool) for l_shape_tool; direct tool grasp is rejected by this task wrapper.",
                 '- robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="toward_base") can tune xarm6 pulling.',
                 '- pull_frame may be "tool", "world", or "toward_base".',
