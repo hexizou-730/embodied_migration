@@ -13,6 +13,7 @@ FAILURE_TYPES = (
     "reachability failure",
     "gripper/force failure",
     "alignment failure",
+    "insertion failure",
     "insertion speed failure",
     "tool-use ordering failure",
     "impossible-task refusal failure",
@@ -77,6 +78,8 @@ def classify_failure(
         return "tool-use ordering failure"
     if "align" in text or "misalign" in text or "pose error" in text:
         return "alignment failure"
+    if "not inserted" in text or "insertion failure" in text or "peg_head_pos_at_hole" in text:
+        return "insertion failure"
     if "speed" in text or "too fast" in text:
         return "insertion speed failure"
     if "not placed" in text or "not at goal" in text or "place" in text:

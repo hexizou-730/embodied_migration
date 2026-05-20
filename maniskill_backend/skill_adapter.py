@@ -680,14 +680,25 @@ class ManiSkillPandaPegInsertionPlannerRobot:
 
         import sapien
 
-        target_pose = self.insert_pose * sapien.Pose([0.05, 0.0, 0.0])
-        if not self._capture(self._ensure_planner().move_to_pose_with_screw(target_pose), "insert"):
+        ok = False
+        failed_stage = ""
+        for depth in (0.05, 0.10, 0.15, 0.20):
+            target_pose = self.insert_pose * sapien.Pose([depth, 0.0, 0.0])
+            if not self._capture(
+                self._ensure_planner().move_to_pose_with_screw(target_pose),
+                f"insert_{depth:.2f}",
+            ):
+                failed_stage = f"motion planning failed during insertion depth {depth:.2f}m"
+                break
+            ok = self._evaluate_success()
+            if ok:
+                break
+        if failed_stage and not ok:
             return self._fail(
                 "insert",
                 {"obj": obj.name, "target": target.name, "speed": float(speed)},
-                "motion planning failed during insertion",
+                failed_stage,
             )
-        ok = self._evaluate_success()
         diagnostics = self._peg_diagnostics()
         return self._log(
             "insert",

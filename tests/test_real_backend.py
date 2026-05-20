@@ -280,6 +280,13 @@ class RealBackendTest(unittest.TestCase):
             classify_failure(success=False, message="cube was not placed at goal"),
             "execution failure",
         )
+        self.assertEqual(
+            classify_failure(
+                success=False,
+                message="peg was not inserted; peg_head_pos_at_hole=[-0.1, 0.0, 0.0]",
+            ),
+            "insertion failure",
+        )
 
     def test_real_failure_report_mentions_pick_cube_skill_failure(self):
         task = get_task_spec("pick_cube")
