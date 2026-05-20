@@ -75,6 +75,7 @@ class RealBackendTest(unittest.TestCase):
         task = get_task_spec("pick_cube")
         self.assertEqual(task.task_id, "pick_cube")
         self.assertEqual(task.name_cn, "抓取方块")
+        self.assertEqual(task.source_robot, "panda")
         self.assertEqual(task.maniskill_env_id, "PickCube-v1")
         self.assertIn("robot.place", task.source_program)
 
@@ -84,6 +85,7 @@ class RealBackendTest(unittest.TestCase):
 
     def test_oracle_code_is_real_source_program(self):
         task = get_task_spec("peg_insertion")
+        self.assertEqual(task.source_robot, "panda_wristcam")
         self.assertIn("xarm6_robotiq", task.target_robots)
         oracle = build_oracle_code(task)
         self.assertIn("robot.align_to_target", oracle)
