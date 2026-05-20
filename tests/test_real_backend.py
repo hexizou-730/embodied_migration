@@ -329,6 +329,23 @@ class RealBackendTest(unittest.TestCase):
             classify_failure(success=False, message="cubeA was not stably stacked on cubeB"),
             "placement stability failure",
         )
+        self.assertEqual(
+            classify_failure(
+                success=False,
+                message="tool pull failed; cube was not pulled into workspace; cube_distance=[0.59]",
+            ),
+            "tool-use execution failure",
+        )
+
+    def test_pull_cube_tool_prompt_forbids_direct_tool_grasp(self):
+        request = MigrationRequest.from_ids(
+            task_id="pull_cube_tool",
+            target_robot="xarm6_robotiq",
+            method="llm_card_report",
+        )
+        prompt = build_migration_prompt(request)
+        self.assertIn("hook_object(tool, cube) already grasps", prompt)
+        self.assertIn("Do not call robot.grasp(tool)", prompt)
 
     def test_real_failure_report_mentions_pick_cube_skill_failure(self):
         task = get_task_spec("pick_cube")
@@ -361,6 +378,38 @@ class RealBackendTest(unittest.TestCase):
         self.assertIn("pick_cube", text)
         self.assertIn("step 2: place", text)
         self.assertIn("real ManiSkill-backed skill", text)
+
+    def test_pull_cube_tool_report_does_not_suggest_direct_grasp(self):
+        task = get_task_spec("pull_cube_tool")
+        profile = get_robot_profile("xarm6_robotiq")
+        record = TrialRecord(
+            task_id="pull_cube_tool",
+            source_robot="panda",
+            target_robot="xarm6_robotiq",
+            method="source-copy",
+            seed=0,
+            generated_code=task.source_program,
+            success=False,
+            failure_type="tool-use execution failure",
+            message="tool pull failed; cube was not pulled into workspace",
+            info={
+                "execution_log": [
+                    {"step": 1, "api": "hook_object", "args": {"tool": "l_shape_tool", "obj": "cube"}, "ok": True},
+                    {
+                        "step": 2,
+                        "api": "pull_with_tool",
+                        "args": {"tool": "l_shape_tool", "obj": "cube", "target": "workspace"},
+                        "ok": False,
+                        "message": "tool pull failed; cube was not pulled into workspace",
+                    },
+                ]
+            },
+        )
+        report = build_real_failure_report(task=task, target_profile=profile, failed_record=record)
+        text = report.to_prompt_section()
+        self.assertIn("source-level tool-use order was already correct", text)
+        self.assertIn("Do not add robot.grasp(tool)", text)
+        self.assertNotIn("requires grasping the tool before pulling", text)
 
     def test_results_summary_and_jsonl(self):
         records = [

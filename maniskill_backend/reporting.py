@@ -163,12 +163,13 @@ def build_real_failure_report(
             diagnosis=[
                 f"Execution log failed at {failed_step}.",
                 message,
-                "Tool use requires grasping the tool before pulling the cube.",
+                "The source-level tool-use order was already correct: hook_object succeeded before pull_with_tool.",
+                "The failure happened during the physical pull, so it is a tool-use execution or skill-wrapper issue rather than a missing direct grasp call.",
             ],
             suggestions=[
-                "Call hook_object(tool, cube) before pull_with_tool(tool, cube, workspace).",
-                "Check the return value of hook_object before pulling.",
-                "Use the L-shaped tool object; do not directly grasp or teleport the cube.",
+                "Keep the sequence hook_object(tool, cube) -> pull_with_tool(tool, cube, workspace).",
+                "Do not add robot.grasp(tool); hook_object already grasps and positions the L-shaped tool.",
+                "If high-level code cannot change pull distance or hook geometry, preserve the source sequence and report that the target skill wrapper or planner needs migration.",
                 "Use only the allowed high-level skill API.",
             ],
         )

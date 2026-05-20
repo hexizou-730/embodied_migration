@@ -86,6 +86,16 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         f"# Target Robot: {request.target_profile.name}",
     ]
 
+    if request.task.task_id == "pull_cube_tool":
+        lines.extend(
+            [
+                "",
+                "# Task-specific API note",
+                "- For pull_cube_tool, robot.hook_object(tool, cube) already grasps the L-shaped tool and positions it behind the cube.",
+                "- Do not call robot.grasp(tool) for l_shape_tool; direct tool grasp is rejected by this task wrapper.",
+            ]
+        )
+
     if method == "llm_card_report":
         lines.append(request.target_profile.to_prompt_section())
     else:

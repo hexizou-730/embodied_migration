@@ -17,6 +17,7 @@ FAILURE_TYPES = (
     "insertion failure",
     "insertion speed failure",
     "tool-use ordering failure",
+    "tool-use execution failure",
     "impossible-task refusal failure",
     "invalid generated code",
     "execution failure",
@@ -73,9 +74,16 @@ def classify_failure(
 
     if "unreachable" in text or "reach" in text:
         return "reachability failure"
+    if (
+        "tool pull failed" in text
+        or "not pulled into workspace" in text
+        or "cube_progress" in text
+        or "cube_distance" in text
+    ):
+        return "tool-use execution failure"
     if "grasp" in text or "gripper" in text or "force" in text:
         return "gripper/force failure"
-    if "tool" in text or "hook" in text or "ordering" in text:
+    if "ordering" in text or "called before" in text:
         return "tool-use ordering failure"
     if "align" in text or "misalign" in text or "pose error" in text:
         return "alignment failure"
