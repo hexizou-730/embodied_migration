@@ -18,6 +18,7 @@ from .skill_adapter import (
     ManiSkillPandaPegInsertionPlannerRobot,
     ManiSkillPegInsertionRobot,
     ManiSkillPickCubeRobot,
+    ManiSkillPullCubeToolPlannerRobot,
     ManiSkillSceneAdapter,
     ManiSkillStackCubePlannerRobot,
     ManiSkillXArmPickCubePlannerRobot,
@@ -25,12 +26,13 @@ from .skill_adapter import (
 from .tasks import get_task_spec
 
 
-SUPPORTED_REAL_TASKS = ("pick_cube", "peg_insertion", "stack_cube")
+SUPPORTED_REAL_TASKS = ("pick_cube", "peg_insertion", "stack_cube", "pull_cube_tool")
 
 DEFAULT_CONTROL_MODE: Dict[str, str] = {
     "pick_cube": "pd_ee_delta_pos",
     "peg_insertion": "pd_ee_pose",
     "stack_cube": "pd_joint_pos",
+    "pull_cube_tool": "pd_joint_pos",
 }
 
 
@@ -40,6 +42,8 @@ def _default_control_mode(task_id: str, robot_uid: str) -> str:
     if task_id == "peg_insertion" and robot_uid in {"panda", "panda_wristcam"}:
         return "pd_joint_pos"
     if task_id == "stack_cube" and robot_uid in {"panda", "xarm6_robotiq"}:
+        return "pd_joint_pos"
+    if task_id == "pull_cube_tool" and robot_uid in {"panda", "xarm6_robotiq"}:
         return "pd_joint_pos"
     return DEFAULT_CONTROL_MODE.get(task_id, "pd_ee_delta_pos")
 
@@ -68,6 +72,13 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
             return ManiSkillStackCubePlannerRobot(env, robot_uid=robot_uid, control_mode=control_mode)
         raise ValueError(
             "StackCube real runner currently supports panda/xarm6_robotiq with "
+            f"pd_joint_pos-style planner control, got robot={robot_uid!r}, control_mode={control_mode!r}."
+        )
+    if task_id == "pull_cube_tool":
+        if robot_uid in {"panda", "xarm6_robotiq"} and control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
+            return ManiSkillPullCubeToolPlannerRobot(env, robot_uid=robot_uid, control_mode=control_mode)
+        raise ValueError(
+            "PullCubeTool real runner currently supports panda/xarm6_robotiq with "
             f"pd_joint_pos-style planner control, got robot={robot_uid!r}, control_mode={control_mode!r}."
         )
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")

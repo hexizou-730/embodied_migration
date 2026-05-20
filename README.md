@@ -45,6 +45,7 @@ real simulator re-execution
 |---|---|---|---|
 | `pick_cube` | 抓取方块 | `PickCube-v1` | validated smoke and controller-portability task |
 | `stack_cube` | 堆叠方块 | `StackCube-v1` | second real task, official Panda solver succeeds at seed 0 |
+| `pull_cube_tool` | 用工具拉方块 | `PullCubeTool-v1` | tool-use task, official Panda solver succeeds at seed 0 |
 | `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | parked: official solver failed at seed 0 |
 
 ## Current Robots
@@ -111,5 +112,6 @@ pick_cube + panda + pd_ee_delta_pos -> success
 pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
 pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
 stack_cube + official Panda solver -> success at seed 0
+pull_cube_tool + official Panda solver -> success at seed 0
 peg_insertion + official Panda solver -> failure at seed 0, not used yet
 ```

@@ -806,6 +806,315 @@ class ManiSkillStackCubePlannerRobot:
         return self._log(api, args, False, False, message)
 
 
+class ManiSkillPullCubeToolPlannerRobot:
+    """PullCubeTool-v1 wrapper backed by ManiSkill motion planners.
+
+    The high-level LMP split is:
+    - hook_object(tool, cube): grasp the L-shaped tool and position its hook
+      behind the cube;
+    - pull_with_tool(tool, cube, workspace): pull the cube back toward the
+      robot workspace and check ManiSkill's success condition.
+    """
+
+    def __init__(
+        self,
+        env: Any,
+        *,
+        robot_uid: str,
+        control_mode: Optional[str] = None,
+        debug: bool = False,
+        vis: bool = False,
+    ) -> None:
+        if robot_uid not in {"panda", "xarm6_robotiq"}:
+            raise ValueError(f"PullCubeTool planner does not support robot_uid={robot_uid!r}.")
+        if control_mode not in {None, "pd_joint_pos", "pd_joint_pos_vel"}:
+            raise ValueError(
+                "PullCubeTool planner adapter requires control_mode "
+                f"'pd_joint_pos' or 'pd_joint_pos_vel', got {control_mode!r}."
+            )
+        self.env = env
+        self.robot_uid = robot_uid
+        self.control_mode = control_mode
+        self.debug = debug
+        self.vis = vis
+        self.planner: Any = None
+        self.grasp_pose: Any = None
+        self.hook_pose: Any = None
+        self.last_info: Dict[str, Any] = {}
+        self.events: List[Dict[str, Any]] = []
+
+    def hook_object(self, tool: SkillTarget, obj: SkillTarget) -> bool:
+        if tool.name != "l_shape_tool" or obj.name != "cube":
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "PullCubeTool planner only supports l_shape_tool hooking cube.",
+            )
+
+        import sapien
+        from mani_skill.examples.motionplanning.base_motionplanner.utils import (
+            compute_grasp_info_by_obb,
+            get_actor_obb,
+        )
+
+        base = self._base_env()
+        planner = self._ensure_planner()
+        tool_obb = get_actor_obb(base.l_shape_tool)
+        approaching = np.array([0.0, 0.0, -1.0])
+        target_closing = _pose_matrix(base.agent.tcp.pose)[:3, 1]
+        grasp_info = compute_grasp_info_by_obb(
+            tool_obb,
+            approaching=approaching,
+            target_closing=target_closing,
+            depth=0.03,
+        )
+        self.grasp_pose = _sapien_pose_from_any(
+            base.agent.build_grasp_pose(
+                approaching,
+                grasp_info["closing"],
+                _sapien_pose_from_any(base.l_shape_tool.pose).p,
+            )
+        ) * sapien.Pose([0.02, 0.0, 0.0])
+
+        reach_pose = self.grasp_pose * sapien.Pose([0.0, 0.0, -0.05])
+        if not self._capture(self._move_to_pose(reach_pose, prefer_rrt=True), "reach_tool"):
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "motion planning failed while reaching the L-shaped tool",
+            )
+        if not self._capture(planner.move_to_pose_with_screw(self.grasp_pose), "grasp_tool"):
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "motion planning failed at the tool grasp pose",
+            )
+        if not self._capture(planner.close_gripper(), "close_gripper"):
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "close gripper command failed while grasping tool",
+            )
+
+        grasped = self._agent_is_grasping_tool()
+        self._log(
+            "tool_grasp_check_after_close",
+            {"tool": tool.name},
+            grasped,
+            grasped,
+            "" if grasped else "gripper closed but L-shaped tool not held",
+        )
+        if not grasped:
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "L-shaped tool was not grasped",
+            )
+
+        lift_height = 0.35
+        lift_pose = sapien.Pose(
+            np.asarray(self.grasp_pose.p, dtype=np.float64) + np.array([0.0, 0.0, lift_height]),
+            self.grasp_pose.q,
+        )
+        if not self._capture(planner.move_to_pose_with_screw(lift_pose), "lift_tool"):
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "motion planning failed while lifting the tool",
+            )
+
+        cube_pos = np.asarray(_sapien_pose_from_any(base.cube.pose).p, dtype=np.float64)
+        hook_length = float(_to_numpy(base.hook_length)[0])
+        cube_half_size = float(_to_numpy(base.cube_half_size)[0])
+
+        approach_pose = sapien.Pose(
+            cube_pos + np.array([-(hook_length + cube_half_size + 0.08), 0.0, lift_height - 0.05]),
+            self.grasp_pose.q,
+        )
+        if not self._capture(self._move_to_pose(approach_pose, prefer_rrt=True), "approach_cube_with_tool"):
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "motion planning failed while approaching cube with tool",
+            )
+
+        self.hook_pose = sapien.Pose(
+            cube_pos + np.array([-(hook_length + cube_half_size), -0.067, 0.0]),
+            self.grasp_pose.q,
+        )
+        if not self._capture(planner.move_to_pose_with_screw(self.hook_pose), "hook_cube"):
+            return self._fail(
+                "hook_object",
+                {"tool": tool.name, "obj": obj.name},
+                "motion planning failed while positioning hook behind cube",
+            )
+
+        return self._log(
+            "hook_object",
+            {"tool": tool.name, "obj": obj.name},
+            True,
+            True,
+            "",
+        )
+
+    def pull_with_tool(self, tool: SkillTarget, obj: SkillTarget, target: SkillTarget) -> bool:
+        if tool.name != "l_shape_tool" or obj.name != "cube":
+            return self._fail(
+                "pull_with_tool",
+                {"tool": tool.name, "obj": obj.name, "target": target.name},
+                "PullCubeTool planner only supports pulling cube with l_shape_tool.",
+            )
+        if self.hook_pose is None:
+            return self._fail(
+                "pull_with_tool",
+                {"tool": tool.name, "obj": obj.name, "target": target.name},
+                "pull_with_tool called before hook_object succeeded.",
+            )
+
+        import sapien
+
+        target_pose = self.hook_pose * sapien.Pose([-0.35, 0.0, 0.0])
+        if not self._capture(self._move_to_pose(target_pose, prefer_rrt=False), "pull_cube_with_tool"):
+            return self._fail(
+                "pull_with_tool",
+                {"tool": tool.name, "obj": obj.name, "target": target.name},
+                "motion planning failed while pulling cube with tool",
+            )
+
+        ok = self._evaluate_success()
+        diagnostics = self._pull_diagnostics()
+        return self._log(
+            "pull_with_tool",
+            {"tool": tool.name, "obj": obj.name, "target": target.name},
+            ok,
+            ok,
+            "" if ok else f"tool pull failed; cube was not pulled into workspace; {diagnostics}",
+        )
+
+    def grasp(self, obj: SkillTarget) -> bool:
+        return self._fail(
+            "grasp",
+            {"obj": obj.name},
+            "Use hook_object(tool, cube) for PullCubeTool-v1 instead of direct grasp.",
+        )
+
+    def place(self, obj: SkillTarget, target: SkillTarget) -> bool:
+        return self._fail(
+            "place",
+            {"obj": obj.name, "target": target.name},
+            "place is not implemented for PullCubeTool-v1",
+        )
+
+    def align_to_target(self, obj: SkillTarget, target: SkillTarget, tolerance: float) -> bool:
+        return self._fail(
+            "align_to_target",
+            {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+            "align_to_target is not implemented for PullCubeTool-v1",
+        )
+
+    def insert(self, obj: SkillTarget, target: SkillTarget, speed: float) -> bool:
+        return self._fail(
+            "insert",
+            {"obj": obj.name, "target": target.name, "speed": float(speed)},
+            "insert is not implemented for PullCubeTool-v1",
+        )
+
+    def execution_log(self) -> List[Dict[str, Any]]:
+        return list(self.events)
+
+    def close(self) -> None:
+        if self.planner is not None and hasattr(self.planner, "close"):
+            self.planner.close()
+
+    def _ensure_planner(self) -> Any:
+        if self.planner is None:
+            if self.robot_uid == "xarm6_robotiq":
+                from mani_skill.examples.motionplanning.xarm6.motionplanner import (
+                    XArm6RobotiqMotionPlanningSolver,
+                )
+
+                planner_cls = XArm6RobotiqMotionPlanningSolver
+                limits = {"joint_vel_limits": 0.5, "joint_acc_limits": 0.5}
+            else:
+                from mani_skill.examples.motionplanning.panda.motionplanner import (
+                    PandaArmMotionPlanningSolver,
+                )
+
+                planner_cls = PandaArmMotionPlanningSolver
+                limits = {"joint_vel_limits": 0.75, "joint_acc_limits": 0.75}
+            base = self._base_env()
+            self.planner = planner_cls(
+                self.env,
+                debug=self.debug,
+                vis=self.vis,
+                base_pose=base.agent.robot.pose,
+                visualize_target_grasp_pose=False,
+                print_env_info=False,
+                **limits,
+            )
+        return self.planner
+
+    def _move_to_pose(self, pose: Any, *, prefer_rrt: bool = False) -> Any:
+        planner = self._ensure_planner()
+        if self.robot_uid == "xarm6_robotiq" and prefer_rrt:
+            return planner.move_to_pose_with_RRTStar(pose)
+        return planner.move_to_pose_with_screw(pose)
+
+    def _capture(self, result: Any, label: str) -> bool:
+        if result == -1:
+            self.last_info = {"planner_status": "failed", "planner_stage": label}
+            return False
+        if isinstance(result, tuple) and len(result) >= 5:
+            self.last_info = dict(result[4] or {})
+        return True
+
+    def _base_env(self) -> Any:
+        return getattr(self.env, "unwrapped", self.env)
+
+    def _agent_is_grasping_tool(self) -> bool:
+        try:
+            value = self._base_env().agent.is_grasping(self._base_env().l_shape_tool, max_angle=20)
+            return bool(_to_numpy(value)[0])
+        except Exception:
+            return False
+
+    def _evaluate_success(self) -> bool:
+        try:
+            result = self._base_env().evaluate()
+            self.last_info = dict(result or {})
+            return _dict_bool(result, "success")
+        except Exception:
+            return False
+
+    def _pull_diagnostics(self) -> str:
+        try:
+            result = self._base_env().evaluate()
+            parts = []
+            for key in ("success", "success_once", "success_at_end", "cube_progress", "cube_distance"):
+                if key in result:
+                    parts.append(f"{key}={_to_numpy(result[key]).tolist()}")
+            return ", ".join(parts) if parts else "pull diagnostics unavailable"
+        except Exception:
+            return "pull diagnostics unavailable"
+
+    def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
+        self.events.append(
+            {
+                "step": len(self.events) + 1,
+                "api": api,
+                "args": dict(args),
+                "result": bool(result),
+                "ok": bool(ok),
+                "message": message,
+                "failure_type": "" if ok else "execution failure",
+            }
+        )
+        return bool(ok)
+
+    def _fail(self, api: str, args: Dict[str, Any], message: str) -> bool:
+        return self._log(api, args, False, False, message)
+
+
 class ManiSkillPandaPegInsertionPlannerRobot:
     """PegInsertionSide-v1 wrapper backed by ManiSkill's official Panda planner."""
 

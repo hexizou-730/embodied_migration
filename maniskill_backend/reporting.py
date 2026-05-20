@@ -143,6 +143,36 @@ def build_real_failure_report(
             ],
         )
 
+    if task.task_id == "pull_cube_tool":
+        return FailureReport(
+            task_name=task.task_id,
+            instruction=task.instruction,
+            robot_name=target_profile.name,
+            expected={
+                "execution_result": "success",
+                "hook_tool": "robot.hook_object(l_shape_tool, cube) returns True",
+                "pull_cube": "robot.pull_with_tool(l_shape_tool, cube, workspace) returns True",
+                "workspace_state": "cube is pulled back into the robot workspace",
+            },
+            actual={
+                "execution_result": "failure",
+                "failure_type": failed_record.failure_type,
+                "message": message,
+                "failed_skill_call": failed_step,
+            },
+            diagnosis=[
+                f"Execution log failed at {failed_step}.",
+                message,
+                "Tool use requires grasping the tool before pulling the cube.",
+            ],
+            suggestions=[
+                "Call hook_object(tool, cube) before pull_with_tool(tool, cube, workspace).",
+                "Check the return value of hook_object before pulling.",
+                "Use the L-shaped tool object; do not directly grasp or teleport the cube.",
+                "Use only the allowed high-level skill API.",
+            ],
+        )
+
     return FailureReport(
         task_name=task.task_id,
         instruction=task.instruction,

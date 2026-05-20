@@ -21,6 +21,7 @@ from maniskill_backend.sim_check import summarize_value
 from maniskill_backend.skill_adapter import (
     ManiSkillPandaPegInsertionPlannerRobot,
     ManiSkillPickCubeRobot,
+    ManiSkillPullCubeToolPlannerRobot,
     ManiSkillSceneAdapter,
     ManiSkillStackCubePlannerRobot,
     ManiSkillXArmPickCubePlannerRobot,
@@ -100,6 +101,14 @@ class RealBackendTest(unittest.TestCase):
         self.assertIn("cubeA", task.source_program)
         self.assertIn("cubeB", task.source_program)
 
+    def test_pull_cube_tool_task_is_available(self):
+        task = get_task_spec("pull_cube_too")
+        self.assertEqual(task.task_id, "pull_cube_tool")
+        self.assertEqual(task.maniskill_env_id, "PullCubeTool-v1")
+        self.assertEqual(task.name_cn, "用工具拉方块")
+        self.assertIn("robot.hook_object", task.source_program)
+        self.assertIn("robot.pull_with_tool", task.source_program)
+
     def test_success_from_ret_val(self):
         self.assertTrue(success_from_ret_val(True))
         self.assertTrue(success_from_ret_val("ok"))
@@ -111,6 +120,7 @@ class RealBackendTest(unittest.TestCase):
         self.assertEqual(_default_control_mode("pick_cube", "panda"), "pd_ee_delta_pos")
         self.assertEqual(_default_control_mode("peg_insertion", "panda_wristcam"), "pd_joint_pos")
         self.assertEqual(_default_control_mode("stack_cube", "xarm6_robotiq"), "pd_joint_pos")
+        self.assertEqual(_default_control_mode("pull_cube_tool", "xarm6_robotiq"), "pd_joint_pos")
 
     def test_pick_cube_skill_adapter_action_shape(self):
         class Space:
@@ -193,6 +203,14 @@ class RealBackendTest(unittest.TestCase):
         robot = _build_robot_adapter("stack_cube", Env(), "pd_joint_pos", "xarm6_robotiq")
         self.assertIsInstance(robot, ManiSkillStackCubePlannerRobot)
         self.assertEqual(robot.robot_uid, "xarm6_robotiq")
+
+    def test_real_runner_uses_pull_cube_tool_planner_for_joint_pos(self):
+        class Env:
+            pass
+
+        robot = _build_robot_adapter("pull_cube_tool", Env(), "pd_joint_pos", "panda")
+        self.assertIsInstance(robot, ManiSkillPullCubeToolPlannerRobot)
+        self.assertEqual(robot.robot_uid, "panda")
 
     def test_pick_cube_place_accepts_success_while_held(self):
         class Space:

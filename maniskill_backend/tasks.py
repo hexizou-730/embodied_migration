@@ -81,6 +81,19 @@ else:
 """
 
 
+PULL_CUBE_TOOL_SOURCE = """
+tool = scene.get_object("l_shape_tool")
+cube = scene.get_object("cube")
+workspace = scene.get_region("workspace")
+
+ok = robot.hook_object(tool, cube)
+if ok:
+    ret_val = robot.pull_with_tool(tool, cube, workspace)
+else:
+    ret_val = "failure: hook"
+"""
+
+
 TASK_SPECS: Dict[str, TaskSpec] = {
     "pick_cube": TaskSpec(
         task_id="pick_cube",
@@ -135,6 +148,24 @@ TASK_SPECS: Dict[str, TaskSpec] = {
         ),
         notes="Stable second real task: official Panda solver succeeds at seed 0.",
     ),
+    "pull_cube_tool": TaskSpec(
+        task_id="pull_cube_tool",
+        display_name="Pull cube with L-shaped tool",
+        name_cn="用工具拉方块",
+        maniskill_env_id="PullCubeTool-v1",
+        instruction="Use the L-shaped tool to pull the cube back into the robot workspace.",
+        instruction_cn="使用 L 形工具钩住方块，并把方块拉回机器人可达区域。",
+        source_robot="panda",
+        target_robots=("panda", "xarm6_robotiq"),
+        source_program=PULL_CUBE_TOOL_SOURCE,
+        expected_failure_modes=(
+            "tool-use ordering failure",
+            "gripper/force failure",
+            "reachability failure",
+            "execution failure",
+        ),
+        notes="Tool-use task: official Panda solver succeeds at seed 0.",
+    ),
 }
 
 
@@ -148,6 +179,10 @@ TASK_ALIASES: Dict[str, str] = {
     "StackCube-v1": "stack_cube",
     "stack-cube": "stack_cube",
     "stackcube": "stack_cube",
+    "PullCubeTool-v1": "pull_cube_tool",
+    "pull-cube-tool": "pull_cube_tool",
+    "pullcubetool": "pull_cube_tool",
+    "pull_cube_too": "pull_cube_tool",
 }
 
 

@@ -48,6 +48,7 @@ Current task names:
 ```text
 pick_cube      抓取方块       ManiSkill env: PickCube-v1
 stack_cube     堆叠方块       ManiSkill env: StackCube-v1
+pull_cube_tool 用工具拉方块   ManiSkill env: PullCubeTool-v1
 peg_insertion  侧向插 peg     ManiSkill env: PegInsertionSide-v1
 ```
 
@@ -166,6 +167,53 @@ python -m maniskill_backend.real_benchmark \
   --max-episode-steps 200
 ```
 
+## Third Task: Pull Cube With Tool
+
+`pull_cube_tool` is a tool-use task. The source program must hook the cube with
+the L-shaped tool before pulling it back into the robot workspace.
+
+Panda source run:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task pull_cube_tool \
+  --robot panda \
+  --method source-copy \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 300
+```
+
+xarm6 target run:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task pull_cube_tool \
+  --robot xarm6_robotiq \
+  --method source-copy \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 300
+```
+
+Benchmark:
+
+```bash
+python -m maniskill_backend.real_benchmark \
+  --task pull_cube_tool \
+  --robot xarm6_robotiq \
+  --methods source-copy,llm_card_report,oracle \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 300
+```
+
 ## Parked Task: Peg Insertion
 
 `peg_insertion` is currently parked because ManiSkill's official Panda solver
@@ -212,5 +260,6 @@ pick_cube + panda + pd_ee_delta_pos -> success
 pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
 pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
 stack_cube + official Panda solver -> success at seed 0
+pull_cube_tool + official Panda solver -> success at seed 0
 peg_insertion + official Panda solver -> failure at seed 0, parked
 ```
