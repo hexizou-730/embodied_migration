@@ -842,6 +842,7 @@ class ManiSkillPullCubeToolPlannerRobot:
         self.hook_pose: Any = None
         self.hook_tool_pose: Any = None
         self.tool_to_tcp: Any = None
+        self.tool_tcp_scale: float = 1.0
         self.pull_start_cube_pos: Optional[np.ndarray] = None
         self.last_info: Dict[str, Any] = {}
         self.events: List[Dict[str, Any]] = []
@@ -938,6 +939,7 @@ class ManiSkillPullCubeToolPlannerRobot:
                 "motion planning failed while lifting the tool",
             )
         self.tool_to_tcp = self._tool_to_tcp_transform()
+        self.tool_tcp_scale = 1.0
 
         cube_pos = np.asarray(_sapien_pose_from_any(base.cube.pose).p, dtype=np.float64)
         hook_length = float(_to_numpy(base.hook_length)[0])
@@ -948,8 +950,7 @@ class ManiSkillPullCubeToolPlannerRobot:
             cube_pos + np.array([-(behind_distance + approach_extra), 0.0, lift_height - 0.05]),
             _sapien_pose_from_any(base.l_shape_tool.pose).q,
         )
-        approach_pose = self._tcp_pose_for_tool_pose(approach_tool_pose)
-        if not self._capture(self._move_to_pose(approach_pose, prefer_rrt=True), "approach_cube_with_tool"):
+        if not self._move_to_tool_pose(approach_tool_pose, "approach_cube_with_tool", prefer_rrt=True):
             return self._fail(
                 "hook_object",
                 {"tool": tool.name, "obj": obj.name},
@@ -960,8 +961,7 @@ class ManiSkillPullCubeToolPlannerRobot:
             cube_pos + np.array([-behind_distance, hook_y_offset, 0.0]),
             _sapien_pose_from_any(base.l_shape_tool.pose).q,
         )
-        self.hook_pose = self._tcp_pose_for_tool_pose(self.hook_tool_pose)
-        if not self._capture(planner.move_to_pose_with_screw(self.hook_pose), "hook_cube"):
+        if not self._move_to_tool_pose(self.hook_tool_pose, "hook_cube", prefer_rrt=False):
             return self._fail(
                 "hook_object",
                 {"tool": tool.name, "obj": obj.name},
@@ -977,6 +977,7 @@ class ManiSkillPullCubeToolPlannerRobot:
                 "behind_margin": behind_margin,
                 "approach_extra": approach_extra,
                 "lift_height": lift_height,
+                "tool_tcp_scale": round(float(self.tool_tcp_scale), 3),
             },
             True,
             True,
@@ -1178,16 +1179,44 @@ class ManiSkillPullCubeToolPlannerRobot:
         )
         return self._tcp_pose_for_tool_pose(tool_target)
 
+    def _move_to_tool_pose(self, tool_pose: Any, label: str, *, prefer_rrt: bool) -> bool:
+        scales = [self.tool_tcp_scale]
+        if self.robot_uid == "xarm6_robotiq":
+            scales.extend(scale for scale in (0.75, 0.5, 0.25, 0.0) if scale not in scales)
+        for scale in scales:
+            pose = self._tcp_pose_for_tool_pose(tool_pose, scale=scale)
+            if self._capture(self._move_to_pose(pose, prefer_rrt=prefer_rrt), label):
+                self.tool_tcp_scale = float(scale)
+                self.hook_pose = pose
+                if scale != scales[0]:
+                    self._log(
+                        "tool_tcp_compensation_fallback",
+                        {"planner_stage": label, "tool_tcp_scale": round(float(scale), 3)},
+                        True,
+                        True,
+                        "",
+                    )
+                return True
+        return False
+
     def _tool_to_tcp_transform(self) -> Any:
         base = self._base_env()
         tool_pose = _sapien_pose_from_any(base.l_shape_tool.pose)
         tcp_pose = _sapien_pose_from_any(base.agent.tcp.pose)
         return tool_pose.inv() * tcp_pose
 
-    def _tcp_pose_for_tool_pose(self, tool_pose: Any) -> Any:
+    def _tcp_pose_for_tool_pose(self, tool_pose: Any, *, scale: Optional[float] = None) -> Any:
         if self.tool_to_tcp is None:
             return tool_pose
-        return tool_pose * self.tool_to_tcp
+        if scale is None:
+            scale = self.tool_tcp_scale
+        import sapien
+
+        scaled_tool_to_tcp = sapien.Pose(
+            np.asarray(self.tool_to_tcp.p, dtype=np.float64) * float(scale),
+            self.tool_to_tcp.q,
+        )
+        return tool_pose * scaled_tool_to_tcp
 
     def _cube_position(self) -> Optional[np.ndarray]:
         try:
@@ -1241,6 +1270,7 @@ class ManiSkillPullCubeToolPlannerRobot:
                     tool_pos = np.asarray(_sapien_pose_from_any(base.l_shape_tool.pose).p, dtype=np.float64)
                     parts.append(f"tool_pos={np.round(tool_pos, 4).tolist()}")
                     parts.append(f"tool_cube_xy={float(np.linalg.norm(tool_pos[:2] - cube_pos[:2])):.4f}")
+                    parts.append(f"tool_tcp_scale={self.tool_tcp_scale:.3f}")
                 except Exception:
                     pass
                 try:

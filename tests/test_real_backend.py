@@ -213,7 +213,7 @@ class RealBackendTest(unittest.TestCase):
         self.assertIsInstance(robot, ManiSkillPullCubeToolPlannerRobot)
         self.assertEqual(robot.robot_uid, "panda")
 
-    def test_pull_cube_tool_xarm_defaults_to_world_pull_frame(self):
+    def test_pull_cube_tool_xarm_defaults_to_base_pull_frame(self):
         class Env:
             pass
 
