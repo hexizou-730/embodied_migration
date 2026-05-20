@@ -30,6 +30,9 @@ python -m unittest discover -s tests -v
 
 ## Check ManiSkill
 
+`sim_check` uses the official ManiSkill env id because it talks directly to
+ManiSkill. The experiment runners below use the clearer task names.
+
 ```bash
 python -m maniskill_backend.sim_check \
   --env PickCube-v1 \
@@ -40,11 +43,18 @@ python -m maniskill_backend.sim_check \
 
 ## One Real Trial
 
+Current task names:
+
+```text
+pick_cube      抓取方块       ManiSkill env: PickCube-v1
+peg_insertion  侧向插 peg     ManiSkill env: PegInsertionSide-v1
+```
+
 Panda smoke test:
 
 ```bash
 python -m maniskill_backend.real_runner \
-  --task PickCube-v1 \
+  --task pick_cube \
   --robot panda \
   --method source-copy \
   --seed 0 \
@@ -57,7 +67,7 @@ xarm6 with ManiSkill's official planner path:
 
 ```bash
 python -m maniskill_backend.real_runner \
-  --task PickCube-v1 \
+  --task pick_cube \
   --robot xarm6_robotiq \
   --method source-copy \
   --seed 0 \
@@ -66,7 +76,7 @@ python -m maniskill_backend.real_runner \
   --render-backend gpu
 ```
 
-For `PickCube-v1`, omitting `--control-mode` automatically selects:
+For `pick_cube`, omitting `--control-mode` automatically selects:
 
 ```text
 panda -> pd_ee_delta_pos
@@ -86,7 +96,7 @@ Report shown to the LLM.
 
 ```bash
 python -m maniskill_backend.real_runner \
-  --task PickCube-v1 \
+  --task pick_cube \
   --robot xarm6_robotiq \
   --method llm_card_report \
   --seed 0 \
@@ -99,7 +109,7 @@ python -m maniskill_backend.real_runner \
 
 ```bash
 python -m maniskill_backend.real_benchmark \
-  --task PickCube-v1 \
+  --task pick_cube \
   --robot xarm6_robotiq \
   --methods source-copy,llm_card_report,oracle \
   --seed 0 \
@@ -124,7 +134,7 @@ generated code, raw LLM output, and real execution log.
 The current validated real simulation slice is:
 
 ```text
-PickCube-v1 + panda + pd_ee_delta_pos -> success
-PickCube-v1 + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
-PickCube-v1 + xarm6_robotiq + pd_joint_pos planner -> success
+pick_cube + panda + pd_ee_delta_pos -> success
+pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
+pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
 ```

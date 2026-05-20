@@ -30,13 +30,15 @@ from maniskill_backend.view import records_to_md
 class RealBackendTest(unittest.TestCase):
     def test_profiles_and_real_tasks_are_promptable(self):
         profile = get_robot_profile("xarm6_robotiq")
-        task = get_task_spec("PickCube-v1")
+        task = get_task_spec("pick_cube")
         self.assertIn("Official Specs", profile.to_prompt_section())
         self.assertIn("Derived Task Priors", profile.to_prompt_section())
         self.assertIn("payload_kg", profile.to_prompt_section())
         self.assertIn("recommended_alignment_tolerance_m", profile.to_prompt_section())
         self.assertNotIn("\n  alignment_tolerance_m:", profile.to_prompt_section())
-        self.assertIn("PickCube-v1", task.to_prompt_section())
+        self.assertIn("# Task: pick_cube", task.to_prompt_section())
+        self.assertIn("中文任务: 抓取方块", task.to_prompt_section())
+        self.assertIn("ManiSkill env: PickCube-v1", task.to_prompt_section())
 
     def test_method_set_is_real_only(self):
         self.assertEqual(METHODS, ("source-copy", "llm_card_report", "oracle"))
@@ -47,7 +49,7 @@ class RealBackendTest(unittest.TestCase):
 
     def test_migration_prompt_card_report_method(self):
         request = MigrationRequest.from_ids(
-            task_id="PickCube-v1",
+            task_id="pick_cube",
             target_robot="xarm6_robotiq",
             method="llm_card_report",
         )
@@ -60,7 +62,7 @@ class RealBackendTest(unittest.TestCase):
 
     def test_source_copy_prompt_does_not_include_target_card(self):
         request = MigrationRequest.from_ids(
-            task_id="PickCube-v1",
+            task_id="pick_cube",
             target_robot="xarm6_robotiq",
             method="source-copy",
         )
@@ -69,12 +71,18 @@ class RealBackendTest(unittest.TestCase):
         self.assertNotIn("# Failure Report", prompt)
 
     def test_pick_cube_task_is_available(self):
-        task = get_task_spec("PickCube-v1")
+        task = get_task_spec("pick_cube")
+        self.assertEqual(task.task_id, "pick_cube")
+        self.assertEqual(task.name_cn, "抓取方块")
         self.assertEqual(task.maniskill_env_id, "PickCube-v1")
         self.assertIn("robot.place", task.source_program)
 
+    def test_official_env_name_still_works_as_alias(self):
+        task = get_task_spec("PickCube-v1")
+        self.assertEqual(task.task_id, "pick_cube")
+
     def test_oracle_code_is_real_source_program(self):
-        task = get_task_spec("PegInsertionSide-v1")
+        task = get_task_spec("peg_insertion")
         oracle = build_oracle_code(task)
         self.assertIn("robot.align_to_target", oracle)
         self.assertNotIn("robot.recommended_alignment_tolerance", oracle)
@@ -86,8 +94,8 @@ class RealBackendTest(unittest.TestCase):
         self.assertFalse(success_from_ret_val("failure: grasp"))
 
     def test_default_xarm_pick_cube_control_uses_planner_path(self):
-        self.assertEqual(_default_control_mode("PickCube-v1", "xarm6_robotiq"), "pd_joint_pos")
-        self.assertEqual(_default_control_mode("PickCube-v1", "panda"), "pd_ee_delta_pos")
+        self.assertEqual(_default_control_mode("pick_cube", "xarm6_robotiq"), "pd_joint_pos")
+        self.assertEqual(_default_control_mode("pick_cube", "panda"), "pd_ee_delta_pos")
 
     def test_pick_cube_skill_adapter_action_shape(self):
         class Space:
@@ -144,7 +152,7 @@ class RealBackendTest(unittest.TestCase):
             def step(self, action):
                 return None, 0.0, False, False, {}
 
-        robot = _build_robot_adapter("PickCube-v1", Env(), "pd_ee_delta_pos", "xarm6_robotiq")
+        robot = _build_robot_adapter("pick_cube", Env(), "pd_ee_delta_pos", "xarm6_robotiq")
         self.assertEqual(robot.gripper_open, -1.0)
         self.assertEqual(robot.gripper_close, 1.0)
         self.assertGreaterEqual(robot.move_steps, 36)
@@ -153,7 +161,7 @@ class RealBackendTest(unittest.TestCase):
         class Env:
             pass
 
-        robot = _build_robot_adapter("PickCube-v1", Env(), "pd_joint_pos", "xarm6_robotiq")
+        robot = _build_robot_adapter("pick_cube", Env(), "pd_joint_pos", "xarm6_robotiq")
         self.assertIsInstance(robot, ManiSkillXArmPickCubePlannerRobot)
 
     def test_pick_cube_place_accepts_success_while_held(self):
@@ -264,10 +272,10 @@ class RealBackendTest(unittest.TestCase):
         )
 
     def test_real_failure_report_mentions_pick_cube_skill_failure(self):
-        task = get_task_spec("PickCube-v1")
+        task = get_task_spec("pick_cube")
         profile = get_robot_profile("xarm6_robotiq")
         record = TrialRecord(
-            task_id="PickCube-v1",
+            task_id="pick_cube",
             source_robot="panda",
             target_robot="xarm6_robotiq",
             method="source-copy",
@@ -291,14 +299,14 @@ class RealBackendTest(unittest.TestCase):
         )
         report = build_real_failure_report(task=task, target_profile=profile, failed_record=record)
         text = report.to_prompt_section()
-        self.assertIn("PickCube-v1", text)
+        self.assertIn("pick_cube", text)
         self.assertIn("step 2: place", text)
         self.assertIn("real ManiSkill-backed skill", text)
 
     def test_results_summary_and_jsonl(self):
         records = [
             TrialRecord(
-                task_id="PickCube-v1",
+                task_id="pick_cube",
                 source_robot="panda",
                 target_robot="xarm6_robotiq",
                 method="source-copy",
@@ -312,7 +320,7 @@ class RealBackendTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "trials.jsonl"
             append_jsonl(path, records)
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["task_id"], "PickCube-v1")
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["task_id"], "pick_cube")
 
     def test_existing_lmp_executor_still_works(self):
         ok, message, _ = execute_lmp("ret_val = 2", {}, verbose=False)
@@ -331,7 +339,7 @@ class RealBackendTest(unittest.TestCase):
 
     def test_records_to_md_formats_generated_code(self):
         record = TrialRecord(
-            task_id="PickCube-v1",
+            task_id="pick_cube",
             source_robot="panda",
             target_robot="xarm6_robotiq",
             method="source-copy",

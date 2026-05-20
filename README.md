@@ -41,17 +41,17 @@ real simulator re-execution
 
 ## Current Real Tasks
 
-| Task | Status |
-|---|---|
-| `PickCube-v1` | validated smoke and controller-portability task |
-| `PegInsertionSide-v1` | contact-rich task under development |
+| Task name | 中文任务 | ManiSkill env | Status |
+|---|---|---|---|
+| `pick_cube` | 抓取方块 | `PickCube-v1` | validated smoke and controller-portability task |
+| `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | contact-rich task under development |
 
 ## Current Robots
 
 | Robot | Status |
 |---|---|
 | `panda` | source and smoke-test robot |
-| `xarm6_robotiq` | validated on `PickCube-v1` through ManiSkill planner |
+| `xarm6_robotiq` | validated on `pick_cube` through ManiSkill planner |
 
 Other profiles can stay in `profiles.py`, but they are not counted as validated
 real experiments until their ManiSkill runs are working.
@@ -84,7 +84,7 @@ export VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json
 
 ```bash
 python -m maniskill_backend.real_benchmark \
-  --task PickCube-v1 \
+  --task pick_cube \
   --robot xarm6_robotiq \
   --methods source-copy,llm_card_report,oracle \
   --seed 0 \
@@ -106,7 +106,7 @@ See `docs/RUN.md` for the step-by-step workflow.
 ## Current Validated Result
 
 ```text
-PickCube-v1 + panda + pd_ee_delta_pos -> success
-PickCube-v1 + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
-PickCube-v1 + xarm6_robotiq + pd_joint_pos planner -> success
+pick_cube + panda + pd_ee_delta_pos -> success
+pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
+pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
 ```

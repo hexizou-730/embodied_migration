@@ -23,22 +23,22 @@ from .skill_adapter import (
 from .tasks import get_task_spec
 
 
-SUPPORTED_REAL_TASKS = ("PickCube-v1", "PegInsertionSide-v1")
+SUPPORTED_REAL_TASKS = ("pick_cube", "peg_insertion")
 
 DEFAULT_CONTROL_MODE: Dict[str, str] = {
-    "PickCube-v1": "pd_ee_delta_pos",
-    "PegInsertionSide-v1": "pd_ee_pose",
+    "pick_cube": "pd_ee_delta_pos",
+    "peg_insertion": "pd_ee_pose",
 }
 
 
 def _default_control_mode(task_id: str, robot_uid: str) -> str:
-    if task_id == "PickCube-v1" and robot_uid.startswith("xarm6"):
+    if task_id == "pick_cube" and robot_uid.startswith("xarm6"):
         return "pd_joint_pos"
     return DEFAULT_CONTROL_MODE.get(task_id, "pd_ee_delta_pos")
 
 
 def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: str) -> Any:
-    if task_id == "PickCube-v1":
+    if task_id == "pick_cube":
         if robot_uid.startswith("xarm6"):
             if control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
                 return ManiSkillXArmPickCubePlannerRobot(env, control_mode=control_mode)
@@ -52,14 +52,14 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
                 settle_steps=12,
             )
         return ManiSkillPickCubeRobot(env, control_mode=control_mode)
-    if task_id == "PegInsertionSide-v1":
+    if task_id == "peg_insertion":
         return ManiSkillPegInsertionRobot(env, control_mode=control_mode)
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")
 
 
 def run_real_trial(
     *,
-    task_id: str = "PickCube-v1",
+    task_id: str = "pick_cube",
     robot_uid: str = "panda",
     method: str = "source-copy",
     seed: int = 0,
@@ -72,10 +72,13 @@ def run_real_trial(
 ) -> Dict[str, Any]:
     method = norm_method(method)
     task = get_task_spec(task_id)
+    task_id = task.task_id
     if control_mode is None:
         control_mode = _default_control_mode(task_id, robot_uid)
     result: Dict[str, Any] = {
         "task_id": task_id,
+        "task_name": task.display_name,
+        "task_name_cn": task.name_cn,
         "env_id": task.maniskill_env_id,
         "robot_uid": robot_uid,
         "method": method,
@@ -260,7 +263,7 @@ def _jsonable(value: Any) -> Any:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run real ManiSkill-backed LMP trials.")
-    parser.add_argument("--task", default="PickCube-v1")
+    parser.add_argument("--task", default="pick_cube")
     parser.add_argument("--robot", default="panda")
     parser.add_argument("--method", default="source-copy")
     parser.add_argument("--seed", type=int, default=0)

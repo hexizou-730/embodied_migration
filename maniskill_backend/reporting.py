@@ -50,7 +50,7 @@ def build_real_failure_report(
         )
     )
 
-    if task.task_id == "PickCube-v1":
+    if task.task_id == "pick_cube":
         failed_api = str((failed_event or {}).get("api", "unknown skill"))
         return FailureReport(
             task_name=task.task_id,
@@ -83,7 +83,7 @@ def build_real_failure_report(
             ],
         )
 
-    if task.task_id == "PegInsertionSide-v1":
+    if task.task_id == "peg_insertion":
         return FailureReport(
             task_name=task.task_id,
             instruction=task.instruction,

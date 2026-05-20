@@ -18,6 +18,8 @@ def _result_to_record(result: Dict[str, Any], *, source_robot: str, seed: int) -
     info_keys = (
         "real_runner",
         "env_id",
+        "task_name",
+        "task_name_cn",
         "reset_info_keys",
         "execution_log",
         "final_info",
@@ -86,7 +88,7 @@ def _items(value: str) -> Tuple[str, ...]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run real-physics migration matrix.")
-    parser.add_argument("--task", default="PickCube-v1")
+    parser.add_argument("--task", default="pick_cube")
     parser.add_argument("--robot", default="panda")
     parser.add_argument(
         "--methods",

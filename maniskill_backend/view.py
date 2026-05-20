@@ -21,6 +21,7 @@ def record_to_md(record: Dict[str, Any], index: int) -> str:
     info = record.get("info") or {}
     fields = [
         ("task", record.get("task_id", "")),
+        ("task_cn", info.get("task_name_cn", "")),
         ("target", record.get("target_robot", "")),
         ("method", record.get("method", "")),
         ("success", record.get("success", "")),
