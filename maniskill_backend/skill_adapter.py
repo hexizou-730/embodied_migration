@@ -950,7 +950,13 @@ class ManiSkillPullCubeToolPlannerRobot:
             cube_pos + np.array([-(behind_distance + approach_extra), 0.0, lift_height - 0.05]),
             _sapien_pose_from_any(base.l_shape_tool.pose).q,
         )
-        if not self._move_to_tool_pose(approach_tool_pose, "approach_cube_with_tool", prefer_rrt=True):
+        if not self._move_to_tool_pose(
+            approach_tool_pose,
+            "approach_cube_with_tool",
+            prefer_rrt=True,
+            correct_tool=True,
+            correction_tolerance=0.12,
+        ):
             return self._fail(
                 "hook_object",
                 {"tool": tool.name, "obj": obj.name},
@@ -961,11 +967,17 @@ class ManiSkillPullCubeToolPlannerRobot:
             cube_pos + np.array([-behind_distance, hook_y_offset, 0.0]),
             _sapien_pose_from_any(base.l_shape_tool.pose).q,
         )
-        if not self._move_to_tool_pose(self.hook_tool_pose, "hook_cube", prefer_rrt=False):
+        if not self._move_to_tool_pose(
+            self.hook_tool_pose,
+            "hook_cube",
+            prefer_rrt=False,
+            correct_tool=True,
+            correction_tolerance=0.06,
+        ):
             return self._fail(
                 "hook_object",
                 {"tool": tool.name, "obj": obj.name},
-                "motion planning failed while positioning hook behind cube",
+                "motion planning failed while positioning the actual tool behind cube",
             )
 
         return self._log(
@@ -1179,7 +1191,15 @@ class ManiSkillPullCubeToolPlannerRobot:
         )
         return self._tcp_pose_for_tool_pose(tool_target)
 
-    def _move_to_tool_pose(self, tool_pose: Any, label: str, *, prefer_rrt: bool) -> bool:
+    def _move_to_tool_pose(
+        self,
+        tool_pose: Any,
+        label: str,
+        *,
+        prefer_rrt: bool,
+        correct_tool: bool = False,
+        correction_tolerance: float = 0.06,
+    ) -> bool:
         scales = [self.tool_tcp_scale]
         if self.robot_uid == "xarm6_robotiq":
             scales.extend(scale for scale in (0.75, 0.5, 0.25, 0.0) if scale not in scales)
@@ -1196,8 +1216,65 @@ class ManiSkillPullCubeToolPlannerRobot:
                         True,
                         "",
                     )
+                if correct_tool and self.robot_uid == "xarm6_robotiq":
+                    return self._correct_actual_tool_position(
+                        tool_pose,
+                        label,
+                        tolerance=correction_tolerance,
+                        prefer_rrt=prefer_rrt,
+                    )
                 return True
         return False
+
+    def _correct_actual_tool_position(
+        self,
+        desired_tool_pose: Any,
+        label: str,
+        *,
+        tolerance: float,
+        prefer_rrt: bool,
+    ) -> bool:
+        import sapien
+
+        desired_tool_pos = np.asarray(desired_tool_pose.p, dtype=np.float64)
+        for attempt in range(1, 4):
+            actual_tool_pos = self._tool_position()
+            if actual_tool_pos is None:
+                return True
+            error = desired_tool_pos - actual_tool_pos
+            error_norm = float(np.linalg.norm(error))
+            self._log(
+                "tool_position_error",
+                {
+                    "planner_stage": label,
+                    "attempt": attempt,
+                    "error_norm": round(error_norm, 4),
+                    "error": np.round(error, 4).tolist(),
+                    "tolerance": round(float(tolerance), 4),
+                },
+                True,
+                True,
+                "",
+            )
+            if error_norm <= tolerance:
+                return True
+
+            current_tcp = _sapien_pose_from_any(self._base_env().agent.tcp.pose)
+            correction = np.clip(error, -0.08, 0.08)
+            corrected_pose = sapien.Pose(
+                np.asarray(current_tcp.p, dtype=np.float64) + correction,
+                current_tcp.q,
+            )
+            if not self._capture(
+                self._move_to_pose(corrected_pose, prefer_rrt=prefer_rrt),
+                f"{label}_tool_position_correction_{attempt}",
+            ):
+                return False
+            self.hook_pose = corrected_pose
+        actual_tool_pos = self._tool_position()
+        if actual_tool_pos is None:
+            return True
+        return float(np.linalg.norm(desired_tool_pos - actual_tool_pos)) <= tolerance
 
     def _tool_to_tcp_transform(self) -> Any:
         base = self._base_env()
@@ -1221,6 +1298,12 @@ class ManiSkillPullCubeToolPlannerRobot:
     def _cube_position(self) -> Optional[np.ndarray]:
         try:
             return np.asarray(_sapien_pose_from_any(self._base_env().cube.pose).p, dtype=np.float64)
+        except Exception:
+            return None
+
+    def _tool_position(self) -> Optional[np.ndarray]:
+        try:
+            return np.asarray(_sapien_pose_from_any(self._base_env().l_shape_tool.pose).p, dtype=np.float64)
         except Exception:
             return None
 
