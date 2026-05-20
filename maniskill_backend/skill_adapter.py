@@ -840,6 +840,7 @@ class ManiSkillPullCubeToolPlannerRobot:
         self.planner: Any = None
         self.grasp_pose: Any = None
         self.hook_pose: Any = None
+        self.pull_start_cube_pos: Optional[np.ndarray] = None
         self.last_info: Dict[str, Any] = {}
         self.events: List[Dict[str, Any]] = []
 
@@ -985,6 +986,7 @@ class ManiSkillPullCubeToolPlannerRobot:
         *,
         distance: float = 0.35,
         stages: int = 1,
+        pull_frame: Optional[str] = None,
     ) -> bool:
         if tool.name != "l_shape_tool" or obj.name != "cube":
             return self._fail(
@@ -999,15 +1001,29 @@ class ManiSkillPullCubeToolPlannerRobot:
                 "pull_with_tool called before hook_object succeeded.",
             )
 
-        import sapien
-
         distance = float(np.clip(distance, 0.10, 0.70))
         stages = int(np.clip(stages, 1, 5))
+        pull_frame = self._default_pull_frame(pull_frame)
+        if pull_frame not in {"tool", "world", "toward_base"}:
+            return self._fail(
+                "pull_with_tool",
+                {
+                    "tool": tool.name,
+                    "obj": obj.name,
+                    "target": target.name,
+                    "distance": distance,
+                    "stages": stages,
+                    "pull_frame": pull_frame,
+                },
+                "pull_frame must be one of: tool, world, toward_base.",
+            )
+
+        self.pull_start_cube_pos = self._cube_position()
         ok = False
         failed_stage = ""
         for stage in range(1, stages + 1):
             depth = distance * stage / stages
-            target_pose = self.hook_pose * sapien.Pose([-depth, 0.0, 0.0])
+            target_pose = self._pull_target_pose(depth, pull_frame)
             if not self._capture(self._move_to_pose(target_pose, prefer_rrt=False), f"pull_cube_with_tool_{stage}"):
                 failed_stage = f"motion planning failed while pulling cube with tool at stage {stage}"
                 break
@@ -1017,14 +1033,28 @@ class ManiSkillPullCubeToolPlannerRobot:
         if failed_stage and not ok:
             return self._fail(
                 "pull_with_tool",
-                {"tool": tool.name, "obj": obj.name, "target": target.name, "distance": distance, "stages": stages},
+                {
+                    "tool": tool.name,
+                    "obj": obj.name,
+                    "target": target.name,
+                    "distance": distance,
+                    "stages": stages,
+                    "pull_frame": pull_frame,
+                },
                 failed_stage,
             )
 
         diagnostics = self._pull_diagnostics()
         return self._log(
             "pull_with_tool",
-            {"tool": tool.name, "obj": obj.name, "target": target.name, "distance": distance, "stages": stages},
+            {
+                "tool": tool.name,
+                "obj": obj.name,
+                "target": target.name,
+                "distance": distance,
+                "stages": stages,
+                "pull_frame": pull_frame,
+            },
             ok,
             ok,
             "" if ok else f"tool pull failed; cube was not pulled into workspace; {diagnostics}",
@@ -1110,6 +1140,53 @@ class ManiSkillPullCubeToolPlannerRobot:
     def _base_env(self) -> Any:
         return getattr(self.env, "unwrapped", self.env)
 
+    def _default_pull_frame(self, pull_frame: Optional[str]) -> str:
+        if pull_frame is None:
+            return "world" if self.robot_uid == "xarm6_robotiq" else "tool"
+        normalized = str(pull_frame).strip().lower().replace("-", "_")
+        aliases = {
+            "local": "tool",
+            "local_x": "tool",
+            "tool_local": "tool",
+            "tool_x": "tool",
+            "world_x": "world",
+            "base": "toward_base",
+            "towards_base": "toward_base",
+        }
+        return aliases.get(normalized, normalized)
+
+    def _pull_target_pose(self, depth: float, pull_frame: str) -> Any:
+        import sapien
+
+        assert self.hook_pose is not None
+        if pull_frame == "tool":
+            return self.hook_pose * sapien.Pose([-depth, 0.0, 0.0])
+
+        if pull_frame == "toward_base":
+            direction = self._cube_to_base_direction()
+        else:
+            direction = np.array([-1.0, 0.0, 0.0], dtype=np.float64)
+        return sapien.Pose(np.asarray(self.hook_pose.p, dtype=np.float64) + direction * depth, self.hook_pose.q)
+
+    def _cube_position(self) -> Optional[np.ndarray]:
+        try:
+            return np.asarray(_sapien_pose_from_any(self._base_env().cube.pose).p, dtype=np.float64)
+        except Exception:
+            return None
+
+    def _cube_to_base_direction(self) -> np.ndarray:
+        try:
+            base = self._base_env()
+            cube_pos = np.asarray(_sapien_pose_from_any(base.cube.pose).p, dtype=np.float64)
+            base_pos = np.asarray(_sapien_pose_from_any(base.agent.robot.get_links()[0].pose).p, dtype=np.float64)
+            delta_xy = base_pos[:2] - cube_pos[:2]
+            norm = float(np.linalg.norm(delta_xy))
+            if norm > 1e-6:
+                return np.array([delta_xy[0] / norm, delta_xy[1] / norm, 0.0], dtype=np.float64)
+        except Exception:
+            pass
+        return np.array([-1.0, 0.0, 0.0], dtype=np.float64)
+
     def _agent_is_grasping_tool(self) -> bool:
         try:
             value = self._base_env().agent.is_grasping(self._base_env().l_shape_tool, max_angle=20)
@@ -1127,11 +1204,27 @@ class ManiSkillPullCubeToolPlannerRobot:
 
     def _pull_diagnostics(self) -> str:
         try:
-            result = self._base_env().evaluate()
+            base = self._base_env()
+            result = base.evaluate()
             parts = []
             for key in ("success", "success_once", "success_at_end", "cube_progress", "cube_distance"):
                 if key in result:
                     parts.append(f"{key}={_to_numpy(result[key]).tolist()}")
+            cube_pos = self._cube_position()
+            if cube_pos is not None:
+                parts.append(f"cube_pos={np.round(cube_pos, 4).tolist()}")
+                if self.pull_start_cube_pos is not None:
+                    cube_delta = cube_pos - self.pull_start_cube_pos
+                    parts.append(f"cube_delta={np.round(cube_delta, 4).tolist()}")
+                try:
+                    base_pos = np.asarray(
+                        _sapien_pose_from_any(base.agent.robot.get_links()[0].pose).p,
+                        dtype=np.float64,
+                    )
+                    cube_to_base_xy = float(np.linalg.norm(cube_pos[:2] - base_pos[:2]))
+                    parts.append(f"cube_to_base_xy={cube_to_base_xy:.4f}")
+                except Exception:
+                    pass
             return ", ".join(parts) if parts else "pull diagnostics unavailable"
         except Exception:
             return "pull diagnostics unavailable"

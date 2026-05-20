@@ -118,8 +118,13 @@ parameters:
 
 ```python
 robot.hook_object(tool, cube, hook_y_offset=-0.067, behind_margin=0.0)
-robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1)
+robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="world")
 ```
+
+`pull_frame` can be `"tool"`, `"world"`, or `"toward_base"`. Panda keeps the
+official tool-local pull by default; xarm6 defaults to world-frame pulling so
+the target motion is not accidentally tied to a different gripper/tool local
+axis.
 
 Run:
 

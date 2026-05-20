@@ -145,5 +145,6 @@ pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
 pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
 stack_cube + official Panda solver -> success at seed 0
 pull_cube_tool + official Panda solver -> success at seed 0
+pull_cube_tool + iterative LLM xarm6 -> currently tests skill-wrapper migration
 peg_insertion + official Panda solver -> failure at seed 0, not used yet
 ```

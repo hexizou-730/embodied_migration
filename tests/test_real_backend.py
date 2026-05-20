@@ -213,6 +213,17 @@ class RealBackendTest(unittest.TestCase):
         self.assertIsInstance(robot, ManiSkillPullCubeToolPlannerRobot)
         self.assertEqual(robot.robot_uid, "panda")
 
+    def test_pull_cube_tool_xarm_defaults_to_world_pull_frame(self):
+        class Env:
+            pass
+
+        panda = ManiSkillPullCubeToolPlannerRobot(Env(), robot_uid="panda", control_mode="pd_joint_pos")
+        xarm = ManiSkillPullCubeToolPlannerRobot(Env(), robot_uid="xarm6_robotiq", control_mode="pd_joint_pos")
+        self.assertEqual(panda._default_pull_frame(None), "tool")
+        self.assertEqual(xarm._default_pull_frame(None), "world")
+        self.assertEqual(xarm._default_pull_frame("tool-local"), "tool")
+        self.assertEqual(xarm._default_pull_frame("towards_base"), "toward_base")
+
     def test_pick_cube_place_accepts_success_while_held(self):
         class Space:
             shape = (4,)
@@ -379,6 +390,7 @@ class RealBackendTest(unittest.TestCase):
         self.assertIn("iterative robot code migration", prompt)
         self.assertIn("distance=0.35", prompt)
         self.assertIn("stages=1", prompt)
+        self.assertIn("pull_frame", prompt)
         self.assertIn("Previous target attempts", prompt)
         self.assertIn("cube_distance", prompt)
 
