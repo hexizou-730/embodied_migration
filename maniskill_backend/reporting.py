@@ -113,6 +113,36 @@ def build_real_failure_report(
             ],
         )
 
+    if task.task_id == "stack_cube":
+        return FailureReport(
+            task_name=task.task_id,
+            instruction=task.instruction,
+            robot_name=target_profile.name,
+            expected={
+                "execution_result": "success",
+                "grasp_cubeA": "robot.grasp(cubeA) returns True",
+                "place_cubeA_on_cubeB": "robot.place(cubeA, cubeB) returns True",
+                "stack_state": "cubeA is on cubeB and static after release",
+            },
+            actual={
+                "execution_result": "failure",
+                "failure_type": failed_record.failure_type,
+                "message": message,
+                "failed_skill_call": failed_step,
+            },
+            diagnosis=[
+                f"Execution log failed at {failed_step}.",
+                message,
+                "Stacking requires both placement accuracy and post-release stability.",
+            ],
+            suggestions=[
+                "Keep the grasp guard: only call place after robot.grasp(cubeA) returns True.",
+                "Place cubeA on cubeB using the high-level place API, not raw object pose access.",
+                "If placement fails after release, treat it as a skill-wrapper/controller stability issue.",
+                "Use only the allowed high-level skill API.",
+            ],
+        )
+
     return FailureReport(
         task_name=task.task_id,
         instruction=task.instruction,

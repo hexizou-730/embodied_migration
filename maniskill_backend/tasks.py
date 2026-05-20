@@ -69,6 +69,18 @@ else:
 """
 
 
+STACK_CUBE_SOURCE = """
+cube_a = scene.get_object("cubeA")
+cube_b = scene.get_object("cubeB")
+
+ok = robot.grasp(cube_a)
+if ok:
+    ret_val = robot.place(cube_a, cube_b)
+else:
+    ret_val = "failure: grasp"
+"""
+
+
 TASK_SPECS: Dict[str, TaskSpec] = {
     "pick_cube": TaskSpec(
         task_id="pick_cube",
@@ -105,6 +117,24 @@ TASK_SPECS: Dict[str, TaskSpec] = {
         ),
         notes="First contact-rich real ManiSkill task after PickCube.",
     ),
+    "stack_cube": TaskSpec(
+        task_id="stack_cube",
+        display_name="Stack cube A on cube B",
+        name_cn="堆叠方块",
+        maniskill_env_id="StackCube-v1",
+        instruction="Pick up cube A and stack it on top of cube B.",
+        instruction_cn="抓起 cube A，并把它稳定放到 cube B 上方。",
+        source_robot="panda",
+        target_robots=("panda", "xarm6_robotiq"),
+        source_program=STACK_CUBE_SOURCE,
+        expected_failure_modes=(
+            "gripper/force failure",
+            "reachability failure",
+            "placement stability failure",
+            "execution failure",
+        ),
+        notes="Stable second real task: official Panda solver succeeds at seed 0.",
+    ),
 }
 
 
@@ -115,6 +145,9 @@ TASK_ALIASES: Dict[str, str] = {
     "PegInsertionSide-v1": "peg_insertion",
     "peg-insertion": "peg_insertion",
     "peginsertion": "peg_insertion",
+    "StackCube-v1": "stack_cube",
+    "stack-cube": "stack_cube",
+    "stackcube": "stack_cube",
 }
 
 

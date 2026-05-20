@@ -44,7 +44,8 @@ real simulator re-execution
 | Task name | 中文任务 | ManiSkill env | Status |
 |---|---|---|---|
 | `pick_cube` | 抓取方块 | `PickCube-v1` | validated smoke and controller-portability task |
-| `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | second task to validate next |
+| `stack_cube` | 堆叠方块 | `StackCube-v1` | second real task, official Panda solver succeeds at seed 0 |
+| `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | parked: official solver failed at seed 0 |
 
 ## Current Robots
 
@@ -109,4 +110,6 @@ See `docs/RUN.md` for the step-by-step workflow.
 pick_cube + panda + pd_ee_delta_pos -> success
 pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
 pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
+stack_cube + official Panda solver -> success at seed 0
+peg_insertion + official Panda solver -> failure at seed 0, not used yet
 ```

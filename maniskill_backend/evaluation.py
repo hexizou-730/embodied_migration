@@ -13,6 +13,7 @@ FAILURE_TYPES = (
     "reachability failure",
     "gripper/force failure",
     "alignment failure",
+    "placement stability failure",
     "insertion failure",
     "insertion speed failure",
     "tool-use ordering failure",
@@ -78,6 +79,8 @@ def classify_failure(
         return "tool-use ordering failure"
     if "align" in text or "misalign" in text or "pose error" in text:
         return "alignment failure"
+    if "stack" in text or "on cubeb" in text or "cubea_static" in text or "stability" in text:
+        return "placement stability failure"
     if "not inserted" in text or "insertion failure" in text or "peg_head_pos_at_hole" in text:
         return "insertion failure"
     if "speed" in text or "too fast" in text:

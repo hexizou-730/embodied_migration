@@ -22,6 +22,7 @@ from maniskill_backend.skill_adapter import (
     ManiSkillPandaPegInsertionPlannerRobot,
     ManiSkillPickCubeRobot,
     ManiSkillSceneAdapter,
+    ManiSkillStackCubePlannerRobot,
     ManiSkillXArmPickCubePlannerRobot,
 )
 from maniskill_backend.tasks import get_task_spec
@@ -91,6 +92,14 @@ class RealBackendTest(unittest.TestCase):
         self.assertIn("robot.align_to_target", oracle)
         self.assertNotIn("robot.recommended_alignment_tolerance", oracle)
 
+    def test_stack_cube_task_is_available(self):
+        task = get_task_spec("stack_cube")
+        self.assertEqual(task.task_id, "stack_cube")
+        self.assertEqual(task.maniskill_env_id, "StackCube-v1")
+        self.assertEqual(task.source_robot, "panda")
+        self.assertIn("cubeA", task.source_program)
+        self.assertIn("cubeB", task.source_program)
+
     def test_success_from_ret_val(self):
         self.assertTrue(success_from_ret_val(True))
         self.assertTrue(success_from_ret_val("ok"))
@@ -101,6 +110,7 @@ class RealBackendTest(unittest.TestCase):
         self.assertEqual(_default_control_mode("pick_cube", "xarm6_robotiq"), "pd_joint_pos")
         self.assertEqual(_default_control_mode("pick_cube", "panda"), "pd_ee_delta_pos")
         self.assertEqual(_default_control_mode("peg_insertion", "panda_wristcam"), "pd_joint_pos")
+        self.assertEqual(_default_control_mode("stack_cube", "xarm6_robotiq"), "pd_joint_pos")
 
     def test_pick_cube_skill_adapter_action_shape(self):
         class Space:
@@ -175,6 +185,14 @@ class RealBackendTest(unittest.TestCase):
 
         robot = _build_robot_adapter("peg_insertion", Env(), "pd_joint_pos", "panda_wristcam")
         self.assertIsInstance(robot, ManiSkillPandaPegInsertionPlannerRobot)
+
+    def test_real_runner_uses_stack_cube_planner_for_joint_pos(self):
+        class Env:
+            pass
+
+        robot = _build_robot_adapter("stack_cube", Env(), "pd_joint_pos", "xarm6_robotiq")
+        self.assertIsInstance(robot, ManiSkillStackCubePlannerRobot)
+        self.assertEqual(robot.robot_uid, "xarm6_robotiq")
 
     def test_pick_cube_place_accepts_success_while_held(self):
         class Space:
@@ -288,6 +306,10 @@ class RealBackendTest(unittest.TestCase):
                 message="peg was not inserted; peg_head_pos_at_hole=[-0.1, 0.0, 0.0]",
             ),
             "insertion failure",
+        )
+        self.assertEqual(
+            classify_failure(success=False, message="cubeA was not stably stacked on cubeB"),
+            "placement stability failure",
         )
 
     def test_real_failure_report_mentions_pick_cube_skill_failure(self):

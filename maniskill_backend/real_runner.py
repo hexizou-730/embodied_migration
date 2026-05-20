@@ -19,16 +19,18 @@ from .skill_adapter import (
     ManiSkillPegInsertionRobot,
     ManiSkillPickCubeRobot,
     ManiSkillSceneAdapter,
+    ManiSkillStackCubePlannerRobot,
     ManiSkillXArmPickCubePlannerRobot,
 )
 from .tasks import get_task_spec
 
 
-SUPPORTED_REAL_TASKS = ("pick_cube", "peg_insertion")
+SUPPORTED_REAL_TASKS = ("pick_cube", "peg_insertion", "stack_cube")
 
 DEFAULT_CONTROL_MODE: Dict[str, str] = {
     "pick_cube": "pd_ee_delta_pos",
     "peg_insertion": "pd_ee_pose",
+    "stack_cube": "pd_joint_pos",
 }
 
 
@@ -36,6 +38,8 @@ def _default_control_mode(task_id: str, robot_uid: str) -> str:
     if task_id == "pick_cube" and robot_uid.startswith("xarm6"):
         return "pd_joint_pos"
     if task_id == "peg_insertion" and robot_uid in {"panda", "panda_wristcam"}:
+        return "pd_joint_pos"
+    if task_id == "stack_cube" and robot_uid in {"panda", "xarm6_robotiq"}:
         return "pd_joint_pos"
     return DEFAULT_CONTROL_MODE.get(task_id, "pd_ee_delta_pos")
 
@@ -59,6 +63,13 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
         if robot_uid in {"panda", "panda_wristcam"} and control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
             return ManiSkillPandaPegInsertionPlannerRobot(env, control_mode=control_mode)
         return ManiSkillPegInsertionRobot(env, control_mode=control_mode)
+    if task_id == "stack_cube":
+        if robot_uid in {"panda", "xarm6_robotiq"} and control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
+            return ManiSkillStackCubePlannerRobot(env, robot_uid=robot_uid, control_mode=control_mode)
+        raise ValueError(
+            "StackCube real runner currently supports panda/xarm6_robotiq with "
+            f"pd_joint_pos-style planner control, got robot={robot_uid!r}, control_mode={control_mode!r}."
+        )
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")
 
 

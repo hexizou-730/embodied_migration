@@ -47,6 +47,7 @@ Current task names:
 
 ```text
 pick_cube      抓取方块       ManiSkill env: PickCube-v1
+stack_cube     堆叠方块       ManiSkill env: StackCube-v1
 peg_insertion  侧向插 peg     ManiSkill env: PegInsertionSide-v1
 ```
 
@@ -118,15 +119,60 @@ python -m maniskill_backend.real_benchmark \
   --render-backend gpu
 ```
 
-## Second Task: Peg Insertion
+## Second Task: Stack Cube
 
-Use `peg_insertion` to decide whether the next research direction should focus
-on high-level LMP migration, skill-wrapper migration, or controller/planner
-selection.
+`stack_cube` is the current second real task. It is more demanding than
+`pick_cube` because cube A must remain stably on cube B after release.
 
-First verify the official Panda source task. `PegInsertionSide-v1` officially
-supports `panda_wristcam`, and this path uses ManiSkill's official motion
-planner.
+Panda source run:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task stack_cube \
+  --robot panda \
+  --method source-copy \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 200
+```
+
+xarm6 target run:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task stack_cube \
+  --robot xarm6_robotiq \
+  --method source-copy \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 200
+```
+
+Benchmark:
+
+```bash
+python -m maniskill_backend.real_benchmark \
+  --task stack_cube \
+  --robot xarm6_robotiq \
+  --methods source-copy,llm_card_report,oracle \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 200
+```
+
+## Parked Task: Peg Insertion
+
+`peg_insertion` is currently parked because ManiSkill's official Panda solver
+also failed at seed 0 in this environment. Do not use it as a migration task
+until the official source side is reliable.
+
+Historical source-side check:
 
 ```bash
 python -m maniskill_backend.real_runner \
@@ -140,36 +186,10 @@ python -m maniskill_backend.real_runner \
   --max-episode-steps 500
 ```
 
-Then check whether ManiSkill can even create the same task with xarm6:
-
-```bash
-python -m maniskill_backend.sim_check \
-  --env PegInsertionSide-v1 \
-  --robot xarm6_robotiq \
-  --obs-mode state \
-  --control-mode pd_ee_pose
-```
-
-If xarm6 creation works, try the real target run:
-
-```bash
-python -m maniskill_backend.real_runner \
-  --task peg_insertion \
-  --robot xarm6_robotiq \
-  --method source-copy \
-  --seed 0 \
-  --control-mode pd_ee_pose \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 500
-```
-
 Interpretation:
 
 ```text
-panda_wristcam succeeds, xarm6 fails in align/insert -> high-level parameters or target skill wrapper matter
-panda_wristcam fails -> fix the Panda peg_insertion wrapper before using it for migration
-xarm6 env creation fails -> task is not yet a cross-robot ManiSkill experiment
+panda_wristcam failed -> do not evaluate xarm6 yet
 ```
 
 Outputs:
@@ -191,4 +211,6 @@ The current validated real simulation slice is:
 pick_cube + panda + pd_ee_delta_pos -> success
 pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
 pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
+stack_cube + official Panda solver -> success at seed 0
+peg_insertion + official Panda solver -> failure at seed 0, parked
 ```

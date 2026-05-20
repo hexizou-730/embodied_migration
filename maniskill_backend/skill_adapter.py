@@ -534,6 +534,278 @@ class ManiSkillXArmPickCubePlannerRobot:
         return self._log(api, args, False, False, message)
 
 
+class ManiSkillStackCubePlannerRobot:
+    """StackCube-v1 wrapper backed by ManiSkill's official Panda/xarm6 planners."""
+
+    def __init__(
+        self,
+        env: Any,
+        *,
+        robot_uid: str,
+        control_mode: Optional[str] = None,
+        debug: bool = False,
+        vis: bool = False,
+    ) -> None:
+        if robot_uid not in {"panda", "xarm6_robotiq"}:
+            raise ValueError(f"StackCube planner does not support robot_uid={robot_uid!r}.")
+        if control_mode not in {None, "pd_joint_pos", "pd_joint_pos_vel"}:
+            raise ValueError(
+                "StackCube planner adapter requires control_mode "
+                f"'pd_joint_pos' or 'pd_joint_pos_vel', got {control_mode!r}."
+            )
+        self.env = env
+        self.robot_uid = robot_uid
+        self.control_mode = control_mode
+        self.debug = debug
+        self.vis = vis
+        self.planner: Any = None
+        self.grasp_pose: Any = None
+        self.lift_pose: Any = None
+        self.last_info: Dict[str, Any] = {}
+        self.events: List[Dict[str, Any]] = []
+
+    def grasp(self, obj: SkillTarget) -> bool:
+        if obj.name != "cubeA":
+            return self._fail("grasp", {"obj": obj.name}, "StackCube planner only supports cubeA grasp.")
+
+        import sapien
+        from transforms3d.euler import euler2quat
+        from mani_skill.examples.motionplanning.base_motionplanner.utils import (
+            compute_grasp_info_by_obb,
+            get_actor_obb,
+        )
+
+        base = self._base_env()
+        planner = self._ensure_planner()
+        obb = get_actor_obb(base.cubeA)
+        approaching = np.array([0.0, 0.0, -1.0])
+        target_closing = _pose_matrix(base.agent.tcp.pose)[:3, 1]
+        grasp_info = compute_grasp_info_by_obb(
+            obb,
+            approaching=approaching,
+            target_closing=target_closing,
+            depth=0.025,
+        )
+        self.grasp_pose = _sapien_pose_from_any(
+            base.agent.build_grasp_pose(
+                approaching,
+                grasp_info["closing"],
+                grasp_info["center"],
+            )
+        )
+
+        angles = np.arange(0.0, np.pi * 2.0 / 3.0, np.pi / 2.0)
+        angles = np.repeat(angles, 2)
+        angles[1::2] *= -1
+        for angle in angles:
+            candidate = self.grasp_pose * sapien.Pose(q=euler2quat(0, 0, float(angle)))
+            if self._dry_run_pose(candidate):
+                self.grasp_pose = candidate
+                break
+        else:
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed for all cubeA grasp poses")
+
+        reach_pose = self.grasp_pose * sapien.Pose([0.0, 0.0, -0.05])
+        if not self._capture(self._move_to_pose(reach_pose, prefer_rrt=True), "reach"):
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed while reaching cubeA")
+        if not self._capture(planner.move_to_pose_with_screw(self.grasp_pose), "pregrasp"):
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed at cubeA grasp pose")
+        if not self._capture(planner.close_gripper(), "close_gripper"):
+            return self._fail("grasp", {"obj": obj.name}, "close gripper command failed")
+
+        grasped_after_close = self._agent_is_grasping_cube_a()
+        self._log(
+            "grasp_check_after_close",
+            {"obj": obj.name},
+            grasped_after_close,
+            grasped_after_close,
+            "" if grasped_after_close else "gripper closed but cubeA not held",
+        )
+
+        self.lift_pose = sapien.Pose([0.0, 0.0, 0.1]) * self.grasp_pose
+        if not self._capture(planner.move_to_pose_with_screw(self.lift_pose), "lift"):
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed while lifting cubeA")
+
+        grasped_after_lift = self._agent_is_grasping_cube_a()
+        if grasped_after_lift:
+            message = ""
+        elif grasped_after_close:
+            message = "cubeA slipped during lift"
+        else:
+            message = "cubeA was not grasped"
+        return self._log("grasp", {"obj": obj.name}, grasped_after_lift, grasped_after_lift, message)
+
+    def place(self, obj: SkillTarget, target: SkillTarget) -> bool:
+        if obj.name != "cubeA" or target.name != "cubeB":
+            return self._fail(
+                "place",
+                {"obj": obj.name, "target": target.name},
+                "StackCube planner only supports placing cubeA on cubeB.",
+            )
+        if self.lift_pose is None:
+            return self._fail(
+                "place",
+                {"obj": obj.name, "target": target.name},
+                "place called before cubeA was grasped and lifted.",
+            )
+
+        import sapien
+
+        base = self._base_env()
+        cube_half_size = _to_numpy(base.cube_half_size)
+        goal_pose = _sapien_pose_from_any(base.cubeB.pose) * sapien.Pose(
+            [0.0, 0.0, float(cube_half_size[2]) * 2.0]
+        )
+        cube_a_pose = _sapien_pose_from_any(base.cubeA.pose)
+        offset = np.asarray(goal_pose.p, dtype=np.float64) - np.asarray(cube_a_pose.p, dtype=np.float64)
+        align_pose = sapien.Pose(np.asarray(self.lift_pose.p, dtype=np.float64) + offset, self.lift_pose.q)
+
+        if not self._capture(self._move_to_pose(align_pose, prefer_rrt=True), "stack_align"):
+            return self._fail(
+                "place",
+                {"obj": obj.name, "target": target.name},
+                "motion planning failed while moving cubeA above cubeB",
+            )
+        if not self._capture(self._ensure_planner().open_gripper(), "open_gripper"):
+            return self._fail(
+                "place",
+                {"obj": obj.name, "target": target.name},
+                "open gripper command failed",
+            )
+
+        ok = self._evaluate_success()
+        diagnostics = self._stack_diagnostics()
+        return self._log(
+            "place",
+            {"obj": obj.name, "target": target.name},
+            ok,
+            ok,
+            "" if ok else f"cubeA was not stably stacked on cubeB; {diagnostics}",
+        )
+
+    def align_to_target(self, obj: SkillTarget, target: SkillTarget, tolerance: float) -> bool:
+        return self._fail(
+            "align_to_target",
+            {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+            "align_to_target is not implemented for StackCube-v1",
+        )
+
+    def insert(self, obj: SkillTarget, target: SkillTarget, speed: float) -> bool:
+        return self._fail(
+            "insert",
+            {"obj": obj.name, "target": target.name, "speed": float(speed)},
+            "insert is not implemented for StackCube-v1",
+        )
+
+    def hook_object(self, tool: SkillTarget, obj: SkillTarget) -> bool:
+        return self._fail("hook_object", {"tool": tool.name, "obj": obj.name}, "tool use is not implemented for StackCube-v1")
+
+    def pull_with_tool(self, tool: SkillTarget, obj: SkillTarget, target: SkillTarget) -> bool:
+        return self._fail(
+            "pull_with_tool",
+            {"tool": tool.name, "obj": obj.name, "target": target.name},
+            "tool use is not implemented for StackCube-v1",
+        )
+
+    def execution_log(self) -> List[Dict[str, Any]]:
+        return list(self.events)
+
+    def close(self) -> None:
+        if self.planner is not None and hasattr(self.planner, "close"):
+            self.planner.close()
+
+    def _ensure_planner(self) -> Any:
+        if self.planner is None:
+            if self.robot_uid == "xarm6_robotiq":
+                from mani_skill.examples.motionplanning.xarm6.motionplanner import (
+                    XArm6RobotiqMotionPlanningSolver,
+                )
+
+                planner_cls = XArm6RobotiqMotionPlanningSolver
+            else:
+                from mani_skill.examples.motionplanning.panda.motionplanner import (
+                    PandaArmMotionPlanningSolver,
+                )
+
+                planner_cls = PandaArmMotionPlanningSolver
+            base = self._base_env()
+            self.planner = planner_cls(
+                self.env,
+                debug=self.debug,
+                vis=self.vis,
+                base_pose=base.agent.robot.pose,
+                visualize_target_grasp_pose=False,
+                print_env_info=False,
+            )
+        return self.planner
+
+    def _move_to_pose(self, pose: Any, *, prefer_rrt: bool = False) -> Any:
+        planner = self._ensure_planner()
+        if self.robot_uid == "xarm6_robotiq" and prefer_rrt:
+            return planner.move_to_pose_with_RRTStar(pose)
+        return planner.move_to_pose_with_screw(pose)
+
+    def _dry_run_pose(self, pose: Any) -> bool:
+        planner = self._ensure_planner()
+        if self.robot_uid == "xarm6_robotiq":
+            return planner.move_to_pose_with_RRTStar(pose, dry_run=True) != -1
+        return planner.move_to_pose_with_screw(pose, dry_run=True) != -1
+
+    def _capture(self, result: Any, label: str) -> bool:
+        if result == -1:
+            self.last_info = {"planner_status": "failed", "planner_stage": label}
+            return False
+        if isinstance(result, tuple) and len(result) >= 5:
+            self.last_info = dict(result[4] or {})
+        return True
+
+    def _base_env(self) -> Any:
+        return getattr(self.env, "unwrapped", self.env)
+
+    def _agent_is_grasping_cube_a(self) -> bool:
+        try:
+            value = self._base_env().agent.is_grasping(self._base_env().cubeA)
+            return bool(_to_numpy(value)[0])
+        except Exception:
+            return False
+
+    def _evaluate_success(self) -> bool:
+        try:
+            result = self._base_env().evaluate()
+            self.last_info = dict(result or {})
+            return _dict_bool(result, "success")
+        except Exception:
+            return False
+
+    def _stack_diagnostics(self) -> str:
+        try:
+            result = self._base_env().evaluate()
+            parts = []
+            for key in ("is_cubeA_grasped", "is_cubeA_on_cubeB", "is_cubeA_static", "success"):
+                if key in result:
+                    parts.append(f"{key}={_to_numpy(result[key]).tolist()}")
+            return ", ".join(parts) if parts else "stack diagnostics unavailable"
+        except Exception:
+            return "stack diagnostics unavailable"
+
+    def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
+        self.events.append(
+            {
+                "step": len(self.events) + 1,
+                "api": api,
+                "args": dict(args),
+                "result": bool(result),
+                "ok": bool(ok),
+                "message": message,
+                "failure_type": "" if ok else "execution failure",
+            }
+        )
+        return bool(ok)
+
+    def _fail(self, api: str, args: Dict[str, Any], message: str) -> bool:
+        return self._log(api, args, False, False, message)
+
+
 class ManiSkillPandaPegInsertionPlannerRobot:
     """PegInsertionSide-v1 wrapper backed by ManiSkill's official Panda planner."""
 
