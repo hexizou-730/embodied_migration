@@ -954,8 +954,6 @@ class ManiSkillPullCubeToolPlannerRobot:
             approach_tool_pose,
             "approach_cube_with_tool",
             prefer_rrt=True,
-            correct_tool=True,
-            correction_tolerance=0.12,
         ):
             return self._fail(
                 "hook_object",
@@ -1237,7 +1235,7 @@ class ManiSkillPullCubeToolPlannerRobot:
         import sapien
 
         desired_tool_pos = np.asarray(desired_tool_pose.p, dtype=np.float64)
-        for attempt in range(1, 4):
+        for attempt in range(1, 9):
             actual_tool_pos = self._tool_position()
             if actual_tool_pos is None:
                 return True
@@ -1260,17 +1258,27 @@ class ManiSkillPullCubeToolPlannerRobot:
                 return True
 
             current_tcp = _sapien_pose_from_any(self._base_env().agent.tcp.pose)
-            correction = np.clip(error, -0.08, 0.08)
-            corrected_pose = sapien.Pose(
-                np.asarray(current_tcp.p, dtype=np.float64) + correction,
-                current_tcp.q,
-            )
-            if not self._capture(
-                self._move_to_pose(corrected_pose, prefer_rrt=prefer_rrt),
-                f"{label}_tool_position_correction_{attempt}",
-            ):
+            max_step = 0.035
+            correction = error
+            if error_norm > max_step:
+                correction = error / error_norm * max_step
+            correction[2] = float(np.clip(correction[2], -0.018, 0.018))
+
+            moved = False
+            for scale in (1.0, 0.5, 0.25):
+                corrected_pose = sapien.Pose(
+                    np.asarray(current_tcp.p, dtype=np.float64) + correction * scale,
+                    current_tcp.q,
+                )
+                if self._capture(
+                    self._move_to_pose(corrected_pose, prefer_rrt=False),
+                    f"{label}_tool_position_correction_{attempt}",
+                ):
+                    self.hook_pose = corrected_pose
+                    moved = True
+                    break
+            if not moved:
                 return False
-            self.hook_pose = corrected_pose
         actual_tool_pos = self._tool_position()
         if actual_tool_pos is None:
             return True
