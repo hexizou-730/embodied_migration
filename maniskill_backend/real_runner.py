@@ -15,6 +15,7 @@ from .migration import MigrationRequest, build_migration_prompt, get_source_copy
 from .reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
 from .sim_check import diagnose_graphics_stack
 from .skill_adapter import (
+    ManiSkillPandaPegInsertionPlannerRobot,
     ManiSkillPegInsertionRobot,
     ManiSkillPickCubeRobot,
     ManiSkillSceneAdapter,
@@ -33,6 +34,8 @@ DEFAULT_CONTROL_MODE: Dict[str, str] = {
 
 def _default_control_mode(task_id: str, robot_uid: str) -> str:
     if task_id == "pick_cube" and robot_uid.startswith("xarm6"):
+        return "pd_joint_pos"
+    if task_id == "peg_insertion" and robot_uid in {"panda", "panda_wristcam"}:
         return "pd_joint_pos"
     return DEFAULT_CONTROL_MODE.get(task_id, "pd_ee_delta_pos")
 
@@ -53,6 +56,8 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
             )
         return ManiSkillPickCubeRobot(env, control_mode=control_mode)
     if task_id == "peg_insertion":
+        if robot_uid in {"panda", "panda_wristcam"} and control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
+            return ManiSkillPandaPegInsertionPlannerRobot(env, control_mode=control_mode)
         return ManiSkillPegInsertionRobot(env, control_mode=control_mode)
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")
 
@@ -73,6 +78,8 @@ def run_real_trial(
     method = norm_method(method)
     task = get_task_spec(task_id)
     task_id = task.task_id
+    requested_robot_uid = robot_uid
+    robot_uid = _normalize_robot_uid(task_id, robot_uid)
     if control_mode is None:
         control_mode = _default_control_mode(task_id, robot_uid)
     result: Dict[str, Any] = {
@@ -90,6 +97,8 @@ def run_real_trial(
         "max_episode_steps": max_episode_steps,
         "real_runner": True,
     }
+    if requested_robot_uid != robot_uid:
+        result["requested_robot_uid"] = requested_robot_uid
     if task_id not in SUPPORTED_REAL_TASKS:
         result.update(
             success=False,
@@ -216,6 +225,12 @@ def _failure_message(robot: Any, fallback: str) -> str:
         if not event.get("ok"):
             return str(event.get("message") or fallback)
     return fallback
+
+
+def _normalize_robot_uid(task_id: str, robot_uid: str) -> str:
+    if task_id == "peg_insertion" and robot_uid == "panda":
+        return "panda_wristcam"
+    return robot_uid
 
 
 def _result_to_report_record(result: Dict[str, Any], *, source_robot: str) -> TrialRecord:

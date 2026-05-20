@@ -124,15 +124,17 @@ Use `peg_insertion` to decide whether the next research direction should focus
 on high-level LMP migration, skill-wrapper migration, or controller/planner
 selection.
 
-First verify the Panda source task:
+First verify the official Panda source task. `PegInsertionSide-v1` officially
+supports `panda_wristcam`, and this path uses ManiSkill's official motion
+planner.
 
 ```bash
 python -m maniskill_backend.real_runner \
   --task peg_insertion \
-  --robot panda \
+  --robot panda_wristcam \
   --method source-copy \
   --seed 0 \
-  --control-mode pd_ee_pose \
+  --control-mode pd_joint_pos \
   --sim-backend auto \
   --render-backend gpu \
   --max-episode-steps 500
@@ -165,8 +167,8 @@ python -m maniskill_backend.real_runner \
 Interpretation:
 
 ```text
-panda succeeds, xarm6 fails in align/insert -> high-level parameters or target skill wrapper matter
-panda fails -> fix the Panda peg_insertion wrapper before using it for migration
+panda_wristcam succeeds, xarm6 fails in align/insert -> high-level parameters or target skill wrapper matter
+panda_wristcam fails -> fix the Panda peg_insertion wrapper before using it for migration
 xarm6 env creation fails -> task is not yet a cross-robot ManiSkill experiment
 ```
 

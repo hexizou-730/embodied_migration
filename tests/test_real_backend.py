@@ -19,6 +19,7 @@ from maniskill_backend.reporting import (
 from maniskill_backend.results import append_jsonl, summarize_records
 from maniskill_backend.sim_check import summarize_value
 from maniskill_backend.skill_adapter import (
+    ManiSkillPandaPegInsertionPlannerRobot,
     ManiSkillPickCubeRobot,
     ManiSkillSceneAdapter,
     ManiSkillXArmPickCubePlannerRobot,
@@ -97,6 +98,7 @@ class RealBackendTest(unittest.TestCase):
     def test_default_xarm_pick_cube_control_uses_planner_path(self):
         self.assertEqual(_default_control_mode("pick_cube", "xarm6_robotiq"), "pd_joint_pos")
         self.assertEqual(_default_control_mode("pick_cube", "panda"), "pd_ee_delta_pos")
+        self.assertEqual(_default_control_mode("peg_insertion", "panda_wristcam"), "pd_joint_pos")
 
     def test_pick_cube_skill_adapter_action_shape(self):
         class Space:
@@ -164,6 +166,13 @@ class RealBackendTest(unittest.TestCase):
 
         robot = _build_robot_adapter("pick_cube", Env(), "pd_joint_pos", "xarm6_robotiq")
         self.assertIsInstance(robot, ManiSkillXArmPickCubePlannerRobot)
+
+    def test_real_runner_uses_panda_peg_planner_for_joint_pos(self):
+        class Env:
+            pass
+
+        robot = _build_robot_adapter("peg_insertion", Env(), "pd_joint_pos", "panda_wristcam")
+        self.assertIsInstance(robot, ManiSkillPandaPegInsertionPlannerRobot)
 
     def test_pick_cube_place_accepts_success_while_held(self):
         class Space:

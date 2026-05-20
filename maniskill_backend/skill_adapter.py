@@ -534,6 +534,281 @@ class ManiSkillXArmPickCubePlannerRobot:
         return self._log(api, args, False, False, message)
 
 
+class ManiSkillPandaPegInsertionPlannerRobot:
+    """PegInsertionSide-v1 wrapper backed by ManiSkill's official Panda planner."""
+
+    def __init__(
+        self,
+        env: Any,
+        *,
+        control_mode: Optional[str] = None,
+        debug: bool = False,
+        vis: bool = False,
+    ) -> None:
+        if control_mode not in {None, "pd_joint_pos", "pd_joint_pos_vel"}:
+            raise ValueError(
+                "Panda planner PegInsertion adapter requires control_mode "
+                f"'pd_joint_pos' or 'pd_joint_pos_vel', got {control_mode!r}."
+            )
+        self.env = env
+        self.control_mode = control_mode
+        self.debug = debug
+        self.vis = vis
+        self.planner: Any = None
+        self.grasp_pose: Any = None
+        self.insert_pose: Any = None
+        self.pre_insert_pose: Any = None
+        self.last_info: Dict[str, Any] = {}
+        self.events: List[Dict[str, Any]] = []
+
+    def grasp(self, obj: SkillTarget) -> bool:
+        if obj.name != "peg":
+            return self._fail("grasp", {"obj": obj.name}, "PegInsertion planner only supports peg grasp.")
+
+        import sapien
+        from mani_skill.examples.motionplanning.base_motionplanner.utils import (
+            compute_grasp_info_by_obb,
+            get_actor_obb,
+        )
+
+        base = self._base_env()
+        planner = self._ensure_planner()
+        obb = get_actor_obb(base.peg)
+        approaching = np.array([0.0, 0.0, -1.0])
+        target_closing = _pose_matrix(base.agent.tcp.pose)[:3, 1]
+        peg_init_pose = _sapien_pose_from_any(base.peg.pose)
+
+        grasp_info = compute_grasp_info_by_obb(
+            obb,
+            approaching=approaching,
+            target_closing=target_closing,
+            depth=0.025,
+        )
+        self.grasp_pose = _sapien_pose_from_any(
+            base.agent.build_grasp_pose(
+                approaching,
+                grasp_info["closing"],
+                grasp_info["center"],
+            )
+        )
+        peg_half_length = float(_to_numpy(base.peg_half_sizes)[0])
+        self.grasp_pose = self.grasp_pose * sapien.Pose(
+            [-max(0.05, peg_half_length / 2 + 0.01), 0.0, 0.0]
+        )
+        self.insert_pose = _sapien_pose_from_any(base.goal_pose) * peg_init_pose.inv() * self.grasp_pose
+
+        reach_pose = self.grasp_pose * sapien.Pose([0.0, 0.0, -0.05])
+        if not self._capture(planner.move_to_pose_with_screw(reach_pose), "reach"):
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed while reaching peg")
+        if not self._capture(planner.move_to_pose_with_screw(self.grasp_pose), "pregrasp"):
+            return self._fail("grasp", {"obj": obj.name}, "motion planning failed at grasp pose")
+        if not self._capture(planner.close_gripper(), "close_gripper"):
+            return self._fail("grasp", {"obj": obj.name}, "close gripper command failed")
+
+        ok = self._agent_is_grasping_peg()
+        self._log(
+            "grasp_check_after_close",
+            {"obj": obj.name},
+            ok,
+            ok,
+            "" if ok else "gripper closed but peg not held",
+        )
+        return self._log("grasp", {"obj": obj.name}, ok, ok, "" if ok else "peg was not grasped")
+
+    def align_to_target(self, obj: SkillTarget, target: SkillTarget, tolerance: float) -> bool:
+        if obj.name != "peg" or target.name != "hole":
+            return self._fail(
+                "align_to_target",
+                {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+                "PegInsertion planner only supports aligning peg to hole.",
+            )
+        if self.insert_pose is None:
+            return self._fail(
+                "align_to_target",
+                {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+                "align_to_target called before grasp.",
+            )
+
+        import sapien
+
+        base = self._base_env()
+        planner = self._ensure_planner()
+        peg_half_length = float(_to_numpy(base.peg_half_sizes)[0])
+        offset = sapien.Pose([-0.01 - peg_half_length, 0.0, 0.0])
+        self.pre_insert_pose = self.insert_pose * offset
+        if not self._capture(planner.move_to_pose_with_screw(self.pre_insert_pose), "pre_insert"):
+            return self._fail(
+                "align_to_target",
+                {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+                "motion planning failed while moving to pre-insert pose",
+            )
+
+        for i in range(3):
+            delta_pose = _sapien_pose_from_any(base.goal_pose) * offset * _sapien_pose_from_any(base.peg.pose).inv()
+            self.pre_insert_pose = delta_pose * self.pre_insert_pose
+            if not self._capture(planner.move_to_pose_with_screw(self.pre_insert_pose), f"pre_insert_refine_{i + 1}"):
+                return self._fail(
+                    "align_to_target",
+                    {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+                    "motion planning failed while refining pre-insert pose",
+                )
+
+        err = self._pre_insert_alignment_error()
+        ok = err <= float(tolerance)
+        message = "" if ok else f"alignment failure: pre-insert yz error {err:.4f} exceeds tolerance {float(tolerance):.4f}"
+        return self._log(
+            "align_to_target",
+            {"obj": obj.name, "target": target.name, "tolerance": float(tolerance)},
+            ok,
+            ok,
+            message,
+        )
+
+    def insert(self, obj: SkillTarget, target: SkillTarget, speed: float) -> bool:
+        if obj.name != "peg" or target.name != "hole":
+            return self._fail(
+                "insert",
+                {"obj": obj.name, "target": target.name, "speed": float(speed)},
+                "PegInsertion planner only supports inserting peg into hole.",
+            )
+        if self.insert_pose is None:
+            return self._fail(
+                "insert",
+                {"obj": obj.name, "target": target.name, "speed": float(speed)},
+                "insert called before grasp.",
+            )
+
+        import sapien
+
+        target_pose = self.insert_pose * sapien.Pose([0.05, 0.0, 0.0])
+        if not self._capture(self._ensure_planner().move_to_pose_with_screw(target_pose), "insert"):
+            return self._fail(
+                "insert",
+                {"obj": obj.name, "target": target.name, "speed": float(speed)},
+                "motion planning failed during insertion",
+            )
+        ok = self._evaluate_success()
+        diagnostics = self._peg_diagnostics()
+        return self._log(
+            "insert",
+            {"obj": obj.name, "target": target.name, "speed": float(speed)},
+            ok,
+            ok,
+            "" if ok else f"peg was not inserted; {diagnostics}",
+        )
+
+    def place(self, obj: SkillTarget, target: SkillTarget) -> bool:
+        return self._fail(
+            "place",
+            {"obj": obj.name, "target": target.name},
+            "place is not implemented for PegInsertionSide-v1",
+        )
+
+    def hook_object(self, tool: SkillTarget, obj: SkillTarget) -> bool:
+        return self._fail(
+            "hook_object",
+            {"tool": tool.name, "obj": obj.name},
+            "tool use is not implemented for PegInsertionSide-v1",
+        )
+
+    def pull_with_tool(self, tool: SkillTarget, obj: SkillTarget, target: SkillTarget) -> bool:
+        return self._fail(
+            "pull_with_tool",
+            {"tool": tool.name, "obj": obj.name, "target": target.name},
+            "tool use is not implemented for PegInsertionSide-v1",
+        )
+
+    def execution_log(self) -> List[Dict[str, Any]]:
+        return list(self.events)
+
+    def close(self) -> None:
+        if self.planner is not None and hasattr(self.planner, "close"):
+            self.planner.close()
+
+    def _ensure_planner(self) -> Any:
+        if self.planner is None:
+            from mani_skill.examples.motionplanning.panda.motionplanner import (
+                PandaArmMotionPlanningSolver,
+            )
+
+            base = self._base_env()
+            self.planner = PandaArmMotionPlanningSolver(
+                self.env,
+                debug=self.debug,
+                vis=self.vis,
+                base_pose=base.agent.robot.pose,
+                visualize_target_grasp_pose=False,
+                print_env_info=False,
+                joint_vel_limits=0.75,
+                joint_acc_limits=0.75,
+            )
+        return self.planner
+
+    def _capture(self, result: Any, label: str) -> bool:
+        if result == -1:
+            self.last_info = {"planner_status": "failed", "planner_stage": label}
+            return False
+        if isinstance(result, tuple) and len(result) >= 5:
+            self.last_info = dict(result[4] or {})
+        return True
+
+    def _base_env(self) -> Any:
+        return getattr(self.env, "unwrapped", self.env)
+
+    def _agent_is_grasping_peg(self) -> bool:
+        try:
+            value = self._base_env().agent.is_grasping(self._base_env().peg, max_angle=20)
+            return bool(_to_numpy(value)[0])
+        except Exception:
+            return False
+
+    def _evaluate_success(self) -> bool:
+        try:
+            result = self._base_env().evaluate()
+            self.last_info = dict(result or {})
+            return _dict_bool(result, "success")
+        except Exception:
+            return False
+
+    def _pre_insert_alignment_error(self) -> float:
+        try:
+            base = self._base_env()
+            goal_pose = _sapien_pose_from_any(base.goal_pose)
+            peg_head = goal_pose.inv() * _sapien_pose_from_any(base.peg_head_pose)
+            peg_origin = goal_pose.inv() * _sapien_pose_from_any(base.peg.pose)
+            return max(
+                float(np.linalg.norm(np.asarray(peg_head.p)[1:3])),
+                float(np.linalg.norm(np.asarray(peg_origin.p)[1:3])),
+            )
+        except Exception:
+            return float("inf")
+
+    def _peg_diagnostics(self) -> str:
+        try:
+            result = self._base_env().evaluate()
+            value = _to_numpy(result.get("peg_head_pos_at_hole", []))
+            return f"peg_head_pos_at_hole={np.round(value, 4).tolist()}"
+        except Exception:
+            return "peg diagnostics unavailable"
+
+    def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
+        self.events.append(
+            {
+                "step": len(self.events) + 1,
+                "api": api,
+                "args": dict(args),
+                "result": bool(result),
+                "ok": bool(ok),
+                "message": message,
+                "failure_type": "" if ok else "execution failure",
+            }
+        )
+        return bool(ok)
+
+    def _fail(self, api: str, args: Dict[str, Any], message: str) -> bool:
+        return self._log(api, args, False, False, message)
+
+
 def _to_numpy(value: Any) -> np.ndarray:
     if hasattr(value, "detach"):
         value = value.detach().cpu().numpy()
