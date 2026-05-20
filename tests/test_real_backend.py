@@ -8,6 +8,7 @@ import numpy as np
 from lmp.executor import execute_lmp
 from maniskill_backend.env_adapter import can_import_maniskill
 from maniskill_backend.evaluation import TrialRecord, classify_failure
+from maniskill_backend.iterative_runner import _code_diff, build_iterative_prompt
 from maniskill_backend.migration import METHODS, MigrationRequest, build_migration_prompt
 from maniskill_backend.profiles import get_robot_profile
 from maniskill_backend.real_runner import _build_robot_adapter, _default_control_mode
@@ -346,6 +347,49 @@ class RealBackendTest(unittest.TestCase):
         prompt = build_migration_prompt(request)
         self.assertIn("hook_object(tool, cube) already grasps", prompt)
         self.assertIn("Do not call robot.grasp(tool)", prompt)
+
+    def test_iterative_prompt_exposes_pull_tool_parameters(self):
+        task = get_task_spec("pull_cube_tool")
+        prompt = build_iterative_prompt(
+            task=task,
+            source_robot="panda",
+            target_robot="xarm6_robotiq",
+            previous_attempts=[
+                {
+                    "attempt": 1,
+                    "code": task.source_program,
+                    "result": {
+                        "success": False,
+                        "failure_type": "tool-use execution failure",
+                        "message": "tool pull failed",
+                        "execution_log": [
+                            {
+                                "step": 1,
+                                "api": "pull_with_tool",
+                                "args": {"distance": 0.35},
+                                "result": False,
+                                "ok": False,
+                            }
+                        ],
+                        "final_info": {"cube_distance": 0.59},
+                    },
+                }
+            ],
+        )
+        self.assertIn("iterative robot code migration", prompt)
+        self.assertIn("distance=0.35", prompt)
+        self.assertIn("stages=1", prompt)
+        self.assertIn("Previous target attempts", prompt)
+        self.assertIn("cube_distance", prompt)
+
+    def test_code_diff_marks_parameter_changes(self):
+        diff = _code_diff(
+            "ret_val = robot.pull_with_tool(tool, cube, workspace, distance=0.35)",
+            "ret_val = robot.pull_with_tool(tool, cube, workspace, distance=0.55, stages=3)",
+        )
+        self.assertIn("-ret_val", diff)
+        self.assertIn("+ret_val", diff)
+        self.assertIn("distance=0.55", diff)
 
     def test_real_failure_report_mentions_pick_cube_skill_failure(self):
         task = get_task_spec("pick_cube")

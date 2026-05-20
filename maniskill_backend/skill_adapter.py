@@ -843,7 +843,16 @@ class ManiSkillPullCubeToolPlannerRobot:
         self.last_info: Dict[str, Any] = {}
         self.events: List[Dict[str, Any]] = []
 
-    def hook_object(self, tool: SkillTarget, obj: SkillTarget) -> bool:
+    def hook_object(
+        self,
+        tool: SkillTarget,
+        obj: SkillTarget,
+        *,
+        hook_y_offset: float = -0.067,
+        behind_margin: float = 0.0,
+        approach_extra: float = 0.08,
+        lift_height: float = 0.35,
+    ) -> bool:
         if tool.name != "l_shape_tool" or obj.name != "cube":
             return self._fail(
                 "hook_object",
@@ -859,6 +868,10 @@ class ManiSkillPullCubeToolPlannerRobot:
 
         base = self._base_env()
         planner = self._ensure_planner()
+        hook_y_offset = float(np.clip(hook_y_offset, -0.14, 0.02))
+        behind_margin = float(np.clip(behind_margin, -0.02, 0.10))
+        approach_extra = float(np.clip(approach_extra, 0.02, 0.20))
+        lift_height = float(np.clip(lift_height, 0.20, 0.50))
         tool_obb = get_actor_obb(base.l_shape_tool)
         approaching = np.array([0.0, 0.0, -1.0])
         target_closing = _pose_matrix(base.agent.tcp.pose)[:3, 1]
@@ -911,7 +924,6 @@ class ManiSkillPullCubeToolPlannerRobot:
                 "L-shaped tool was not grasped",
             )
 
-        lift_height = 0.35
         lift_pose = sapien.Pose(
             np.asarray(self.grasp_pose.p, dtype=np.float64) + np.array([0.0, 0.0, lift_height]),
             self.grasp_pose.q,
@@ -926,9 +938,10 @@ class ManiSkillPullCubeToolPlannerRobot:
         cube_pos = np.asarray(_sapien_pose_from_any(base.cube.pose).p, dtype=np.float64)
         hook_length = float(_to_numpy(base.hook_length)[0])
         cube_half_size = float(_to_numpy(base.cube_half_size)[0])
+        behind_distance = hook_length + cube_half_size + behind_margin
 
         approach_pose = sapien.Pose(
-            cube_pos + np.array([-(hook_length + cube_half_size + 0.08), 0.0, lift_height - 0.05]),
+            cube_pos + np.array([-(behind_distance + approach_extra), 0.0, lift_height - 0.05]),
             self.grasp_pose.q,
         )
         if not self._capture(self._move_to_pose(approach_pose, prefer_rrt=True), "approach_cube_with_tool"):
@@ -939,7 +952,7 @@ class ManiSkillPullCubeToolPlannerRobot:
             )
 
         self.hook_pose = sapien.Pose(
-            cube_pos + np.array([-(hook_length + cube_half_size), -0.067, 0.0]),
+            cube_pos + np.array([-behind_distance, hook_y_offset, 0.0]),
             self.grasp_pose.q,
         )
         if not self._capture(planner.move_to_pose_with_screw(self.hook_pose), "hook_cube"):
@@ -951,13 +964,28 @@ class ManiSkillPullCubeToolPlannerRobot:
 
         return self._log(
             "hook_object",
-            {"tool": tool.name, "obj": obj.name},
+            {
+                "tool": tool.name,
+                "obj": obj.name,
+                "hook_y_offset": hook_y_offset,
+                "behind_margin": behind_margin,
+                "approach_extra": approach_extra,
+                "lift_height": lift_height,
+            },
             True,
             True,
             "",
         )
 
-    def pull_with_tool(self, tool: SkillTarget, obj: SkillTarget, target: SkillTarget) -> bool:
+    def pull_with_tool(
+        self,
+        tool: SkillTarget,
+        obj: SkillTarget,
+        target: SkillTarget,
+        *,
+        distance: float = 0.35,
+        stages: int = 1,
+    ) -> bool:
         if tool.name != "l_shape_tool" or obj.name != "cube":
             return self._fail(
                 "pull_with_tool",
@@ -973,19 +1001,30 @@ class ManiSkillPullCubeToolPlannerRobot:
 
         import sapien
 
-        target_pose = self.hook_pose * sapien.Pose([-0.35, 0.0, 0.0])
-        if not self._capture(self._move_to_pose(target_pose, prefer_rrt=False), "pull_cube_with_tool"):
+        distance = float(np.clip(distance, 0.10, 0.70))
+        stages = int(np.clip(stages, 1, 5))
+        ok = False
+        failed_stage = ""
+        for stage in range(1, stages + 1):
+            depth = distance * stage / stages
+            target_pose = self.hook_pose * sapien.Pose([-depth, 0.0, 0.0])
+            if not self._capture(self._move_to_pose(target_pose, prefer_rrt=False), f"pull_cube_with_tool_{stage}"):
+                failed_stage = f"motion planning failed while pulling cube with tool at stage {stage}"
+                break
+            ok = self._evaluate_success()
+            if ok:
+                break
+        if failed_stage and not ok:
             return self._fail(
                 "pull_with_tool",
-                {"tool": tool.name, "obj": obj.name, "target": target.name},
-                "motion planning failed while pulling cube with tool",
+                {"tool": tool.name, "obj": obj.name, "target": target.name, "distance": distance, "stages": stages},
+                failed_stage,
             )
 
-        ok = self._evaluate_success()
         diagnostics = self._pull_diagnostics()
         return self._log(
             "pull_with_tool",
-            {"tool": tool.name, "obj": obj.name, "target": target.name},
+            {"tool": tool.name, "obj": obj.name, "target": target.name, "distance": distance, "stages": stages},
             ok,
             ok,
             "" if ok else f"tool pull failed; cube was not pulled into workspace; {diagnostics}",

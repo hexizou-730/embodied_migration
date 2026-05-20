@@ -183,6 +183,77 @@ def run_real_trial(
             "llm_raw_text": generated.raw_text,
         }
 
+    return run_real_code_trial(
+        task_id=task_id,
+        robot_uid=robot_uid,
+        method=method,
+        code=code,
+        prompt=prompt,
+        seed=seed,
+        control_mode=control_mode,
+        obs_mode=obs_mode,
+        sim_backend=sim_backend,
+        render_backend=render_backend,
+        max_episode_steps=max_episode_steps,
+        extra_result={
+            **_report_info(report_source_result, report),
+            **llm_info,
+        },
+    )
+
+
+def run_real_code_trial(
+    *,
+    task_id: str,
+    robot_uid: str,
+    method: str,
+    code: str,
+    prompt: str = "",
+    seed: int = 0,
+    control_mode: Optional[str] = None,
+    obs_mode: str = "state",
+    sim_backend: str = "auto",
+    render_backend: str = "gpu",
+    max_episode_steps: int = 300,
+    extra_result: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Execute a caller-provided LMP snippet in a real ManiSkill task."""
+
+    task = get_task_spec(task_id)
+    task_id = task.task_id
+    requested_robot_uid = robot_uid
+    robot_uid = _normalize_robot_uid(task_id, robot_uid)
+    if control_mode is None:
+        control_mode = _default_control_mode(task_id, robot_uid)
+    result: Dict[str, Any] = {
+        "task_id": task_id,
+        "task_name": task.display_name,
+        "task_name_cn": task.name_cn,
+        "env_id": task.maniskill_env_id,
+        "robot_uid": robot_uid,
+        "method": method,
+        "seed": seed,
+        "control_mode": control_mode,
+        "obs_mode": obs_mode,
+        "sim_backend": sim_backend,
+        "render_backend": render_backend,
+        "max_episode_steps": max_episode_steps,
+        "real_runner": True,
+    }
+    if requested_robot_uid != robot_uid:
+        result["requested_robot_uid"] = requested_robot_uid
+    if task_id not in SUPPORTED_REAL_TASKS:
+        result.update(
+            success=False,
+            failure_type="execution failure",
+            message=f"real runner currently supports only: {', '.join(SUPPORTED_REAL_TASKS)}",
+            generated_code=code,
+            prompt=prompt,
+        )
+        if extra_result:
+            result.update(extra_result)
+        return result
+
     adapter = ManiSkillEnvAdapter(
         task.maniskill_env_id,
         robot_uid=robot_uid,
@@ -221,9 +292,9 @@ def run_real_trial(
             reset_info_keys=sorted(str(k) for k in getattr(reset_info, "keys", lambda: [])()),
             execution_log=robot.execution_log(),
             final_info=_jsonable(robot.last_info),
-            **_report_info(report_source_result, report),
-            **llm_info,
         )
+        if extra_result:
+            result.update(extra_result)
     except Exception as exc:  # pragma: no cover - depends on local Vulkan/GPU stack
         result.update(
             success=False,
@@ -232,9 +303,9 @@ def run_real_trial(
             generated_code=code,
             prompt=prompt,
             graphics_diagnosis=diagnose_graphics_stack(),
-            **_report_info(report_source_result, report),
-            **llm_info,
         )
+        if extra_result:
+            result.update(extra_result)
     finally:
         if robot is not None and hasattr(robot, "close"):
             robot.close()

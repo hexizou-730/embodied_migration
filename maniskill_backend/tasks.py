@@ -160,6 +160,7 @@ TASK_SPECS: Dict[str, TaskSpec] = {
         source_program=PULL_CUBE_TOOL_SOURCE,
         expected_failure_modes=(
             "tool-use ordering failure",
+            "tool-use execution failure",
             "gripper/force failure",
             "reachability failure",
             "execution failure",

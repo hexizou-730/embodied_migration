@@ -107,6 +107,43 @@ python -m maniskill_backend.real_runner \
   --render-backend gpu
 ```
 
+## Iterative LLM Migration
+
+This is the main research workflow now. It verifies that the source robot
+succeeds, asks the LLM to write target-robot code, runs the target code, feeds
+the simulator failure log back to the LLM, and repeats up to `--max-attempts`.
+
+For `pull_cube_tool`, the iterative runner exposes tunable target-code
+parameters:
+
+```python
+robot.hook_object(tool, cube, hook_y_offset=-0.067, behind_margin=0.0)
+robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1)
+```
+
+Run:
+
+```bash
+python -m maniskill_backend.iterative_runner \
+  --task pull_cube_tool \
+  --source-robot panda \
+  --target-robot xarm6_robotiq \
+  --max-attempts 3 \
+  --seed 0 \
+  --target-control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 300
+```
+
+Outputs:
+
+```text
+results/iterative_trials.jsonl
+results/iterative_trials.md
+results/iterative_summary.csv
+```
+
 ## Real Benchmark
 
 ```bash

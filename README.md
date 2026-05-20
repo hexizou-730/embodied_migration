@@ -17,11 +17,20 @@ experiments have been removed.
 
 ## Research Question
 
-When a robot program works on one embodiment, what fails when it is executed on
-another embodiment, and can an LLM repair the program using:
+When a robot program works on one embodiment, can an LLM iteratively migrate
+that code so another embodiment completes the same task in real simulation?
 
-- the target robot's Capability Card, and
-- a structured Failure Report generated from a real simulator attempt?
+The current primary pipeline is:
+
+- Panda source code succeeds.
+- LLM writes xarm6 target code.
+- ManiSkill executes the target code.
+- The failure log is fed back to the LLM.
+- The LLM revises the code for up to N attempts.
+- We record success, attempt count, generated code, and code changes.
+
+Capability Cards and Failure Reports are now supporting context, not the main
+research object.
 
 ## Core Pipeline
 
@@ -37,6 +46,29 @@ real Failure Report
 LLM generates corrected LMP code
         ->
 real simulator re-execution
+```
+
+## Iterative Runner
+
+```bash
+python -m maniskill_backend.iterative_runner \
+  --task pull_cube_tool \
+  --source-robot panda \
+  --target-robot xarm6_robotiq \
+  --max-attempts 3 \
+  --seed 0 \
+  --target-control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 300
+```
+
+Outputs:
+
+```text
+results/iterative_trials.jsonl
+results/iterative_trials.md
+results/iterative_summary.csv
 ```
 
 ## Current Real Tasks
