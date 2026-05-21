@@ -135,7 +135,8 @@ results/real_trials.md
 results/real_summary.csv
 ```
 
-See `docs/RUN.md` for the step-by-step workflow.
+See `docs/RUN.md` for the step-by-step workflow. For the current Mac +
+Polytechnique remote handoff, read `docs/MAC_GUIDE_CN.md`.
 
 ## Current Validated Result
 
