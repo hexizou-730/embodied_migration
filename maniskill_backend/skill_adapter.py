@@ -1,9 +1,9 @@
-"""High-level skills backed by ManiSkill actions.
+"""Embodiment skill adapters backed by ManiSkill actions.
 
-This module is the bridge from LMP-style task code to real ManiSkill execution.
-It supports PickCube-v1 and PegInsertionSide-v1; both adapters drive the env
-through the same skill API (grasp / align_to_target / insert / place) so the
-same LMP code can run across embodiments.
+This module is the physical half of cross-embodiment migration. LMP-style task
+code calls a compact skill API, but every target robot still needs a migrated
+adapter, planner/control route, grasp geometry, and contact primitive that turn
+those semantics into real ``env.step(action)`` execution.
 """
 
 from __future__ import annotations

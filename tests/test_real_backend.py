@@ -6,8 +6,13 @@ from pathlib import Path
 import numpy as np
 
 from lmp.executor import execute_lmp
+from maniskill_backend.cases import (
+    PRIMARY_FULL_MIGRATION_CASE,
+    PRIMARY_FULL_MIGRATION_CASE_ID,
+    get_full_migration_case,
+)
 from maniskill_backend.env_adapter import can_import_maniskill
-from maniskill_backend.evaluation import TrialRecord, classify_failure
+from maniskill_backend.evaluation import TrialRecord, classify_failure, classify_failure_layer
 from maniskill_backend.iterative_runner import _code_diff, build_iterative_prompt
 from maniskill_backend.migration import METHODS, MigrationRequest, build_migration_prompt
 from maniskill_backend.profiles import get_robot_profile
@@ -50,6 +55,17 @@ class RealBackendTest(unittest.TestCase):
     def test_static_task_specs_are_removed(self):
         with self.assertRaises(KeyError):
             get_task_spec("PlugCharger-v1")
+
+    def test_case01_is_pull_cube_tool_full_migration(self):
+        case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
+        self.assertIs(case, PRIMARY_FULL_MIGRATION_CASE)
+        self.assertEqual(case.case_number, 1)
+        self.assertEqual(case.task_id, "pull_cube_tool")
+        self.assertEqual(case.source_robot, "panda")
+        self.assertEqual(case.target_robot, "xarm6_robotiq")
+        self.assertEqual(case.target_control_mode, "pd_joint_pos")
+        self.assertIn("skill_adapter", case.migration_layers)
+        self.assertIn("controller_primitive", case.migration_layers)
 
     def test_migration_prompt_card_report_method(self):
         request = MigrationRequest.from_ids(
@@ -359,6 +375,47 @@ class RealBackendTest(unittest.TestCase):
             "tool-use execution failure",
         )
 
+    def test_failure_layer_classifier(self):
+        self.assertEqual(
+            classify_failure_layer(
+                success=False,
+                code_ok=False,
+                message="NameError: robot.missing",
+            ),
+            "program",
+        )
+        self.assertEqual(
+            classify_failure_layer(
+                success=False,
+                info={
+                    "execution_log": [
+                        {
+                            "api": "pull_with_tool",
+                            "ok": False,
+                            "message": "tool pull failed",
+                        }
+                    ]
+                },
+            ),
+            "skill_adapter",
+        )
+        self.assertEqual(
+            classify_failure_layer(
+                success=False,
+                info={
+                    "execution_log": [
+                        {
+                            "api": "place",
+                            "ok": False,
+                            "message": "planner failed during pose plan",
+                        }
+                    ],
+                    "final_info": {"planner_status": "failed"},
+                },
+            ),
+            "controller_primitive",
+        )
+
     def test_pull_cube_tool_prompt_forbids_direct_tool_grasp(self):
         request = MigrationRequest.from_ids(
             task_id="pull_cube_tool",
@@ -491,6 +548,7 @@ class RealBackendTest(unittest.TestCase):
             )
         ]
         self.assertEqual(summarize_records(records)[0]["success_rate"], 1.0)
+        self.assertEqual(summarize_records(records)[0]["dominant_failure_layer"], "success")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "trials.jsonl"
             append_jsonl(path, records)
@@ -527,6 +585,7 @@ class RealBackendTest(unittest.TestCase):
         self.assertIn("### Generated Code", text)
         self.assertIn("ret_val = True", text)
         self.assertIn("Execution Log", text)
+        self.assertIn("failure_layer", text)
 
 
 if __name__ == "__main__":

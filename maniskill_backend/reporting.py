@@ -64,6 +64,7 @@ def build_real_failure_report(
             actual={
                 "execution_result": "failure",
                 "failure_type": failed_record.failure_type,
+                "failure_layer": failed_record.failure_layer,
                 "message": message,
                 "failed_skill_call": failed_step,
             },
@@ -97,6 +98,7 @@ def build_real_failure_report(
             actual={
                 "execution_result": "failure",
                 "failure_type": failed_record.failure_type,
+                "failure_layer": failed_record.failure_layer,
                 "message": message,
                 "failed_skill_call": failed_step,
             },
@@ -127,6 +129,7 @@ def build_real_failure_report(
             actual={
                 "execution_result": "failure",
                 "failure_type": failed_record.failure_type,
+                "failure_layer": failed_record.failure_layer,
                 "message": message,
                 "failed_skill_call": failed_step,
             },
@@ -157,6 +160,7 @@ def build_real_failure_report(
             actual={
                 "execution_result": "failure",
                 "failure_type": failed_record.failure_type,
+                "failure_layer": failed_record.failure_layer,
                 "message": message,
                 "failed_skill_call": failed_step,
             },
@@ -182,6 +186,7 @@ def build_real_failure_report(
         actual={
             "execution_result": "failure",
             "failure_type": failed_record.failure_type,
+            "failure_layer": failed_record.failure_layer,
             "message": message,
             "failed_skill_call": failed_step,
         },

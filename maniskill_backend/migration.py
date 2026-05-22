@@ -1,4 +1,4 @@
-"""Prompt construction for real ManiSkill migration trials."""
+"""Prompt construction for the LMP-program layer of ManiSkill migration."""
 
 from __future__ import annotations
 

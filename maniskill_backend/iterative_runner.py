@@ -1,11 +1,15 @@
-"""Iterative LLM robot-code migration runner.
+"""Iterative LLM program-migration runner for the full ManiSkill stack.
 
-This runner matches the current research direction:
+This runner covers the LMP-program layer of cross-embodiment migration:
 1. verify the source robot succeeds with the source program;
 2. ask an LLM to write target-robot code;
 3. execute it in real ManiSkill simulation;
 4. feed the failure log back to the LLM;
 5. repeat up to N attempts.
+
+If a failure is caused by target grasp geometry, contact primitives, planner
+routes, or controller assumptions, migrate ``skill_adapter.py`` as well; LMP
+rewriting alone is not the full migration experiment.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .cases import PRIMARY_FULL_MIGRATION_CASE
 from .llm import gen_code
 from .profiles import get_robot_profile
 from .real_runner import _default_control_mode, run_real_code_trial, run_real_trial
@@ -87,6 +92,7 @@ def build_iterative_prompt(
                     f"## Attempt {attempt['attempt']}",
                     f"success: {result.get('success')}",
                     f"failure_type: {result.get('failure_type')}",
+                    f"failure_layer: {result.get('failure_layer')}",
                     f"message: {result.get('message')}",
                     "code:",
                     "```python",
@@ -104,7 +110,7 @@ def build_iterative_prompt(
         lines.extend(
             [
                 "",
-                "Revise the code for the next attempt. Do not simply repeat code that failed unless the feedback proves no high-level code change is possible.",
+                "Revise the code for the next attempt. Do not simply repeat code that failed unless the feedback proves the remaining failure is in the target skill adapter or controller primitive rather than the LMP program.",
             ]
         )
     else:
@@ -243,6 +249,7 @@ def run_iterative_migration(
         "success": success,
         "successful_attempt": successful_attempt,
         "final_failure_type": final_result.get("failure_type", ""),
+        "final_failure_layer": final_result.get("failure_layer", ""),
         "final_message": final_result.get("message", ""),
         "source_result": source_result,
         "attempts": attempts,
@@ -274,6 +281,7 @@ def write_iterative_outputs(
             "attempts_run",
             "successful_attempt",
             "final_failure_type",
+            "final_failure_layer",
         ]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         if not file_exists:
@@ -292,6 +300,7 @@ def iterative_result_to_md(result: Dict[str, Any]) -> str:
         f"- **attempts_run**: `{result.get('attempts_run')}`",
         f"- **successful_attempt**: `{result.get('successful_attempt')}`",
         f"- **final_failure_type**: `{result.get('final_failure_type')}`",
+        f"- **final_failure_layer**: `{result.get('final_failure_layer')}`",
         f"- **final_message**: `{result.get('final_message')}`",
         "",
     ]
@@ -314,6 +323,7 @@ def iterative_result_to_md(result: Dict[str, Any]) -> str:
                 "",
                 f"- **success**: `{trial.get('success')}`",
                 f"- **failure_type**: `{trial.get('failure_type')}`",
+                f"- **failure_layer**: `{trial.get('failure_layer')}`",
                 f"- **message**: `{trial.get('message')}`",
                 f"- **code_changed_from_previous**: `{attempt.get('code_changed_from_previous')}`",
                 "",
@@ -371,17 +381,17 @@ def _code_diff(previous: str, current: str) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run iterative LLM robot-code migration.")
-    parser.add_argument("--task", default="pull_cube_tool")
-    parser.add_argument("--source-robot", default=None)
-    parser.add_argument("--target-robot", default="xarm6_robotiq")
-    parser.add_argument("--max-attempts", type=int, default=3)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--source-control-mode", default=None)
-    parser.add_argument("--target-control-mode", default=None)
+    parser.add_argument("--task", default=PRIMARY_FULL_MIGRATION_CASE.task_id)
+    parser.add_argument("--source-robot", default=PRIMARY_FULL_MIGRATION_CASE.source_robot)
+    parser.add_argument("--target-robot", default=PRIMARY_FULL_MIGRATION_CASE.target_robot)
+    parser.add_argument("--max-attempts", type=int, default=PRIMARY_FULL_MIGRATION_CASE.max_attempts)
+    parser.add_argument("--seed", type=int, default=PRIMARY_FULL_MIGRATION_CASE.seed)
+    parser.add_argument("--source-control-mode", default=PRIMARY_FULL_MIGRATION_CASE.source_control_mode)
+    parser.add_argument("--target-control-mode", default=PRIMARY_FULL_MIGRATION_CASE.target_control_mode)
     parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--sim-backend", default="auto")
     parser.add_argument("--render-backend", default="gpu")
-    parser.add_argument("--max-episode-steps", type=int, default=300)
+    parser.add_argument("--max-episode-steps", type=int, default=PRIMARY_FULL_MIGRATION_CASE.max_episode_steps)
     parser.add_argument("--jsonl", default="results/iterative_trials.jsonl")
     parser.add_argument("--md", default="results/iterative_trials.md")
     parser.add_argument("--summary", default="results/iterative_summary.csv")

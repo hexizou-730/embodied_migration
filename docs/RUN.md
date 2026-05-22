@@ -3,6 +3,13 @@
 This project now keeps only the real ManiSkill simulation path. The old static
 fake runner and text-only benchmark have been removed.
 
+The research target is full cross-embodiment migration, not only rewriting the
+high-level LMP snippet. A complete migration trial must distinguish:
+
+- program migration: target LMP ordering, API choices, and exposed parameters;
+- execution migration: target skill wrapper, planner/control mode, grasp/contact
+  primitive, TCP/tool compensation, and other `env.step(action)` details.
+
 ## Remote GPU Setup
 
 On the Polytechnique GPU machine:
@@ -51,6 +58,25 @@ stack_cube     堆叠方块       ManiSkill env: StackCube-v1
 pull_cube_tool 用工具拉方块   ManiSkill env: PullCubeTool-v1
 peg_insertion  侧向插 peg     ManiSkill env: PegInsertionSide-v1
 ```
+
+## Case 01: Pull Cube With Tool
+
+The first fixed complete migration case is:
+
+```text
+case id: case01_pull_cube_tool_panda_to_xarm6
+task: pull_cube_tool / PullCubeTool-v1
+source robot: panda
+target robot: xarm6_robotiq
+source control: pd_joint_pos
+target control: pd_joint_pos
+first seed: 0
+episode budget: 300
+```
+
+`pick_cube` and `stack_cube` stay as support tasks. Case 01 is the one that
+must demonstrate both target LMP migration and target skill/controller
+migration.
 
 Panda smoke test:
 
@@ -109,9 +135,16 @@ python -m maniskill_backend.real_runner \
 
 ## Iterative LLM Migration
 
-This is the main research workflow now. It verifies that the source robot
-succeeds, asks the LLM to write target-robot code, runs the target code, feeds
-the simulator failure log back to the LLM, and repeats up to `--max-attempts`.
+This runner automates the program-migration layer. It verifies that the source
+robot succeeds, asks the LLM to write target-robot code, runs the target code,
+feeds the simulator failure log back to the LLM, and repeats up to
+`--max-attempts`.
+
+Do not treat repeated LMP failure as the end of the migration experiment. If
+the source sequence is sound but the target robot cannot physically realize the
+same grasp, tool contact, planner route, or controller path, migrate the target
+execution layer in `maniskill_backend/skill_adapter.py` and rerun the same
+trial.
 
 For `pull_cube_tool`, the iterative runner exposes tunable target-code
 parameters:
@@ -151,23 +184,49 @@ results/iterative_trials.md
 results/iterative_summary.csv
 ```
 
-## Real Benchmark
+## Case 01 Full-Stack Migration Workflow
+
+Use this order for `case01_pull_cube_tool_panda_to_xarm6`:
+
+1. Run the Panda source side and require real simulation success.
+2. Run xarm6 `source-copy` to expose the first portability failure.
+3. Run `iterative_runner` to test whether target LMP code and exposed skill
+   parameters can repair the failure.
+4. If the LMP sequence is already correct but execution logs show target grasp,
+   contact, TCP, planning, or controller failure, migrate the target adapter in
+   `skill_adapter.py` and the target assumptions in `profiles.py` or
+   `real_runner.py`.
+5. Rerun source-copy, iterative LLM, and benchmark commands after each target
+   adapter change.
+6. Record both code changes: generated LMP diffs and committed adapter /
+   controller diffs.
+
+For Case 01, wrapper migration is already part of the experiment:
+xarm6 needs a target-specific tool grasp depth, held-tool pose compensation,
+contact correction, and a pull frame that is physically meaningful for its
+planner path.
+
+## Case 01 Real Benchmark
 
 ```bash
 python -m maniskill_backend.real_benchmark \
-  --task pick_cube \
+  --task pull_cube_tool \
   --robot xarm6_robotiq \
   --methods source-copy,llm_card_report,oracle \
   --seed 0 \
   --control-mode pd_joint_pos \
   --sim-backend auto \
-  --render-backend gpu
+  --render-backend gpu \
+  --max-episode-steps 300
 ```
 
-## Second Task: Stack Cube
+Running `python -m maniskill_backend.real_benchmark` with no CLI overrides now
+uses this Case 01 task/target/controller/seed budget.
 
-`stack_cube` is the current second real task. It is more demanding than
-`pick_cube` because cube A must remain stably on cube B after release.
+## Support Task: Stack Cube
+
+`stack_cube` is a support task. It is more demanding than `pick_cube` because
+cube A must remain stably on cube B after release.
 
 Panda source run:
 
@@ -211,7 +270,7 @@ python -m maniskill_backend.real_benchmark \
   --max-episode-steps 200
 ```
 
-## Third Task: Pull Cube With Tool
+## Case 01 Commands: Pull Cube With Tool
 
 `pull_cube_tool` is a tool-use task. The source program must hook the cube with
 the L-shaped tool before pulling it back into the robot workspace.

@@ -143,33 +143,34 @@ export EM_MODEL=anthropic/claude-opus-4.7
 当前研究目标已经收敛为：
 
 ```text
-LLM iterative robot code migration
+full-stack cross-embodiment robot migration
 ```
 
 实验问题：
 
 ```text
 一个 Panda 程序已经能在仿真中完成任务。
-LLM 能否为 xarm6 写出目标机器人代码，
-并在看到仿真失败日志后不断修改，最终完成相同任务？
+迁移到 xarm6 时，哪些内容必须一起迁移，
+才能让目标机器人在真实 ManiSkill 仿真中完成相同任务？
 ```
 
 当前主流程：
 
 1. Panda 成功源代码。
-2. LLM 为 `xarm6_robotiq` 写目标代码。
-3. ManiSkill 执行目标代码。
-4. 把真实仿真失败日志反馈给 LLM。
-5. LLM 重写代码。
-6. 最多重试 N 次。
-7. 记录是否成功、成功用了几次、每次代码改了什么。
+2. Panda 源 skill wrapper 在 ManiSkill 中成功执行。
+3. xarm6 跑 source-copy，暴露程序层和执行层差异。
+4. 如果高层程序可修，LLM 根据真实失败日志改目标 LMP 代码。
+5. 如果失败来自抓取、工具接触、TCP、planner 或控制 primitive，则迁移
+   `skill_adapter.py` 中的 xarm6 目标执行层。
+6. 反复执行 ManiSkill 验证。
+7. 同时记录 LMP 代码改动和 skill-wrapper / controller 改动。
 
 Capability Card 和 Failure Report 现在是辅助上下文，不再是主要研究
 对象。
 
 ## 8. 代码层次
 
-当前 LLM 写的是高层 LMP 代码，例如：
+当前 LLM runner 写的是高层 LMP 代码，例如：
 
 ```python
 ok = robot.hook_object(tool, cube)
@@ -189,13 +190,14 @@ LLM target code
   -> real simulator feedback
 ```
 
-因此实验里要区分两类失败：
+因此实验里要区分两类迁移对象和失败：
 
-- 高层代码失败：顺序错、参数错、调用 API 错。
-- skill-wrapper 失败：目标机器人需要不同的抓取、规划、接触轨迹或控制
-  primitive，高层代码本身不足以修复。
+- 高层程序迁移：顺序、参数、调用 API 和任务分支。
+- 执行层迁移：目标机器人需要不同的抓取、规划、接触轨迹、TCP 补偿或
+  控制 primitive，高层代码本身不足以修复。
 
-这一区分正是当前实验设计的重要部分。
+这一区分不是把执行层排除掉，而是要求两层都迁移、都记录。只迁移高层
+代码不足以说明跨 embodiment 迁移已经完成。
 
 ## 9. 当前任务与机器人
 
@@ -211,8 +213,8 @@ LLM target code
 | Project task | ManiSkill env | Current use |
 |---|---|---|
 | `pick_cube` | `PickCube-v1` | 基础迁移和 controller/path smoke test |
-| `stack_cube` | `StackCube-v1` | 第二个可运行任务 |
-| `pull_cube_tool` | `PullCubeTool-v1` | 当前工具使用和 wrapper 迁移重点 |
+| `stack_cube` | `StackCube-v1` | 支撑任务，用于检查 stacking 路径 |
+| `pull_cube_tool` | `PullCubeTool-v1` | **Case 01** 完整 Panda 到 xarm6 迁移 |
 | `peg_insertion` | `PegInsertionSide-v1` | 暂停，官方 Panda solver 在 seed 0 也失败 |
 
 注意：
@@ -247,10 +249,25 @@ peg_insertion + official Panda solver -> failure at seed 0, parked
 因此 `pull_cube_tool` 当前更像：
 
 ```text
-high-level iterative code migration
-  -> exposes target skill-wrapper mismatch
-  -> migrate xarm6 tool grasp/contact primitive
+Panda task stack
+  -> xarm6 program migration
+  -> xarm6 tool-wrapper / grasp / contact primitive migration
+  -> full target simulation success
 ```
+
+它已经固定为第一个正式案例：
+
+```text
+case id: case01_pull_cube_tool_panda_to_xarm6
+source robot: panda
+target robot: xarm6_robotiq
+source/target control: pd_joint_pos
+first seed: 0
+episode budget: 300
+```
+
+这个案例必须同时给出两类证据：LLM 目标 LMP 代码差异，以及
+`skill_adapter.py` / controller primitive 的目标执行层迁移差异。
 
 ## 11. 重要运行命令
 

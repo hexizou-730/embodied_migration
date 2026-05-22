@@ -26,6 +26,7 @@ def record_to_md(record: Dict[str, Any], index: int) -> str:
         ("method", record.get("method", "")),
         ("success", record.get("success", "")),
         ("failure_type", record.get("failure_type", "")),
+        ("failure_layer", record.get("failure_layer", "")),
         ("used_llm", info.get("used_llm", "")),
         ("message", record.get("message", "")),
     ]

@@ -1,7 +1,11 @@
 # Embodied Migration
 
-Real ManiSkill simulation experiments for LLM-generated robot program migration
-across robot embodiments.
+Real ManiSkill simulation experiments for full cross-embodiment robot migration.
+
+The migration target is not only the LLM-written high-level LMP program. It is
+the whole executable target stack needed for another embodiment to complete the
+same task: task program, target skill adapter, control mode, controller
+primitive, and embodiment-specific physical parameters.
 
 ## Current Scope
 
@@ -10,45 +14,93 @@ This repository is now focused on real simulation only:
 - Real ManiSkill environments.
 - Real `env.step(action)` skill wrappers.
 - Real execution logs and Failure Reports.
-- LLM repair with Capability Card + Failure Report.
+- Program-level LLM repair with Capability Card + Failure Report.
+- Target skill-wrapper and controller-primitive migration when source
+  primitives do not physically transfer.
 
 The old static fake runner, static benchmark, and text-only code-migration
 experiments have been removed.
 
 ## Research Question
 
-When a robot program works on one embodiment, can an LLM iteratively migrate
-that code so another embodiment completes the same task in real simulation?
+When a task stack works on one embodiment, what must be migrated so another
+embodiment completes the same task in real simulation?
 
-The current primary pipeline is:
+The project separates and then recombines two migration layers:
+
+1. **Program migration**: adapt the LMP task code, API ordering, and tunable
+   target parameters.
+2. **Embodied execution migration**: port the target skill wrapper, planner
+   path, controller mode, contact primitive, and grasp/tool geometry that turn
+   the high-level program into `env.step(action)` execution.
+
+The current working loop is:
 
 - Panda source code succeeds.
-- LLM writes xarm6 target code.
-- ManiSkill executes the target code.
-- The failure log is fed back to the LLM.
-- The LLM revises the code for up to N attempts.
-- We record success, attempt count, generated code, and code changes.
+- Panda source wrapper and target xarm6 wrapper are both tested in ManiSkill.
+- Source-copy exposes program and execution-layer portability failures.
+- The LLM revises target LMP code when the failure is program-level.
+- `skill_adapter.py` and target planner/control primitives are migrated when
+  the same high-level semantics fail physically on the target embodiment.
+- We record success, failed layer, attempts, generated code changes, and
+  adapter/controller changes.
 
 Capability Cards and Failure Reports are now supporting context, not the main
 research object.
 
-## Core Pipeline
+## Case 01: PullCubeTool Panda to xarm6
+
+`pull_cube_tool` is now the first fixed complete migration case:
+
+| Field | Value |
+|---|---|
+| Case id | `case01_pull_cube_tool_panda_to_xarm6` |
+| ManiSkill task | `pull_cube_tool` / `PullCubeTool-v1` |
+| Source embodiment | `panda` |
+| Target embodiment | `xarm6_robotiq` |
+| Controller route | source and target use `pd_joint_pos` planner control |
+| Fixed first seed | `0` |
+| Episode budget | `300` steps |
+
+This case is intentionally more than a high-level program rewrite. It must
+record Panda source success, xarm6 source-copy failure, generated target LMP
+attempts, target `skill_adapter.py` / controller changes, and final real
+ManiSkill success evidence.
+
+## Migration Layers
+
+| Layer | What migrates | Current code location |
+|---|---|---|
+| Task program | LMP sequence, API choices, target-side parameters | `maniskill_backend/tasks.py`, generated LLM code |
+| Embodiment profile | Robot limits and planner/control assumptions | `maniskill_backend/profiles.py` |
+| Skill adapter | Grasp, place, hook, pull, align, insert execution | `maniskill_backend/skill_adapter.py` |
+| Controller primitive | Control mode, planner route, TCP/tool compensation | `real_runner.py`, `skill_adapter.py` |
+| Evaluation/reporting | Success, failed layer, physical failure evidence | `evaluation.py`, `reporting.py`, results logs |
+
+## Full Pipeline
 
 ```text
-source LMP program
+source LMP program + source skill adapter
         ->
-target robot in ManiSkill
+Panda source success in ManiSkill
         ->
-real source-copy execution
+source-copy on target LMP + target execution stack
         ->
-real Failure Report
+program-level or execution-layer failure evidence
         ->
-LLM generates corrected LMP code
+LLM adapts target LMP code when code can fix it
+        +
+skill adapter / controller primitive is migrated when physics cannot transfer
         ->
-real simulator re-execution
+target xarm6 re-execution in real ManiSkill simulation
 ```
 
-## Iterative Runner
+## Program-Level Iterative Runner
+
+`iterative_runner` automates the program migration part of the full loop. It
+does not replace target adapter migration: if repeated logs show a target grasp,
+tool contact, or controller primitive mismatch, port that execution layer and
+rerun the iterative trial.
 
 ```bash
 python -m maniskill_backend.iterative_runner \
@@ -75,9 +127,9 @@ results/iterative_summary.csv
 
 | Task name | 中文任务 | ManiSkill env | Status |
 |---|---|---|---|
-| `pick_cube` | 抓取方块 | `PickCube-v1` | validated smoke and controller-portability task |
-| `stack_cube` | 堆叠方块 | `StackCube-v1` | second real task, official Panda solver succeeds at seed 0 |
-| `pull_cube_tool` | 用工具拉方块 | `PullCubeTool-v1` | tool-use task, official Panda solver succeeds at seed 0 |
+| `pick_cube` | 抓取方块 | `PickCube-v1` | smoke and controller-portability support task |
+| `stack_cube` | 堆叠方块 | `StackCube-v1` | supporting stacking task, official Panda solver succeeds at seed 0 |
+| `pull_cube_tool` | 用工具拉方块 | `PullCubeTool-v1` | **Case 01** full-stack Panda to xarm6 migration |
 | `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | parked: official solver failed at seed 0 |
 
 ## Current Robots
@@ -95,7 +147,7 @@ real experiments until their ManiSkill runs are working.
 | Method | Meaning |
 |---|---|
 | `source-copy` | execute the source LMP program directly on the target robot |
-| `llm_card_report` | give the LLM the target Capability Card plus a real Failure Report |
+| `llm_card_report` | program-level LLM repair from target Capability Card plus real Failure Report |
 | `oracle` | hand-written real-simulation upper bound for the task |
 
 ## Install
@@ -116,15 +168,18 @@ export VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json
 
 ## Run
 
+The benchmark CLI defaults to Case 01. The explicit equivalent command is:
+
 ```bash
 python -m maniskill_backend.real_benchmark \
-  --task pick_cube \
+  --task pull_cube_tool \
   --robot xarm6_robotiq \
   --methods source-copy,llm_card_report,oracle \
   --seed 0 \
   --control-mode pd_joint_pos \
   --sim-backend auto \
-  --render-backend gpu
+  --render-backend gpu \
+  --max-episode-steps 300
 ```
 
 Outputs:
@@ -146,6 +201,6 @@ pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
 pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
 stack_cube + official Panda solver -> success at seed 0
 pull_cube_tool + official Panda solver -> success at seed 0
-pull_cube_tool + iterative LLM xarm6 -> currently tests skill-wrapper migration
+pull_cube_tool + iterative LLM xarm6 -> exposes and tests target tool-wrapper migration
 peg_insertion + official Panda solver -> failure at seed 0, not used yet
 ```

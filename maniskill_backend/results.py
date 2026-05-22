@@ -28,9 +28,12 @@ def summarize_records(records: Iterable[TrialRecord]) -> List[Dict[str, object]]
         total = len(group)
         successes = sum(1 for item in group if item.success)
         failure_counts: Dict[str, int] = defaultdict(int)
+        layer_counts: Dict[str, int] = defaultdict(int)
         for item in group:
             failure_counts[item.failure_type] += 1
+            layer_counts[item.failure_layer] += 1
         dominant_failure = max(failure_counts.items(), key=lambda item: item[1])[0]
+        dominant_layer = max(layer_counts.items(), key=lambda item: item[1])[0]
         rows.append(
             {
                 "task_id": task_id,
@@ -40,6 +43,7 @@ def summarize_records(records: Iterable[TrialRecord]) -> List[Dict[str, object]]
                 "successes": successes,
                 "success_rate": round(successes / total, 4) if total else 0.0,
                 "dominant_failure_type": dominant_failure,
+                "dominant_failure_layer": dominant_layer,
             }
         )
     return rows
@@ -55,6 +59,7 @@ def write_summary_csv(path: Path, rows: Sequence[Dict[str, object]]) -> None:
         "successes",
         "success_rate",
         "dominant_failure_type",
+        "dominant_failure_layer",
     ]
     with path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

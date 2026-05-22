@@ -146,7 +146,7 @@ TASK_SPECS: Dict[str, TaskSpec] = {
             "placement stability failure",
             "execution failure",
         ),
-        notes="Stable second real task: official Panda solver succeeds at seed 0.",
+        notes="Supporting stacking task: official Panda solver succeeds at seed 0.",
     ),
     "pull_cube_tool": TaskSpec(
         task_id="pull_cube_tool",
@@ -165,7 +165,7 @@ TASK_SPECS: Dict[str, TaskSpec] = {
             "reachability failure",
             "execution failure",
         ),
-        notes="Tool-use task: official Panda solver succeeds at seed 0.",
+        notes="Case 01 full-stack migration task: official Panda solver succeeds at seed 0.",
     ),
 }
 

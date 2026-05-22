@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 from lmp.executor import execute_lmp
 
 from .env_adapter import ManiSkillEnvAdapter
-from .evaluation import TrialRecord, classify_failure
+from .evaluation import TrialRecord, classify_failure, classify_failure_layer
 from .llm import gen_code
 from .migration import MigrationRequest, build_migration_prompt, get_source_copy_code, norm_method
 from .reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
@@ -125,6 +125,7 @@ def run_real_trial(
         result.update(
             success=False,
             failure_type="execution failure",
+            failure_layer="runtime_setup",
             message=f"real runner currently supports only: {', '.join(SUPPORTED_REAL_TASKS)}",
         )
         return result
@@ -246,6 +247,7 @@ def run_real_code_trial(
         result.update(
             success=False,
             failure_type="execution failure",
+            failure_layer="runtime_setup",
             message=f"real runner currently supports only: {', '.join(SUPPORTED_REAL_TASKS)}",
             generated_code=code,
             prompt=prompt,
@@ -283,15 +285,28 @@ def run_real_code_trial(
             message=failure_message,
             info=robot.last_info,
         )
+        execution_log = robot.execution_log()
+        final_info = _jsonable(robot.last_info)
+        failure_layer = classify_failure_layer(
+            success=success,
+            code_ok=code_ok,
+            message=failure_message,
+            info={
+                "execution_log": execution_log,
+                "final_info": final_info,
+                "ret_val": ret_val,
+            },
+        )
         result.update(
             success=success,
             failure_type=failure_type,
+            failure_layer=failure_layer,
             message=failure_message,
             generated_code=code,
             prompt=prompt,
             reset_info_keys=sorted(str(k) for k in getattr(reset_info, "keys", lambda: [])()),
-            execution_log=robot.execution_log(),
-            final_info=_jsonable(robot.last_info),
+            execution_log=execution_log,
+            final_info=final_info,
         )
         if extra_result:
             result.update(extra_result)
@@ -299,6 +314,7 @@ def run_real_code_trial(
         result.update(
             success=False,
             failure_type="execution failure",
+            failure_layer="runtime_setup",
             message=repr(exc),
             generated_code=code,
             prompt=prompt,
@@ -336,6 +352,7 @@ def _result_to_report_record(result: Dict[str, Any], *, source_robot: str) -> Tr
         generated_code=str(result.get("generated_code", "")),
         success=bool(result.get("success", False)),
         failure_type=str(result.get("failure_type", "unknown failure")),
+        failure_layer=str(result.get("failure_layer", "unknown")),
         message=str(result.get("message", "")),
         prompt=str(result.get("prompt", "")),
         info={
@@ -352,6 +369,7 @@ def _report_info(report_source_result: Optional[Dict[str, Any]], report: Any) ->
         info.update(
             report_source_method=report_source_result.get("method"),
             report_source_failure_type=report_source_result.get("failure_type"),
+            report_source_failure_layer=report_source_result.get("failure_layer"),
             report_source_message=report_source_result.get("message"),
             report_source_log=report_source_result.get("execution_log", []),
         )

@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
+from .cases import PRIMARY_FULL_MIGRATION_CASE
 from .evaluation import TrialRecord
 from .real_runner import run_real_trial
 from .results import append_jsonl, summarize_records, write_summary_csv
@@ -35,6 +36,7 @@ def _result_to_record(result: Dict[str, Any], *, source_robot: str, seed: int) -
         "graphics_diagnosis",
         "report_source_method",
         "report_source_failure_type",
+        "report_source_failure_layer",
         "report_source_message",
         "report_source_log",
     )
@@ -48,6 +50,7 @@ def _result_to_record(result: Dict[str, Any], *, source_robot: str, seed: int) -
         generated_code=result.get("generated_code", ""),
         success=bool(result.get("success", False)),
         failure_type=result.get("failure_type", "unknown failure"),
+        failure_layer=result.get("failure_layer", "unknown"),
         message=str(result.get("message", "")),
         prompt=result.get("prompt", ""),
         info=info,
@@ -93,18 +96,18 @@ def _items(value: str) -> Tuple[str, ...]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run real-physics migration matrix.")
-    parser.add_argument("--task", default="pick_cube")
-    parser.add_argument("--robot", default="panda")
+    parser.add_argument("--task", default=PRIMARY_FULL_MIGRATION_CASE.task_id)
+    parser.add_argument("--robot", default=PRIMARY_FULL_MIGRATION_CASE.target_robot)
     parser.add_argument(
         "--methods",
         default="source-copy,llm_card_report,oracle",
     )
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--control-mode", default=None)
+    parser.add_argument("--seed", type=int, default=PRIMARY_FULL_MIGRATION_CASE.seed)
+    parser.add_argument("--control-mode", default=PRIMARY_FULL_MIGRATION_CASE.target_control_mode)
     parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--sim-backend", default="auto")
     parser.add_argument("--render-backend", default="gpu")
-    parser.add_argument("--max-episode-steps", type=int, default=500)
+    parser.add_argument("--max-episode-steps", type=int, default=PRIMARY_FULL_MIGRATION_CASE.max_episode_steps)
     parser.add_argument("--jsonl", default="results/real_trials.jsonl")
     parser.add_argument("--md", default="results/real_trials.md")
     parser.add_argument("--summary", default="results/real_summary.csv")
