@@ -31,25 +31,35 @@ PATCH_CONTEXT_WINDOWS: Dict[str, Tuple[Tuple[int, int], ...]] = {
 
 _PATCH_FENCE = re.compile(r"```(?:diff|patch)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 _DIFF_HEADER = re.compile(r"^diff --git a/(.+?) b/(.+?)$", re.MULTILINE)
+_FILE_HEADER = re.compile(
+    r"^--- (?P<old>(?:a/)?[^\t\n]+)\n\+\+\+ (?P<new>(?:b/)?[^\t\n]+)$",
+    re.MULTILINE,
+)
+_PATCH_START = re.compile(
+    r"^(?:diff --git a/.+? b/.+?|--- (?:a/)?[^\t\n]+\n\+\+\+ (?:b/)?[^\t\n]+)$",
+    re.MULTILINE,
+)
 
 
 def extract_unified_diff(text: str) -> str:
-    """Extract one git-style unified diff from raw LLM text."""
+    """Extract one git-style or bare unified diff from raw LLM text."""
 
     fenced = _PATCH_FENCE.search(text)
     candidate = fenced.group(1).strip() if fenced else text.strip()
-    start = candidate.find("diff --git ")
-    return candidate[start:].strip() if start >= 0 else ""
+    start = _PATCH_START.search(candidate)
+    return candidate[start.start() :].strip() if start else ""
 
 
 def patch_paths(patch: str) -> Tuple[str, ...]:
-    """Return changed repo paths from a git-style patch."""
+    """Return changed repo paths from git-style or bare unified patches."""
 
     paths: List[str] = []
     for old_path, new_path in _DIFF_HEADER.findall(patch):
         for path in (old_path, new_path):
-            if path != "/dev/null" and path not in paths:
-                paths.append(path)
+            _append_patch_path(paths, path)
+    for match in _FILE_HEADER.finditer(patch):
+        for path in (match.group("old"), match.group("new")):
+            _append_patch_path(paths, _strip_patch_prefix(path))
     return tuple(paths)
 
 
@@ -58,7 +68,7 @@ def validate_patch(patch: str, allowed_paths: Iterable[str] = PATCH_ALLOWED_PATH
 
     paths = patch_paths(patch)
     if not paths:
-        raise ValueError("LLM response did not contain a git-style unified diff.")
+        raise ValueError("LLM response did not contain a unified diff.")
 
     allowed = set(allowed_paths)
     blocked = [path for path in paths if path not in allowed]
@@ -81,7 +91,9 @@ def build_full_stack_patch_prompt(
         "Do not stop at the high-level LMP program if the failure is in a skill adapter, planner, controller primitive, tool pose, grasp geometry, or contact path.",
         "",
         "# Required output",
-        "Return exactly one git-style unified diff. Do not include Markdown or explanation.",
+        "Return exactly one git-style unified diff. Do not include Markdown, explanation, file contents, or JSON.",
+        "The first non-empty line must start with `diff --git a/<allowed-path> b/<allowed-path>`.",
+        "Every changed file must include `--- a/<path>`, `+++ b/<path>`, and `@@` hunk lines.",
         "",
         "# Case",
         f"case_id: {case.case_id}",
@@ -126,6 +138,13 @@ def build_full_stack_patch_prompt(
             )
             if attempt.get("patch_error"):
                 lines.append(f"patch_error: {attempt['patch_error']}")
+            if attempt.get("llm_response_preview"):
+                lines.extend(
+                    [
+                        "llm_response_preview:",
+                        _trim_text(str(attempt["llm_response_preview"]), 2500),
+                    ]
+                )
             verification = attempt.get("verification") or {}
             if verification and not verification.get("ok"):
                 lines.extend(
@@ -238,6 +257,7 @@ def run_full_stack_migration(
             "llm_model": generated.model,
             "llm_reason": generated.reason,
             "llm_raw_text": generated.raw_text,
+            "llm_response_preview": _trim_text(generated.text, 5000),
             "prompt": prompt,
             "patch": extract_unified_diff(generated.text),
             "patch_applied": False,
@@ -328,6 +348,12 @@ def full_stack_result_to_md(result: Dict[str, Any]) -> str:
                 f"- **patch_kept**: `{attempt.get('patch_kept')}`",
                 f"- **verification_ok**: `{attempt.get('verification_ok')}`",
                 f"- **patch_error**: `{attempt.get('patch_error', '')}`",
+                "",
+                "### LLM Response Preview",
+                "",
+                "```text",
+                str(attempt.get("llm_response_preview") or "").strip(),
+                "```",
                 "",
                 "### Patch",
                 "",
@@ -569,6 +595,17 @@ def _read_context(path: str, windows: Sequence[Tuple[int, int]]) -> str:
         numbered = [f"{line_no:04d}: {line}" for line_no, line in enumerate(chosen, start=start)]
         chunks.append("\n".join(numbered))
     return "\n\n".join(chunks)
+
+
+def _append_patch_path(paths: List[str], path: str) -> None:
+    if path != "/dev/null" and path not in paths:
+        paths.append(path)
+
+
+def _strip_patch_prefix(path: str) -> str:
+    if path.startswith(("a/", "b/")):
+        return path[2:]
+    return path
 
 
 def _result_digest(result: Dict[str, Any]) -> Dict[str, Any]:

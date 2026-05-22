@@ -93,6 +93,23 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
         )
         self.assertEqual(validate_patch(patch), patch_paths(patch))
 
+    def test_full_stack_patch_guard_accepts_bare_unified_diff(self):
+        text = """I propose this targeted patch:
+```diff
+--- a/maniskill_backend/skill_adapter.py
++++ b/maniskill_backend/skill_adapter.py
+@@
+-old
++new
+```"""
+        patch = extract_unified_diff(text)
+        self.assertTrue(patch.startswith("--- a/maniskill_backend/skill_adapter.py"))
+        self.assertEqual(
+            patch_paths(patch),
+            ("maniskill_backend/skill_adapter.py",),
+        )
+        self.assertEqual(validate_patch(patch), patch_paths(patch))
+
     def test_full_stack_patch_guard_rejects_out_of_scope_diff(self):
         patch = """diff --git a/tests/test_real_backend.py b/tests/test_real_backend.py
 --- a/tests/test_real_backend.py
