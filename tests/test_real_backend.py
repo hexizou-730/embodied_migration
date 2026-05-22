@@ -13,6 +13,11 @@ from maniskill_backend.cases import (
 )
 from maniskill_backend.env_adapter import can_import_maniskill
 from maniskill_backend.evaluation import TrialRecord, classify_failure, classify_failure_layer
+from maniskill_backend.full_stack_runner import (
+    extract_unified_diff,
+    patch_paths,
+    validate_patch,
+)
 from maniskill_backend.iterative_runner import _code_diff, build_iterative_prompt
 from maniskill_backend.migration import METHODS, MigrationRequest, build_migration_prompt
 from maniskill_backend.profiles import get_robot_profile
@@ -64,8 +69,40 @@ class RealBackendTest(unittest.TestCase):
         self.assertEqual(case.source_robot, "panda")
         self.assertEqual(case.target_robot, "xarm6_robotiq")
         self.assertEqual(case.target_control_mode, "pd_joint_pos")
+        self.assertEqual(
+            case.target_program_path,
+            "maniskill_backend/case_programs/case01_pull_cube_tool.py",
+        )
         self.assertIn("skill_adapter", case.migration_layers)
         self.assertIn("controller_primitive", case.migration_layers)
+
+    def test_full_stack_patch_guard_extracts_allowed_diff(self):
+        text = """```diff
+diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapter.py
+--- a/maniskill_backend/skill_adapter.py
++++ b/maniskill_backend/skill_adapter.py
+@@
+-old
++new
+```"""
+        patch = extract_unified_diff(text)
+        self.assertIn("diff --git", patch)
+        self.assertEqual(
+            patch_paths(patch),
+            ("maniskill_backend/skill_adapter.py",),
+        )
+        self.assertEqual(validate_patch(patch), patch_paths(patch))
+
+    def test_full_stack_patch_guard_rejects_out_of_scope_diff(self):
+        patch = """diff --git a/tests/test_real_backend.py b/tests/test_real_backend.py
+--- a/tests/test_real_backend.py
++++ b/tests/test_real_backend.py
+@@
+-old
++new
+"""
+        with self.assertRaises(ValueError):
+            validate_patch(patch)
 
     def test_migration_prompt_card_report_method(self):
         request = MigrationRequest.from_ids(

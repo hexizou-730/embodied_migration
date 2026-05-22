@@ -78,6 +78,10 @@ episode budget: 300
 must demonstrate both target LMP migration and target skill/controller
 migration.
 
+The intended research loop is automatic: the LLM may patch the target LMP file,
+target skill wrapper, robot profile, or target controller route. It should keep
+repairing the failing layer until xarm6 succeeds or the repair budget is used.
+
 Panda smoke test:
 
 ```bash
@@ -133,7 +137,50 @@ python -m maniskill_backend.real_runner \
   --render-backend gpu
 ```
 
-## Iterative LLM Migration
+## Full-Stack LLM Migration
+
+This is the main Case 01 runner:
+
+```bash
+python -m maniskill_backend.full_stack_runner \
+  --case case01_pull_cube_tool_panda_to_xarm6 \
+  --max-repair-rounds 3 \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+The runner:
+
+1. requires a clean tracked worktree;
+2. verifies the Panda source side;
+3. runs the xarm6 target-side program file;
+4. gives the real failure log and in-scope code context to the LLM;
+5. applies one LLM unified diff to the bounded target migration surface;
+6. runs unit tests;
+7. reruns real xarm6 simulation;
+8. repeats until success or budget exhaustion.
+
+Allowed Case 01 patch files:
+
+```text
+maniskill_backend/case_programs/case01_pull_cube_tool.py
+maniskill_backend/profiles.py
+maniskill_backend/real_runner.py
+maniskill_backend/skill_adapter.py
+```
+
+Outputs:
+
+```text
+results/full_stack_trials.jsonl
+results/full_stack_trials.md
+```
+
+Successful LLM patches remain as local tracked diffs so they can be inspected,
+benchmarked, and committed. A patch that fails unit tests is reverted before
+the next repair round.
+
+## Program-Only Iterative Baseline
 
 This runner automates the program-migration layer. It verifies that the source
 robot succeeds, asks the LLM to write target-robot code, runs the target code,
@@ -190,16 +237,12 @@ Use this order for `case01_pull_cube_tool_panda_to_xarm6`:
 
 1. Run the Panda source side and require real simulation success.
 2. Run xarm6 `source-copy` to expose the first portability failure.
-3. Run `iterative_runner` to test whether target LMP code and exposed skill
-   parameters can repair the failure.
-4. If the LMP sequence is already correct but execution logs show target grasp,
-   contact, TCP, planning, or controller failure, migrate the target adapter in
-   `skill_adapter.py` and the target assumptions in `profiles.py` or
-   `real_runner.py`.
-5. Rerun source-copy, iterative LLM, and benchmark commands after each target
-   adapter change.
-6. Record both code changes: generated LMP diffs and committed adapter /
-   controller diffs.
+3. Run `full_stack_runner` so the LLM chooses whether the next patch belongs in
+   the target program, skill adapter, profile, or controller route.
+4. Inspect the kept LLM patch and the rerun result after each repair round.
+5. Rerun source-copy, program-only baselines, and benchmark commands around the
+   full-stack result.
+6. Record both code levels: target LMP diffs and adapter / controller diffs.
 
 For Case 01, wrapper migration is already part of the experiment:
 xarm6 needs a target-specific tool grasp depth, held-tool pose compensation,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from lmp.executor import execute_lmp
@@ -407,24 +408,46 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--sim-backend", default="auto")
     parser.add_argument("--render-backend", default="gpu")
     parser.add_argument("--max-episode-steps", type=int, default=300)
+    parser.add_argument(
+        "--code-file",
+        default="",
+        help="Execute target LMP code from a file instead of method-generated code.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    result = run_real_trial(
-        task_id=args.task,
-        robot_uid=args.robot,
-        method=args.method,
-        seed=args.seed,
-        control_mode=args.control_mode,
-        obs_mode=args.obs_mode,
-        sim_backend=args.sim_backend,
-        render_backend=args.render_backend,
-        max_episode_steps=args.max_episode_steps,
-        dry_run=args.dry_run,
-    )
+    if args.code_file:
+        code_path = Path(args.code_file)
+        result = run_real_code_trial(
+            task_id=args.task,
+            robot_uid=args.robot,
+            method=args.method,
+            code=code_path.read_text(encoding="utf-8"),
+            prompt=f"target code file: {code_path}",
+            seed=args.seed,
+            control_mode=args.control_mode,
+            obs_mode=args.obs_mode,
+            sim_backend=args.sim_backend,
+            render_backend=args.render_backend,
+            max_episode_steps=args.max_episode_steps,
+        )
+        result["code_file"] = str(code_path)
+    else:
+        result = run_real_trial(
+            task_id=args.task,
+            robot_uid=args.robot,
+            method=args.method,
+            seed=args.seed,
+            control_mode=args.control_mode,
+            obs_mode=args.obs_mode,
+            sim_backend=args.sim_backend,
+            render_backend=args.render_backend,
+            max_episode_steps=args.max_episode_steps,
+            dry_run=args.dry_run,
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2, default=repr))
 
 

@@ -39,10 +39,11 @@ The current working loop is:
 - Panda source code succeeds.
 - Panda source wrapper and target xarm6 wrapper are both tested in ManiSkill.
 - Source-copy exposes program and execution-layer portability failures.
-- The LLM revises target LMP code when the failure is program-level.
-- `skill_adapter.py` and target planner/control primitives are migrated when
-  the same high-level semantics fail physically on the target embodiment.
-- We record success, failed layer, attempts, generated code changes, and
+- The LLM sees the failed layer and edits the bounded target code surface:
+  target LMP program, target `skill_adapter.py`, profile, or controller route.
+- The patched target stack is tested and rerun until success or repair budget
+  exhaustion.
+- We record success, failed layer, LLM patches, generated code changes, and
   adapter/controller changes.
 
 Capability Cards and Failure Reports are now supporting context, not the main
@@ -62,10 +63,11 @@ research object.
 | Fixed first seed | `0` |
 | Episode budget | `300` steps |
 
-This case is intentionally more than a high-level program rewrite. It must
-record Panda source success, xarm6 source-copy failure, generated target LMP
-attempts, target `skill_adapter.py` / controller changes, and final real
-ManiSkill success evidence.
+This case is intentionally more than a high-level program rewrite. Its full
+runner asks the LLM to repair the needed layer, including target
+`skill_adapter.py` and controller assumptions, then reruns real simulation. It
+must record Panda source success, xarm6 source-copy failure, LLM patches, and
+final real ManiSkill success evidence.
 
 ## Migration Layers
 
@@ -95,12 +97,42 @@ skill adapter / controller primitive is migrated when physics cannot transfer
 target xarm6 re-execution in real ManiSkill simulation
 ```
 
-## Program-Level Iterative Runner
+## Full-Stack LLM Runner
+
+Case 01 uses a bounded repo-level repair loop. It requires a clean tracked
+worktree, asks the LLM for one unified diff per round, applies only in-scope
+patches, runs unit tests, and reruns the target simulation.
+
+```bash
+python -m maniskill_backend.full_stack_runner \
+  --case case01_pull_cube_tool_panda_to_xarm6 \
+  --max-repair-rounds 3 \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+The first allowed patch surface is:
+
+```text
+maniskill_backend/case_programs/case01_pull_cube_tool.py
+maniskill_backend/profiles.py
+maniskill_backend/real_runner.py
+maniskill_backend/skill_adapter.py
+```
+
+Successful patches are left as tracked diffs for inspection and later commit.
+Results are written to:
+
+```text
+results/full_stack_trials.jsonl
+results/full_stack_trials.md
+```
+
+## Program-Only Baseline
 
 `iterative_runner` automates the program migration part of the full loop. It
-does not replace target adapter migration: if repeated logs show a target grasp,
-tool contact, or controller primitive mismatch, port that execution layer and
-rerun the iterative trial.
+is kept as a weaker baseline: it can rewrite the target LMP code feedback loop,
+but it cannot patch the target adapter or controller route.
 
 ```bash
 python -m maniskill_backend.iterative_runner \

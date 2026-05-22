@@ -159,10 +159,10 @@ full-stack cross-embodiment robot migration
 1. Panda 成功源代码。
 2. Panda 源 skill wrapper 在 ManiSkill 中成功执行。
 3. xarm6 跑 source-copy，暴露程序层和执行层差异。
-4. 如果高层程序可修，LLM 根据真实失败日志改目标 LMP 代码。
-5. 如果失败来自抓取、工具接触、TCP、planner 或控制 primitive，则迁移
-   `skill_adapter.py` 中的 xarm6 目标执行层。
-6. 反复执行 ManiSkill 验证。
+4. LLM 根据真实失败日志判断下一轮该改目标 LMP、skill wrapper、profile
+   还是 controller route。
+5. 项目自动应用受约束的 LLM patch，先跑测试，再跑 xarm6 仿真。
+6. 直到成功或修复预算耗尽。
 7. 同时记录 LMP 代码改动和 skill-wrapper / controller 改动。
 
 Capability Card 和 Failure Report 现在是辅助上下文，不再是主要研究
@@ -196,8 +196,8 @@ LLM target code
 - 执行层迁移：目标机器人需要不同的抓取、规划、接触轨迹、TCP 补偿或
   控制 primitive，高层代码本身不足以修复。
 
-这一区分不是把执行层排除掉，而是要求两层都迁移、都记录。只迁移高层
-代码不足以说明跨 embodiment 迁移已经完成。
+这一区分不是把执行层排除掉，而是让 LLM 在失败反馈下选择要迁移哪一层。
+只迁移高层代码不足以说明跨 embodiment 迁移已经完成。
 
 ## 9. 当前任务与机器人
 
@@ -267,9 +267,22 @@ episode budget: 300
 ```
 
 这个案例必须同时给出两类证据：LLM 目标 LMP 代码差异，以及
-`skill_adapter.py` / controller primitive 的目标执行层迁移差异。
+LLM 对 `skill_adapter.py` / controller primitive 的目标执行层迁移差异。
 
 ## 11. 重要运行命令
+
+Case 01 自动跨层迁移主入口：
+
+```bash
+python -m maniskill_backend.full_stack_runner \
+  --case case01_pull_cube_tool_panda_to_xarm6 \
+  --max-repair-rounds 3 \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+它要求 Git tracked worktree 是干净的；成功 patch 会留在本地 diff 里供
+检查和提交，测试失败的 patch 会自动回退。
 
 最小 Panda 源端检查：
 

@@ -18,6 +18,7 @@ class FullMigrationCase:
     target_robot: str
     source_control_mode: str
     target_control_mode: str
+    target_program_path: str
     seed: int
     max_attempts: int
     max_episode_steps: int
@@ -35,6 +36,7 @@ CASE01_PULL_CUBE_TOOL = FullMigrationCase(
     target_robot="xarm6_robotiq",
     source_control_mode="pd_joint_pos",
     target_control_mode="pd_joint_pos",
+    target_program_path="maniskill_backend/case_programs/case01_pull_cube_tool.py",
     seed=0,
     max_attempts=3,
     max_episode_steps=300,
@@ -46,8 +48,8 @@ CASE01_PULL_CUBE_TOOL = FullMigrationCase(
     required_evidence=(
         "Panda source task stack succeeds in real ManiSkill simulation.",
         "xarm6 source-copy exposes target portability failures.",
-        "Generated target LMP attempts and failure logs are saved.",
-        "Target adapter/controller changes are recorded with physical evidence.",
+        "LLM full-stack patches and real failure feedback are saved.",
+        "LLM target program, adapter, and controller edits are recorded with physical evidence.",
         "Final xarm6 success is evaluated with real success state and logs.",
     ),
     notes=(
