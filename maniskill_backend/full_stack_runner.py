@@ -540,9 +540,7 @@ def _run_command(command: Sequence[str], *, timeout_s: int) -> Dict[str, Any]:
 
 
 def _git_apply(patch: str, *, reverse: bool = False) -> None:
-    command = ["git", "apply"]
-    if reverse:
-        command.append("--reverse")
+    command = _git_apply_command(reverse=reverse)
     check = subprocess.run(
         [*command, "--check", "-"],
         cwd=REPO_ROOT,
@@ -563,6 +561,13 @@ def _git_apply(patch: str, *, reverse: bool = False) -> None:
     )
     if apply_result.returncode != 0:
         raise RuntimeError(_trim_text(apply_result.stderr or apply_result.stdout, 4000))
+
+
+def _git_apply_command(*, reverse: bool = False) -> List[str]:
+    command = ["git", "apply", "--recount"]
+    if reverse:
+        command.append("--reverse")
+    return command
 
 
 def _tracked_dirty_paths() -> Tuple[str, ...]:

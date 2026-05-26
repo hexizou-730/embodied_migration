@@ -17,6 +17,7 @@ from maniskill_backend.full_stack_runner import (
     extract_unified_diff,
     patch_paths,
     validate_patch,
+    _git_apply_command,
 )
 from maniskill_backend.iterative_runner import _code_diff, build_iterative_prompt
 from maniskill_backend.migration import METHODS, MigrationRequest, build_migration_prompt
@@ -120,6 +121,10 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
 """
         with self.assertRaises(ValueError):
             validate_patch(patch)
+
+    def test_full_stack_git_apply_uses_recount_for_llm_hunks(self):
+        self.assertIn("--recount", _git_apply_command())
+        self.assertIn("--reverse", _git_apply_command(reverse=True))
 
     def test_migration_prompt_card_report_method(self):
         request = MigrationRequest.from_ids(
