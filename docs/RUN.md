@@ -78,9 +78,10 @@ episode budget: 300
 must demonstrate both target LMP migration and target skill/controller
 migration.
 
-The intended research loop is automatic: the LLM may patch the target LMP file,
-target skill wrapper, robot profile, or target controller route. It should keep
-repairing the failing layer until xarm6 succeeds or the repair budget is used.
+The intended research loop is automatic direct generation: the LLM receives the
+target failure log and writes a complete xarm6 target adapter module. The high
+level LMP file stays fixed unless a later experiment explicitly studies program
+generation.
 
 Panda smoke test:
 
@@ -121,10 +122,10 @@ when the same high-level program succeeds through the official planner.
 
 ## LLM Repair Trial
 
-`llm_card_report` is the only LLM adaptation method kept for real simulation.
-It first runs a real `source-copy` attempt with the same task, robot, seed, and
-sim settings. If that attempt fails, the execution log becomes the Failure
-Report shown to the LLM.
+`llm_card_report` is the program-level LLM adaptation baseline kept for real
+simulation. It first runs a real `source-copy` attempt with the same task,
+robot, seed, and sim settings. If that attempt fails, the execution log becomes
+the Failure Report shown to the LLM.
 
 ```bash
 python -m maniskill_backend.real_runner \
@@ -137,48 +138,65 @@ python -m maniskill_backend.real_runner \
   --render-backend gpu
 ```
 
-## Full-Stack LLM Migration
+## Target Adapter Module Generation
 
 This is the main Case 01 runner:
 
 ```bash
-python -m maniskill_backend.full_stack_runner \
+python -m maniskill_backend.module_generation_runner \
   --case case01_pull_cube_tool_panda_to_xarm6 \
-  --max-repair-rounds 3 \
+  --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
 ```
 
 The runner:
 
-1. requires a clean tracked worktree;
-2. verifies the Panda source side;
-3. runs the xarm6 target-side program file;
-4. gives the real failure log and in-scope code context to the LLM;
-5. applies one LLM unified diff to the bounded target migration surface;
+1. verifies the Panda source side;
+2. runs the unchanged xarm6 target-side program file;
+3. gives the real failure log and adapter context to the LLM;
+4. asks for one complete Python module, not a diff patch;
+5. writes `maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py`;
 6. runs unit tests;
 7. reruns real xarm6 simulation;
-8. repeats until success or budget exhaustion.
+8. repeats until success or budget exhaustion;
+9. writes a Chinese migration analysis comparing source and generated target code.
 
-Allowed Case 01 patch files:
+The generated target adapter module is:
 
 ```text
-maniskill_backend/case_programs/case01_pull_cube_tool.py
-maniskill_backend/profiles.py
-maniskill_backend/real_runner.py
-maniskill_backend/skill_adapter.py
+maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py
 ```
 
 Outputs:
 
 ```text
-results/full_stack_trials.jsonl
-results/full_stack_trials.md
+results/module_generation_trials.jsonl
+results/module_generation_trials.md
 ```
 
-Successful LLM patches remain as local tracked diffs so they can be inspected,
-benchmarked, and committed. A patch that fails unit tests is reverted before
-the next repair round.
+Successful generated modules remain as local tracked diffs so they can be
+inspected, benchmarked, and committed. A generated module that fails unit tests
+is reverted before the next attempt.
+
+To run only the current generated adapter once:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task pull_cube_tool \
+  --robot xarm6_robotiq \
+  --method target-module-generation \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 300 \
+  --code-file maniskill_backend/case_programs/case01_pull_cube_tool.py \
+  --adapter-module maniskill_backend.generated_adapters.case01_xarm6_pull_tool
+```
+
+`full_stack_runner` still exists as an optional legacy patch-loop comparison,
+but it is no longer the main route.
 
 ## Program-Only Iterative Baseline
 
@@ -190,8 +208,8 @@ feeds the simulator failure log back to the LLM, and repeats up to
 Do not treat repeated LMP failure as the end of the migration experiment. If
 the source sequence is sound but the target robot cannot physically realize the
 same grasp, tool contact, planner route, or controller path, migrate the target
-execution layer in `maniskill_backend/skill_adapter.py` and rerun the same
-trial.
+execution layer through `maniskill_backend/generated_adapters/*.py` and rerun
+the same trial.
 
 For `pull_cube_tool`, the iterative runner exposes tunable target-code
 parameters:
@@ -231,18 +249,19 @@ results/iterative_trials.md
 results/iterative_summary.csv
 ```
 
-## Case 01 Full-Stack Migration Workflow
+## Case 01 Direct-Generation Workflow
 
 Use this order for `case01_pull_cube_tool_panda_to_xarm6`:
 
 1. Run the Panda source side and require real simulation success.
 2. Run xarm6 `source-copy` to expose the first portability failure.
-3. Run `full_stack_runner` so the LLM chooses whether the next patch belongs in
-   the target program, skill adapter, profile, or controller route.
-4. Inspect the kept LLM patch and the rerun result after each repair round.
+3. Run `module_generation_runner` so the LLM generates the target adapter
+   module directly.
+4. Inspect the generated module and the rerun result after each attempt.
 5. Rerun source-copy, program-only baselines, and benchmark commands around the
-   full-stack result.
-6. Record both code levels: target LMP diffs and adapter / controller diffs.
+   direct-generation result.
+6. Record both code levels: fixed target LMP code and generated adapter /
+   controller behavior.
 
 For Case 01, wrapper migration is already part of the experiment:
 xarm6 needs a target-specific tool grasp depth, held-tool pose compensation,

@@ -159,18 +159,17 @@ full-stack cross-embodiment robot migration
 1. Panda 成功源代码。
 2. Panda 源 skill wrapper 在 ManiSkill 中成功执行。
 3. xarm6 跑 source-copy，暴露程序层和执行层差异。
-4. LLM 根据真实失败日志判断下一轮该改目标 LMP、skill wrapper、profile
-   还是 controller route。
-5. 项目自动应用受约束的 LLM patch，先跑测试，再跑 xarm6 仿真。
+4. LLM 根据真实失败日志直接生成 xarm6 目标 adapter 模块。
+5. 项目写入生成模块，先跑测试，再跑 xarm6 仿真。
 6. 直到成功或修复预算耗尽。
-7. 同时记录 LMP 代码改动和 skill-wrapper / controller 改动。
+7. 同时记录固定 LMP、生成 adapter、真实失败日志和代码迁移分析。
 
 Capability Card 和 Failure Report 现在是辅助上下文，不再是主要研究
 对象。
 
 ## 8. 代码层次
 
-当前 LLM runner 写的是高层 LMP 代码，例如：
+当前高层 LMP 代码保持固定，例如：
 
 ```python
 ok = robot.hook_object(tool, cube)
@@ -183,9 +182,10 @@ else:
 这些高层 API 由项目里的 ManiSkill skill wrapper 转成真实仿真动作：
 
 ```text
-LLM target code
+fixed target LMP code
   -> high-level skill API
-  -> maniskill_backend/skill_adapter.py
+  -> generated target adapter module
+  -> shared maniskill_backend/skill_adapter.py utilities
   -> ManiSkill planner / env.step(action)
   -> real simulator feedback
 ```
@@ -196,8 +196,8 @@ LLM target code
 - 执行层迁移：目标机器人需要不同的抓取、规划、接触轨迹、TCP 补偿或
   控制 primitive，高层代码本身不足以修复。
 
-这一区分不是把执行层排除掉，而是让 LLM 在失败反馈下选择要迁移哪一层。
-只迁移高层代码不足以说明跨 embodiment 迁移已经完成。
+这一区分不是把执行层排除掉，而是把执行层作为主要生成对象。只迁移高层
+代码不足以说明跨 embodiment 迁移已经完成。
 
 ## 9. 当前任务与机器人
 
@@ -266,23 +266,29 @@ first seed: 0
 episode budget: 300
 ```
 
-这个案例必须同时给出两类证据：LLM 目标 LMP 代码差异，以及
-LLM 对 `skill_adapter.py` / controller primitive 的目标执行层迁移差异。
+这个案例必须给出三类证据：固定高层 LMP、LLM 生成的 xarm6 target
+adapter 模块、以及真实仿真失败/成功日志。
 
 ## 11. 重要运行命令
 
-Case 01 自动跨层迁移主入口：
+Case 01 直接生成目标 adapter 的主入口：
 
 ```bash
-python -m maniskill_backend.full_stack_runner \
+python -m maniskill_backend.module_generation_runner \
   --case case01_pull_cube_tool_panda_to_xarm6 \
-  --max-repair-rounds 3 \
+  --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
 ```
 
-它要求 Git tracked worktree 是干净的；成功 patch 会留在本地 diff 里供
-检查和提交，测试失败的 patch 会自动回退。
+它会重写：
+
+```text
+maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py
+```
+
+成功生成的模块会留在本地 diff 里供检查和提交，测试失败的模块会自动
+回退。
 
 最小 Panda 源端检查：
 
@@ -304,15 +310,17 @@ xarm6 单次目标执行：
 python -m maniskill_backend.real_runner \
   --task pull_cube_tool \
   --robot xarm6_robotiq \
-  --method source-copy \
+  --method target-module-generation \
   --seed 0 \
   --control-mode pd_joint_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 300
+  --max-episode-steps 300 \
+  --code-file maniskill_backend/case_programs/case01_pull_cube_tool.py \
+  --adapter-module maniskill_backend.generated_adapters.case01_xarm6_pull_tool
 ```
 
-当前主实验 runner：
+程序层 baseline runner：
 
 ```bash
 python -m maniskill_backend.iterative_runner \
@@ -345,11 +353,18 @@ results/iterative_trials.md
 results/iterative_summary.csv
 ```
 
+目标 adapter 直接生成实验：
+
+```text
+results/module_generation_trials.jsonl
+results/module_generation_trials.md
+```
+
 推荐阅读顺序：
 
-1. `results/iterative_summary.csv` 看汇总。
-2. `results/iterative_trials.md` 看每次 LLM 代码和日志。
-3. `results/iterative_trials.jsonl` 做后续统计脚本。
+1. `results/module_generation_trials.md` 看生成模块、真实日志和迁移分析。
+2. `results/module_generation_trials.jsonl` 做后续统计脚本。
+3. `results/iterative_trials.md` 作为程序层 baseline 对比。
 
 ## 13. 迁移到 Mac 后的下一步
 
@@ -359,8 +374,8 @@ results/iterative_summary.csv
 2. 在远程项目目录 `git pull`。
 3. 跑单元测试。
 4. 跑 `pick_cube` 或 `stack_cube` 复现已知成功结果。
-5. 继续调 `pull_cube_tool` 的 xarm6 工具抓取和接触 wrapper。
-6. wrapper 稳定后，再跑 iterative LLM 的多 seed / 多 attempt 统计。
+5. 跑 `module_generation_runner`，让 LLM 生成 xarm6 target adapter。
+6. adapter 稳定后，再跑多 seed / 多 attempt 统计。
 
 当前不建议立刻做大量重复实验，因为 `pull_cube_tool` 的 xarm6 技能层
 还在迁移中。先保证任务执行通路可信，再扩大实验数量。

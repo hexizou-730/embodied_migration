@@ -15,8 +15,8 @@ This repository is now focused on real simulation only:
 - Real `env.step(action)` skill wrappers.
 - Real execution logs and Failure Reports.
 - Program-level LLM repair with Capability Card + Failure Report.
-- Target skill-wrapper and controller-primitive migration when source
-  primitives do not physically transfer.
+- Direct LLM generation of target adapter modules when source primitives do not
+  physically transfer.
 
 The old static fake runner, static benchmark, and text-only code-migration
 experiments have been removed.
@@ -39,12 +39,12 @@ The current working loop is:
 - Panda source code succeeds.
 - Panda source wrapper and target xarm6 wrapper are both tested in ManiSkill.
 - Source-copy exposes program and execution-layer portability failures.
-- The LLM sees the failed layer and edits the bounded target code surface:
-  target LMP program, target `skill_adapter.py`, profile, or controller route.
-- The patched target stack is tested and rerun until success or repair budget
-  exhaustion.
-- We record success, failed layer, LLM patches, generated code changes, and
-  adapter/controller changes.
+- The LLM sees the failed layer and generates a complete target adapter module
+  for xarm6.
+- The generated module is validated by unit tests and rerun in real ManiSkill
+  simulation until success or attempt budget exhaustion.
+- We record success, failed layer, generated target module code, execution logs,
+  and source-vs-target migration analysis.
 
 Capability Cards and Failure Reports are now supporting context, not the main
 research object.
@@ -63,11 +63,12 @@ research object.
 | Fixed first seed | `0` |
 | Episode budget | `300` steps |
 
-This case is intentionally more than a high-level program rewrite. Its full
-runner asks the LLM to repair the needed layer, including target
-`skill_adapter.py` and controller assumptions, then reruns real simulation. It
-must record Panda source success, xarm6 source-copy failure, LLM patches, and
-final real ManiSkill success evidence.
+This case is intentionally more than a high-level program rewrite. The main
+runner asks the LLM to generate the target xarm6 adapter module:
+`maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py`. The unchanged
+LMP program then calls the generated adapter in real simulation. The required
+evidence is Panda source success, xarm6 source-copy failure, generated target
+adapter attempts, migration analysis, and final real ManiSkill success evidence.
 
 ## Migration Layers
 
@@ -75,8 +76,8 @@ final real ManiSkill success evidence.
 |---|---|---|
 | Task program | LMP sequence, API choices, target-side parameters | `maniskill_backend/tasks.py`, generated LLM code |
 | Embodiment profile | Robot limits and planner/control assumptions | `maniskill_backend/profiles.py` |
-| Skill adapter | Grasp, place, hook, pull, align, insert execution | `maniskill_backend/skill_adapter.py` |
-| Controller primitive | Control mode, planner route, TCP/tool compensation | `real_runner.py`, `skill_adapter.py` |
+| Skill adapter | Grasp, place, hook, pull, align, insert execution | `skill_adapter.py`, `generated_adapters/*.py` |
+| Controller primitive | Control mode, planner route, TCP/tool compensation | `real_runner.py`, generated adapter modules |
 | Evaluation/reporting | Success, failed layer, physical failure evidence | `evaluation.py`, `reporting.py`, results logs |
 
 ## Full Pipeline
@@ -90,38 +91,63 @@ source-copy on target LMP + target execution stack
         ->
 program-level or execution-layer failure evidence
         ->
-LLM adapts target LMP code when code can fix it
-        +
-skill adapter / controller primitive is migrated when physics cannot transfer
+LLM generates target-specific adapter module
         ->
-target xarm6 re-execution in real ManiSkill simulation
+tests + target xarm6 real simulation
+        ->
+LLM source-vs-target migration analysis
 ```
 
-## Full-Stack LLM Runner
+## Target Adapter Module Generation
 
-Case 01 uses a bounded repo-level repair loop. It requires a clean tracked
-worktree, asks the LLM for one unified diff per round, applies only in-scope
-patches, runs unit tests, and reruns the target simulation.
+This is now the main Case 01 workflow. The LLM returns a complete Python target
+adapter module, not a patch diff.
 
 ```bash
-python -m maniskill_backend.full_stack_runner \
+python -m maniskill_backend.module_generation_runner \
   --case case01_pull_cube_tool_panda_to_xarm6 \
-  --max-repair-rounds 3 \
+  --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
 ```
 
-The first allowed patch surface is:
+The runner:
+
+1. verifies Panda source execution;
+2. runs the unchanged target LMP program on xarm6;
+3. gives the failure log and adapter context to the LLM;
+4. writes `maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py`;
+5. runs unit tests;
+6. reruns real xarm6 simulation;
+7. saves an LLM migration analysis comparing source and target code.
+
+Outputs:
 
 ```text
-maniskill_backend/case_programs/case01_pull_cube_tool.py
-maniskill_backend/profiles.py
-maniskill_backend/real_runner.py
-maniskill_backend/skill_adapter.py
+results/module_generation_trials.jsonl
+results/module_generation_trials.md
 ```
 
-Successful patches are left as tracked diffs for inspection and later commit.
-Results are written to:
+A single target-module trial can also be run directly:
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task pull_cube_tool \
+  --robot xarm6_robotiq \
+  --method target-module-generation \
+  --seed 0 \
+  --control-mode pd_joint_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 300 \
+  --code-file maniskill_backend/case_programs/case01_pull_cube_tool.py \
+  --adapter-module maniskill_backend.generated_adapters.case01_xarm6_pull_tool
+```
+
+## Optional Patch Runner
+
+`full_stack_runner` remains as a parked comparison route for patch-loop
+experiments. It asks for unified diffs and writes:
 
 ```text
 results/full_stack_trials.jsonl
@@ -161,7 +187,7 @@ results/iterative_summary.csv
 |---|---|---|---|
 | `pick_cube` | 抓取方块 | `PickCube-v1` | smoke and controller-portability support task |
 | `stack_cube` | 堆叠方块 | `StackCube-v1` | supporting stacking task, official Panda solver succeeds at seed 0 |
-| `pull_cube_tool` | 用工具拉方块 | `PullCubeTool-v1` | **Case 01** full-stack Panda to xarm6 migration |
+| `pull_cube_tool` | 用工具拉方块 | `PullCubeTool-v1` | **Case 01** direct target-adapter generation |
 | `peg_insertion` | 侧向插 peg | `PegInsertionSide-v1` | parked: official solver failed at seed 0 |
 
 ## Current Robots
@@ -181,6 +207,7 @@ real experiments until their ManiSkill runs are working.
 | `source-copy` | execute the source LMP program directly on the target robot |
 | `llm_card_report` | program-level LLM repair from target Capability Card plus real Failure Report |
 | `oracle` | hand-written real-simulation upper bound for the task |
+| `target-module-generation` | execute a fixed target LMP file through a generated adapter module |
 
 ## Install
 

@@ -22,8 +22,17 @@ from maniskill_backend.full_stack_runner import (
 )
 from maniskill_backend.iterative_runner import _code_diff, build_iterative_prompt
 from maniskill_backend.migration import METHODS, MigrationRequest, build_migration_prompt
+from maniskill_backend.module_generation_runner import (
+    build_module_generation_prompt,
+    extract_python_module,
+    validate_generated_adapter_module,
+)
 from maniskill_backend.profiles import get_robot_profile
-from maniskill_backend.real_runner import _build_robot_adapter, _default_control_mode
+from maniskill_backend.real_runner import (
+    _build_robot_adapter,
+    _build_robot_adapter_from_module,
+    _default_control_mode,
+)
 from maniskill_backend.reporting import (
     build_oracle_code,
     build_real_failure_report,
@@ -75,8 +84,54 @@ class RealBackendTest(unittest.TestCase):
             case.target_program_path,
             "maniskill_backend/case_programs/case01_pull_cube_tool.py",
         )
+        self.assertEqual(
+            case.target_adapter_module,
+            "maniskill_backend.generated_adapters.case01_xarm6_pull_tool",
+        )
+        self.assertEqual(
+            case.target_adapter_path,
+            "maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py",
+        )
         self.assertIn("skill_adapter", case.migration_layers)
         self.assertIn("controller_primitive", case.migration_layers)
+
+    def test_module_generation_extracts_complete_python_module(self):
+        text = """Here is the module:
+```python
+from typing import Any
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str):
+    return object()
+```"""
+        module = extract_python_module(text)
+        self.assertIn("def build_robot", module)
+        validate_generated_adapter_module(module)
+
+    def test_module_generation_rejects_unsafe_module(self):
+        unsafe = """import subprocess
+
+def build_robot(env, *, control_mode: str, robot_uid: str):
+    subprocess.run(["echo", "bad"])
+"""
+        with self.assertRaises(ValueError):
+            validate_generated_adapter_module(unsafe)
+
+    def test_module_generation_prompt_requests_module_not_patch(self):
+        case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
+        prompt = build_module_generation_prompt(
+            case=case,
+            target_result={
+                "success": False,
+                "failure_layer": "controller_primitive",
+                "message": "motion planning failed while positioning the actual tool behind cube",
+            },
+            attempts=[],
+        )
+        self.assertIn("complete Python module", prompt)
+        self.assertIn("not a patch loop", prompt)
+        self.assertIn(case.target_adapter_path, prompt)
+        self.assertIn("def build_robot", prompt)
+        self.assertIn("motion planning failed", prompt)
 
     def test_full_stack_patch_guard_extracts_allowed_diff(self):
         text = """```diff
@@ -320,6 +375,19 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
         robot = _build_robot_adapter("pull_cube_tool", Env(), "pd_joint_pos", "panda")
         self.assertIsInstance(robot, ManiSkillPullCubeToolPlannerRobot)
         self.assertEqual(robot.robot_uid, "panda")
+
+    def test_real_runner_can_load_generated_target_adapter_module(self):
+        class Env:
+            pass
+
+        robot = _build_robot_adapter_from_module(
+            "maniskill_backend.generated_adapters.case01_xarm6_pull_tool",
+            Env(),
+            "pd_joint_pos",
+            "xarm6_robotiq",
+        )
+        self.assertIsInstance(robot, ManiSkillPullCubeToolPlannerRobot)
+        self.assertEqual(robot.robot_uid, "xarm6_robotiq")
 
     def test_pull_cube_tool_xarm_defaults_to_base_pull_frame(self):
         class Env:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -83,6 +84,16 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
             f"pd_joint_pos-style planner control, got robot={robot_uid!r}, control_mode={control_mode!r}."
         )
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")
+
+
+def _build_robot_adapter_from_module(adapter_module: str, env: Any, control_mode: str, robot_uid: str) -> Any:
+    """Load a target-side adapter module generated for one migration case."""
+
+    module = importlib.import_module(adapter_module)
+    build_robot = getattr(module, "build_robot", None)
+    if not callable(build_robot):
+        raise ValueError(f"Adapter module {adapter_module!r} must define callable build_robot(...).")
+    return build_robot(env, control_mode=control_mode, robot_uid=robot_uid)
 
 
 def run_real_trial(
@@ -218,6 +229,7 @@ def run_real_code_trial(
     render_backend: str = "gpu",
     max_episode_steps: int = 300,
     extra_result: Optional[Dict[str, Any]] = None,
+    adapter_module: str = "",
 ) -> Dict[str, Any]:
     """Execute a caller-provided LMP snippet in a real ManiSkill task."""
 
@@ -242,6 +254,8 @@ def run_real_code_trial(
         "max_episode_steps": max_episode_steps,
         "real_runner": True,
     }
+    if adapter_module:
+        result["adapter_module"] = adapter_module
     if requested_robot_uid != robot_uid:
         result["requested_robot_uid"] = requested_robot_uid
     if task_id not in SUPPORTED_REAL_TASKS:
@@ -270,7 +284,10 @@ def run_real_code_trial(
     try:
         env = adapter.make()
         obs, reset_info = adapter.reset(seed=seed)
-        robot = _build_robot_adapter(task_id, env, control_mode, robot_uid)
+        if adapter_module:
+            robot = _build_robot_adapter_from_module(adapter_module, env, control_mode, robot_uid)
+        else:
+            robot = _build_robot_adapter(task_id, env, control_mode, robot_uid)
         scene = ManiSkillSceneAdapter()
         code_ok, message, locals_dict = execute_lmp(
             code,
@@ -413,6 +430,11 @@ def _parse_args() -> argparse.Namespace:
         default="",
         help="Execute target LMP code from a file instead of method-generated code.",
     )
+    parser.add_argument(
+        "--adapter-module",
+        default="",
+        help="Import a generated target adapter module with build_robot(...).",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -433,6 +455,7 @@ def main() -> None:
             sim_backend=args.sim_backend,
             render_backend=args.render_backend,
             max_episode_steps=args.max_episode_steps,
+            adapter_module=args.adapter_module,
         )
         result["code_file"] = str(code_path)
     else:

@@ -1,0 +1,761 @@
+"""LLM target-module generation workflow for full ManiSkill migration.
+
+This runner is the direct-generation alternative to patch loops. The LLM does
+not return a unified diff. Instead, it returns the complete target adapter
+module for one case. The runner writes that module, runs tests, executes the
+real target simulation, and records a source-vs-target migration analysis.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Sequence
+
+from .cases import PRIMARY_FULL_MIGRATION_CASE_ID, FullMigrationCase, get_full_migration_case
+from .llm import gen_text
+from .profiles import get_robot_profile
+from .tasks import get_task_spec
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PULL_TOOL_ADAPTER_CONTEXT = "maniskill_backend/skill_adapter.py"
+PULL_TOOL_ADAPTER_WINDOWS = ((809, 1415),)
+MODULE_FENCE = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
+ALLOWED_IMPORT_PREFIXES = (
+    "__future__",
+    "math",
+    "typing",
+    "numpy",
+    "sapien",
+    "mani_skill",
+    "maniskill_backend.skill_adapter",
+)
+FORBIDDEN_CALLS = {"eval", "exec", "compile", "input", "open", "__import__"}
+FORBIDDEN_TEXT = (
+    "subprocess",
+    "os.",
+    "sys.",
+    "socket",
+    "requests",
+    "urllib",
+    "shutil",
+    "pathlib",
+)
+
+
+def extract_python_module(text: str) -> str:
+    """Extract a complete Python module from raw LLM text."""
+
+    candidates = [match.group(1).strip() for match in MODULE_FENCE.finditer(text)]
+    if candidates:
+        for candidate in candidates:
+            if "def build_robot" in candidate:
+                return candidate
+        return candidates[0]
+    return text.strip()
+
+
+def validate_generated_adapter_module(code: str) -> None:
+    """Reject unsafe or structurally invalid generated adapter modules."""
+
+    if not code.strip():
+        raise ValueError("Generated adapter module is empty.")
+    for snippet in FORBIDDEN_TEXT:
+        if snippet in code:
+            raise ValueError(f"Generated adapter module contains forbidden text: {snippet}")
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        raise ValueError(f"Generated adapter module is not valid Python: {exc}") from exc
+
+    has_factory = any(isinstance(node, ast.FunctionDef) and node.name == "build_robot" for node in tree.body)
+    if not has_factory:
+        raise ValueError("Generated adapter module must define build_robot(env, *, control_mode, robot_uid).")
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                _validate_import(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                raise ValueError("Generated adapter module must use absolute imports only.")
+            _validate_import(node.module or "")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id in FORBIDDEN_CALLS:
+                raise ValueError(f"Generated adapter module calls forbidden function: {func.id}")
+
+
+def build_module_generation_prompt(
+    *,
+    case: FullMigrationCase,
+    target_result: Dict[str, Any],
+    attempts: Sequence[Dict[str, Any]],
+) -> str:
+    """Prompt the LLM for a complete generated target adapter module."""
+
+    task = get_task_spec(case.task_id)
+    source_profile = get_robot_profile(case.source_robot)
+    target_profile = get_robot_profile(case.target_robot)
+    current_module = _read_file(case.target_adapter_path)
+    target_program = _read_file(case.target_program_path)
+    source_adapter_context = _read_context(PULL_TOOL_ADAPTER_CONTEXT, PULL_TOOL_ADAPTER_WINDOWS)
+
+    lines = [
+        "You are generating target-specific robot execution code for a real ManiSkill migration case.",
+        "This is direct module generation, not a patch loop.",
+        "",
+        "# Required output",
+        "Return one complete Python module only. Do not return a diff, JSON, Markdown, or explanation.",
+        f"The module will overwrite `{case.target_adapter_path}`.",
+        "The module must define:",
+        "def build_robot(env, *, control_mode: str, robot_uid: str):",
+        "    ...",
+        "",
+        "# Module scope",
+        "- Keep the high-level LMP program unchanged unless the runner explicitly changes it later.",
+        "- Implement target-side execution behavior for xarm6_robotiq in this generated module.",
+        "- You may subclass ManiSkillPullCubeToolPlannerRobot and override methods such as hook_object, pull_with_tool, _move_to_tool_pose, _correct_actual_tool_position, or _pull_target_pose.",
+        "- You may import numpy, sapien, mani_skill motion-planning helpers, and maniskill_backend.skill_adapter symbols.",
+        "- Do not fake success, bypass evaluate(), disable failure checks, force ret_val, or edit simulator state directly to make success true.",
+        "- Do not read files, call subprocesses, use network libraries, or write outside this module.",
+        "",
+        "# Case",
+        f"case_id: {case.case_id}",
+        f"task_id: {case.task_id}",
+        f"source_robot: {case.source_robot}",
+        f"target_robot: {case.target_robot}",
+        f"source_control_mode: {case.source_control_mode}",
+        f"target_control_mode: {case.target_control_mode}",
+        f"seed: {case.seed}",
+        f"episode_budget: {case.max_episode_steps}",
+        "",
+        "# Task Spec",
+        task.to_prompt_section(),
+        "",
+        "# Source Robot Profile",
+        source_profile.to_prompt_section(),
+        "",
+        "# Target Robot Profile",
+        target_profile.to_prompt_section(),
+        "",
+        "# Unchanged high-level target LMP program",
+        "```python",
+        target_program,
+        "```",
+        "",
+        "# Latest target failure",
+        "```json",
+        _json_dump(_result_digest(target_result)),
+        "```",
+    ]
+    if attempts:
+        lines.extend(["", "# Previous generated-module attempts"])
+        for attempt in attempts[-3:]:
+            lines.extend(
+                [
+                    f"## Attempt {attempt.get('round')}",
+                    f"module_valid: {attempt.get('module_valid')}",
+                    f"module_kept: {attempt.get('module_kept')}",
+                    f"verification_ok: {attempt.get('verification_ok')}",
+                    f"module_error: {attempt.get('module_error', '')}",
+                ]
+            )
+            if attempt.get("target_result"):
+                lines.extend(["target_result:", "```json", _json_dump(_result_digest(attempt["target_result"])), "```"])
+            if attempt.get("verification") and not attempt["verification"].get("ok"):
+                lines.extend(
+                    [
+                        "test_failure:",
+                        "```text",
+                        _trim_text(str(attempt["verification"].get("output", "")), 6000),
+                        "```",
+                    ]
+                )
+    lines.extend(
+        [
+            "",
+            "# Current generated target adapter module",
+            "```python",
+            current_module,
+            "```",
+            "",
+            "# Reference source/target adapter context",
+            "Only use this as implementation context; return the generated module, not this whole file.",
+            "```python",
+            source_adapter_context,
+            "```",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_migration_analysis_prompt(
+    *,
+    case: FullMigrationCase,
+    result: Dict[str, Any],
+) -> str:
+    """Ask the LLM to explain the concrete code migration after generation."""
+
+    source_adapter_context = _read_context(PULL_TOOL_ADAPTER_CONTEXT, PULL_TOOL_ADAPTER_WINDOWS)
+    generated_module = _read_file(case.target_adapter_path)
+    return "\n".join(
+        [
+            "Analyze this robot code migration for a paper experiment.",
+            "Write concise Markdown in Chinese.",
+            "",
+            "# What to compare",
+            "- source Panda execution assumptions",
+            "- generated xarm6 target adapter changes",
+            "- failure evidence that motivated the target-side changes",
+            "- which layer changed: program, skill adapter, controller primitive, contact/tool geometry",
+            "",
+            "# Case result",
+            "```json",
+            _json_dump(_result_digest(result.get("final_target_result") or {})),
+            "```",
+            "",
+            "# Attempts",
+            "```json",
+            _json_dump([_attempt_digest(attempt) for attempt in result.get("attempts") or []]),
+            "```",
+            "",
+            "# Reference source adapter context",
+            "```python",
+            source_adapter_context,
+            "```",
+            "",
+            "# Generated target adapter module",
+            "```python",
+            generated_module,
+            "```",
+        ]
+    )
+
+
+def run_module_generation_migration(
+    *,
+    case_id: str = PRIMARY_FULL_MIGRATION_CASE_ID,
+    max_attempts: int | None = None,
+    obs_mode: str = "state",
+    sim_backend: str = "auto",
+    render_backend: str = "gpu",
+    trial_timeout_s: int = 900,
+    test_timeout_s: int = 240,
+    dry_run: bool = False,
+    source_check: bool = True,
+) -> Dict[str, Any]:
+    """Generate, test, and evaluate complete target adapter modules."""
+
+    case = get_full_migration_case(case_id)
+    rounds = max_attempts if max_attempts is not None else case.max_attempts
+    source_result: Dict[str, Any] | None = None
+    if source_check:
+        source_result = _run_source_trial(
+            case=case,
+            obs_mode=obs_mode,
+            sim_backend=sim_backend,
+            render_backend=render_backend,
+            timeout_s=trial_timeout_s,
+        )
+        if not bool(source_result.get("success", False)):
+            return _base_result(
+                case=case,
+                source_result=source_result,
+                initial_target_result={},
+                final_target_result={},
+                attempts=[],
+                success=False,
+                message="source robot did not succeed; target module generation was not attempted",
+            )
+
+    target_result = _run_target_program_trial(
+        case=case,
+        obs_mode=obs_mode,
+        sim_backend=sim_backend,
+        render_backend=render_backend,
+        timeout_s=trial_timeout_s,
+    )
+    initial_target_result = target_result
+    attempts: List[Dict[str, Any]] = []
+    if bool(target_result.get("success", False)):
+        result = _base_result(
+            case=case,
+            source_result=source_result,
+            initial_target_result=initial_target_result,
+            final_target_result=target_result,
+            attempts=attempts,
+            success=True,
+            message="target generated adapter already succeeded before regeneration",
+        )
+        return _attach_analysis(case=case, result=result, dry_run=dry_run)
+
+    module_path = REPO_ROOT / case.target_adapter_path
+    for round_idx in range(1, max(0, rounds) + 1):
+        prompt = build_module_generation_prompt(case=case, target_result=target_result, attempts=attempts)
+        current_module = module_path.read_text(encoding="utf-8")
+        generated = gen_text(
+            prompt=prompt,
+            system=(
+                "You generate complete Python modules for target robot execution adapters. "
+                "Return only Python module text."
+            ),
+            fallback_text=current_module,
+            dry_run=dry_run,
+        )
+        module_code = extract_python_module(generated.text)
+        attempt: Dict[str, Any] = {
+            "round": round_idx,
+            "used_llm": generated.used_llm,
+            "llm_model": generated.model,
+            "llm_reason": generated.reason,
+            "llm_raw_text": generated.raw_text,
+            "llm_response_preview": _trim_text(generated.text, 5000),
+            "prompt": prompt,
+            "generated_module_preview": _trim_text(module_code, 5000),
+            "module_path": case.target_adapter_path,
+            "module_applied": False,
+            "module_valid": False,
+            "module_kept": False,
+        }
+        snapshot = current_module
+        try:
+            validate_generated_adapter_module(module_code)
+            attempt["module_valid"] = True
+            module_path.write_text(module_code.rstrip() + "\n", encoding="utf-8")
+            attempt["module_applied"] = True
+            verification = _run_command(
+                [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+                timeout_s=test_timeout_s,
+            )
+            attempt["verification"] = verification
+            attempt["verification_ok"] = verification["ok"]
+            if not verification["ok"]:
+                module_path.write_text(snapshot, encoding="utf-8")
+                attempts.append(attempt)
+                continue
+
+            attempt["module_kept"] = True
+            target_result = _run_target_program_trial(
+                case=case,
+                obs_mode=obs_mode,
+                sim_backend=sim_backend,
+                render_backend=render_backend,
+                timeout_s=trial_timeout_s,
+            )
+            attempt["target_result"] = target_result
+            attempts.append(attempt)
+            if bool(target_result.get("success", False)):
+                break
+        except Exception as exc:
+            if module_path.read_text(encoding="utf-8") != snapshot:
+                module_path.write_text(snapshot, encoding="utf-8")
+            attempt["module_error"] = repr(exc)
+            attempts.append(attempt)
+
+    result = _base_result(
+        case=case,
+        source_result=source_result,
+        initial_target_result=initial_target_result,
+        final_target_result=target_result,
+        attempts=attempts,
+        success=bool(target_result.get("success", False)),
+        message="target success reached" if target_result.get("success") else "module generation budget exhausted",
+    )
+    return _attach_analysis(case=case, result=result, dry_run=dry_run)
+
+
+def write_module_generation_outputs(
+    result: Dict[str, Any],
+    *,
+    jsonl_path: Path,
+    md_path: Path,
+) -> None:
+    jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    with jsonl_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(result, ensure_ascii=False, default=repr) + "\n")
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.write_text(module_generation_result_to_md(result) + "\n", encoding="utf-8")
+
+
+def module_generation_result_to_md(result: Dict[str, Any]) -> str:
+    lines = [
+        "# Target Adapter Module Generation",
+        "",
+        f"- **case_id**: `{result.get('case_id')}`",
+        f"- **task**: `{result.get('task_id')}`",
+        f"- **source_robot**: `{result.get('source_robot')}`",
+        f"- **target_robot**: `{result.get('target_robot')}`",
+        f"- **target_adapter_module**: `{result.get('target_adapter_module')}`",
+        f"- **success**: `{result.get('success')}`",
+        f"- **message**: `{result.get('message')}`",
+        f"- **attempts**: `{len(result.get('attempts') or [])}`",
+        "",
+        "## Initial Target Result",
+        "",
+        "```json",
+        _json_dump(_result_digest(result.get("initial_target_result") or {})),
+        "```",
+        "",
+    ]
+    for attempt in result.get("attempts") or []:
+        lines.extend(
+            [
+                f"## Generated Module Attempt {attempt.get('round')}",
+                "",
+                f"- **module_valid**: `{attempt.get('module_valid')}`",
+                f"- **module_applied**: `{attempt.get('module_applied')}`",
+                f"- **module_kept**: `{attempt.get('module_kept')}`",
+                f"- **verification_ok**: `{attempt.get('verification_ok')}`",
+                f"- **module_error**: `{attempt.get('module_error', '')}`",
+                "",
+                "### Generated Module Preview",
+                "",
+                "```python",
+                str(attempt.get("generated_module_preview") or "").strip(),
+                "```",
+                "",
+            ]
+        )
+        if attempt.get("target_result"):
+            lines.extend(
+                [
+                    "### Target Result",
+                    "",
+                    "```json",
+                    _json_dump(_result_digest(attempt["target_result"])),
+                    "```",
+                    "",
+                ]
+            )
+    if result.get("migration_analysis"):
+        lines.extend(["## Migration Analysis", "", str(result["migration_analysis"]).strip(), ""])
+    return "\n".join(lines)
+
+
+def _attach_analysis(*, case: FullMigrationCase, result: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
+    fallback = _fallback_analysis(result)
+    generated = gen_text(
+        prompt=build_migration_analysis_prompt(case=case, result=result),
+        system="You write concise robotics migration analysis for research notes.",
+        fallback_text=fallback,
+        dry_run=dry_run,
+    )
+    result.update(
+        migration_analysis=generated.text,
+        analysis_used_llm=generated.used_llm,
+        analysis_llm_model=generated.model,
+        analysis_llm_reason=generated.reason,
+    )
+    return result
+
+
+def _base_result(
+    *,
+    case: FullMigrationCase,
+    source_result: Dict[str, Any] | None,
+    initial_target_result: Dict[str, Any],
+    final_target_result: Dict[str, Any],
+    attempts: List[Dict[str, Any]],
+    success: bool,
+    message: str,
+) -> Dict[str, Any]:
+    return {
+        "case_id": case.case_id,
+        "task_id": case.task_id,
+        "source_robot": case.source_robot,
+        "target_robot": case.target_robot,
+        "target_program_path": case.target_program_path,
+        "target_adapter_module": case.target_adapter_module,
+        "target_adapter_path": case.target_adapter_path,
+        "success": success,
+        "message": message,
+        "source_result": source_result,
+        "initial_target_result": initial_target_result,
+        "final_target_result": final_target_result,
+        "attempts": attempts,
+        "tracked_diff_after_run": _git_diff([case.target_adapter_path]),
+    }
+
+
+def _run_source_trial(
+    *,
+    case: FullMigrationCase,
+    obs_mode: str,
+    sim_backend: str,
+    render_backend: str,
+    timeout_s: int,
+) -> Dict[str, Any]:
+    return _run_real_runner_json(
+        [
+            "--task",
+            case.task_id,
+            "--robot",
+            case.source_robot,
+            "--method",
+            "source-copy",
+            "--seed",
+            str(case.seed),
+            "--control-mode",
+            case.source_control_mode,
+            "--obs-mode",
+            obs_mode,
+            "--sim-backend",
+            sim_backend,
+            "--render-backend",
+            render_backend,
+            "--max-episode-steps",
+            str(case.max_episode_steps),
+        ],
+        timeout_s=timeout_s,
+    )
+
+
+def _run_target_program_trial(
+    *,
+    case: FullMigrationCase,
+    obs_mode: str,
+    sim_backend: str,
+    render_backend: str,
+    timeout_s: int,
+) -> Dict[str, Any]:
+    return _run_real_runner_json(
+        [
+            "--task",
+            case.task_id,
+            "--robot",
+            case.target_robot,
+            "--method",
+            "target-module-generation",
+            "--seed",
+            str(case.seed),
+            "--control-mode",
+            case.target_control_mode,
+            "--obs-mode",
+            obs_mode,
+            "--sim-backend",
+            sim_backend,
+            "--render-backend",
+            render_backend,
+            "--max-episode-steps",
+            str(case.max_episode_steps),
+            "--code-file",
+            case.target_program_path,
+            "--adapter-module",
+            case.target_adapter_module,
+        ],
+        timeout_s=timeout_s,
+    )
+
+
+def _run_real_runner_json(args: Sequence[str], *, timeout_s: int) -> Dict[str, Any]:
+    completed = _run_command(
+        [sys.executable, "-m", "maniskill_backend.real_runner", *args],
+        timeout_s=timeout_s,
+    )
+    result = _extract_json_object(completed["output"])
+    if result is not None:
+        result["command_ok"] = completed["ok"]
+        return result
+    return {
+        "success": False,
+        "failure_type": "execution failure",
+        "failure_layer": "runtime_setup",
+        "message": "real_runner did not return a JSON trial result",
+        "command_ok": completed["ok"],
+        "command_output": _trim_text(completed["output"], 12000),
+    }
+
+
+def _run_command(command: Sequence[str], *, timeout_s: int) -> Dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            list(command),
+            cwd=REPO_ROOT,
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=timeout_s,
+        )
+        output = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+        return {
+            "ok": completed.returncode == 0,
+            "returncode": completed.returncode,
+            "command": list(command),
+            "output": _trim_text(output, 20000),
+        }
+    except subprocess.TimeoutExpired as exc:
+        output = "\n".join(
+            part
+            for part in (
+                _decode_timeout_output(exc.stdout),
+                _decode_timeout_output(exc.stderr),
+            )
+            if part
+        )
+        return {
+            "ok": False,
+            "returncode": None,
+            "command": list(command),
+            "output": _trim_text(f"timeout after {timeout_s}s\n{output}", 20000),
+        }
+
+
+def _extract_json_object(text: str) -> Dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    for index in (idx for idx, char in enumerate(text) if char == "{"):
+        try:
+            value, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict) and ("task_id" in value or "success" in value):
+            return value
+    return None
+
+
+def _validate_import(module_name: str) -> None:
+    if not module_name:
+        raise ValueError("Generated adapter module contains an empty import.")
+    if not any(module_name == prefix or module_name.startswith(prefix + ".") for prefix in ALLOWED_IMPORT_PREFIXES):
+        raise ValueError(f"Generated adapter module imports disallowed module: {module_name}")
+
+
+def _read_file(path: str) -> str:
+    return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
+def _read_context(path: str, windows: Sequence[tuple[int, int]]) -> str:
+    lines = _read_file(path).splitlines()
+    chunks = []
+    for start, end in windows:
+        chosen = lines[max(0, start - 1) : min(len(lines), end)]
+        numbered = [f"{line_no:04d}: {line}" for line_no, line in enumerate(chosen, start=start)]
+        chunks.append("\n".join(numbered))
+    return "\n\n".join(chunks)
+
+
+def _result_digest(result: Dict[str, Any]) -> Dict[str, Any]:
+    keys = (
+        "task_id",
+        "robot_uid",
+        "method",
+        "adapter_module",
+        "control_mode",
+        "success",
+        "failure_type",
+        "failure_layer",
+        "message",
+        "execution_log",
+        "final_info",
+        "command_output",
+    )
+    return {key: result[key] for key in keys if key in result}
+
+
+def _attempt_digest(attempt: Dict[str, Any]) -> Dict[str, Any]:
+    keys = (
+        "round",
+        "used_llm",
+        "llm_model",
+        "llm_reason",
+        "module_valid",
+        "module_applied",
+        "module_kept",
+        "verification_ok",
+        "module_error",
+        "target_result",
+    )
+    return {key: attempt[key] for key in keys if key in attempt}
+
+
+def _json_dump(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=2, default=repr)
+
+
+def _trim_text(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit // 2] + "\n...<trimmed>...\n" + text[-limit // 2 :]
+
+
+def _decode_timeout_output(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def _git_diff(paths: Sequence[str]) -> str:
+    completed = subprocess.run(
+        ["git", "diff", "--", *paths],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return completed.stdout
+
+
+def _fallback_analysis(result: Dict[str, Any]) -> str:
+    final_target = result.get("final_target_result") or {}
+    return "\n".join(
+        [
+            "### 迁移分析",
+            "",
+            f"- 最终成功: `{result.get('success')}`",
+            f"- 最终失败层: `{final_target.get('failure_layer', '')}`",
+            f"- 最终信息: `{final_target.get('message', '')}`",
+            "- 本路线直接生成目标机器人 adapter 模块，而不是修改 patch diff。",
+        ]
+    )
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run direct LLM target-adapter module generation.")
+    parser.add_argument("--case", default=PRIMARY_FULL_MIGRATION_CASE_ID)
+    parser.add_argument("--max-attempts", type=int, default=None)
+    parser.add_argument("--obs-mode", default="state")
+    parser.add_argument("--sim-backend", default="auto")
+    parser.add_argument("--render-backend", default="gpu")
+    parser.add_argument("--trial-timeout-s", type=int, default=900)
+    parser.add_argument("--test-timeout-s", type=int, default=240)
+    parser.add_argument("--jsonl", default="results/module_generation_trials.jsonl")
+    parser.add_argument("--md", default="results/module_generation_trials.md")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--no-source-check", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+    result = run_module_generation_migration(
+        case_id=args.case,
+        max_attempts=args.max_attempts,
+        obs_mode=args.obs_mode,
+        sim_backend=args.sim_backend,
+        render_backend=args.render_backend,
+        trial_timeout_s=args.trial_timeout_s,
+        test_timeout_s=args.test_timeout_s,
+        dry_run=args.dry_run,
+        source_check=not args.no_source_check,
+    )
+    write_module_generation_outputs(
+        result,
+        jsonl_path=Path(args.jsonl),
+        md_path=Path(args.md),
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=repr))
+    print(f"Wrote: {args.jsonl}")
+    print(f"Wrote: {args.md}")
+
+
+if __name__ == "__main__":
+    main()
