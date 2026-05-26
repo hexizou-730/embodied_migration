@@ -39,6 +39,7 @@ _PATCH_START = re.compile(
     r"^(?:diff --git a/.+? b/.+?|--- (?:a/)?[^\t\n]+\n\+\+\+ (?:b/)?[^\t\n]+)$",
     re.MULTILINE,
 )
+_HUNK_HEADER = re.compile(r"^@@ -(?P<old_start>\d+)(?:,\d+)? \+(?P<new_start>\d+)(?:,\d+)? @@")
 
 
 def extract_unified_diff(text: str) -> str:
@@ -263,9 +264,11 @@ def run_full_stack_migration(
             "patch_applied": False,
             "patch_kept": False,
         }
+        snapshot: Dict[str, str] = {}
         try:
             attempt["patch_paths"] = list(validate_patch(attempt["patch"]))
-            _git_apply(attempt["patch"])
+            snapshot = _snapshot_paths(attempt["patch_paths"])
+            attempt["patch_apply_method"] = _apply_patch_tolerant(attempt["patch"])
             attempt["patch_applied"] = True
             verification = _run_command(
                 [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
@@ -274,7 +277,7 @@ def run_full_stack_migration(
             attempt["verification"] = verification
             attempt["verification_ok"] = verification["ok"]
             if not verification["ok"]:
-                _git_apply(attempt["patch"], reverse=True)
+                _restore_snapshot(snapshot)
                 attempt["patch_kept"] = False
                 attempts.append(attempt)
                 continue
@@ -292,6 +295,8 @@ def run_full_stack_migration(
             if bool(target_result.get("success", False)):
                 break
         except Exception as exc:
+            if snapshot:
+                _restore_snapshot(snapshot)
             attempt["patch_error"] = repr(exc)
             attempts.append(attempt)
 
@@ -563,11 +568,152 @@ def _git_apply(patch: str, *, reverse: bool = False) -> None:
         raise RuntimeError(_trim_text(apply_result.stderr or apply_result.stdout, 4000))
 
 
+def _apply_patch_tolerant(patch: str) -> str:
+    try:
+        _git_apply(patch)
+        return "git_apply"
+    except RuntimeError as git_error:
+        try:
+            _apply_patch_by_hunks(patch)
+            return "manual_hunks"
+        except Exception as manual_error:
+            raise RuntimeError(
+                "git apply failed, and manual hunk fallback failed.\n"
+                f"git apply: {git_error}\n"
+                f"manual hunk fallback: {manual_error}"
+            ) from manual_error
+
+
 def _git_apply_command(*, reverse: bool = False) -> List[str]:
     command = ["git", "apply", "--recount"]
     if reverse:
         command.append("--reverse")
     return command
+
+
+def _apply_patch_by_hunks(patch: str) -> None:
+    file_hunks = _parse_patch_hunks(patch)
+    if not file_hunks:
+        raise ValueError("No hunks found in patch.")
+    for path, hunks in file_hunks:
+        file_path = REPO_ROOT / path
+        original = file_path.read_text(encoding="utf-8")
+        had_final_newline = original.endswith("\n")
+        lines = original.splitlines()
+        for hunk in hunks:
+            lines = _apply_hunk_to_lines(lines, hunk)
+        text = "\n".join(lines)
+        if had_final_newline:
+            text += "\n"
+        file_path.write_text(text, encoding="utf-8")
+
+
+def _parse_patch_hunks(patch: str) -> List[Tuple[str, List[Dict[str, Any]]]]:
+    lines = patch.splitlines()
+    files: List[Tuple[str, List[Dict[str, Any]]]] = []
+    current_path = ""
+    current_hunks: List[Dict[str, Any]] = []
+    index = 0
+
+    def flush_current() -> None:
+        nonlocal current_path, current_hunks
+        if current_path and current_hunks:
+            files.append((current_path, current_hunks))
+        current_path = ""
+        current_hunks = []
+
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith("diff --git "):
+            flush_current()
+            index += 1
+            continue
+        if line.startswith("--- ") and index + 1 < len(lines) and lines[index + 1].startswith("+++ "):
+            old_path = _strip_patch_prefix(line[4:].split("\t", 1)[0].strip())
+            new_path = _strip_patch_prefix(lines[index + 1][4:].split("\t", 1)[0].strip())
+            path = new_path if new_path != "/dev/null" else old_path
+            if current_path and current_path != path:
+                flush_current()
+            current_path = path
+            index += 2
+            continue
+        if line.startswith("@@"):
+            match = _HUNK_HEADER.search(line)
+            old_start = int(match.group("old_start")) if match else 1
+            hunk_lines: List[str] = []
+            index += 1
+            while index < len(lines):
+                next_line = lines[index]
+                next_is_file = (
+                    next_line.startswith("--- ")
+                    and index + 1 < len(lines)
+                    and lines[index + 1].startswith("+++ ")
+                )
+                if next_line.startswith("@@") or next_line.startswith("diff --git ") or next_is_file:
+                    break
+                if next_line.startswith("\\ No newline"):
+                    index += 1
+                    continue
+                hunk_lines.append(next_line)
+                index += 1
+            current_hunks.append({"old_start": old_start, "lines": hunk_lines})
+            continue
+        index += 1
+    flush_current()
+    return files
+
+
+def _apply_hunk_to_lines(lines: List[str], hunk: Dict[str, Any]) -> List[str]:
+    old_lines: List[str] = []
+    new_lines: List[str] = []
+    for raw_line in hunk["lines"]:
+        if not raw_line:
+            marker = " "
+            content = ""
+        else:
+            marker = raw_line[0]
+            content = raw_line[1:]
+        if marker == " ":
+            old_lines.append(content)
+            new_lines.append(content)
+        elif marker == "-":
+            old_lines.append(content)
+        elif marker == "+":
+            new_lines.append(content)
+        else:
+            raise ValueError(f"Malformed hunk line: {raw_line!r}")
+
+    start = _find_sequence(lines, old_lines)
+    if start is None:
+        start = _find_sequence([line.rstrip() for line in lines], [line.rstrip() for line in old_lines])
+    if start is None and not old_lines:
+        start = max(0, min(len(lines), int(hunk.get("old_start", 1)) - 1))
+    if start is None:
+        preview = "\n".join(old_lines[:8])
+        raise ValueError(f"Hunk context not found:\n{preview}")
+    return lines[:start] + new_lines + lines[start + len(old_lines) :]
+
+
+def _find_sequence(lines: Sequence[str], needle: Sequence[str]) -> int | None:
+    if not needle:
+        return None
+    end = len(lines) - len(needle) + 1
+    for index in range(max(0, end)):
+        if list(lines[index : index + len(needle)]) == list(needle):
+            return index
+    return None
+
+
+def _snapshot_paths(paths: Sequence[str]) -> Dict[str, str]:
+    return {
+        path: (REPO_ROOT / path).read_text(encoding="utf-8")
+        for path in paths
+    }
+
+
+def _restore_snapshot(snapshot: Dict[str, str]) -> None:
+    for path, text in snapshot.items():
+        (REPO_ROOT / path).write_text(text, encoding="utf-8")
 
 
 def _tracked_dirty_paths() -> Tuple[str, ...]:

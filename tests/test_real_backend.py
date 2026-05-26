@@ -17,6 +17,7 @@ from maniskill_backend.full_stack_runner import (
     extract_unified_diff,
     patch_paths,
     validate_patch,
+    _apply_hunk_to_lines,
     _git_apply_command,
 )
 from maniskill_backend.iterative_runner import _code_diff, build_iterative_prompt
@@ -125,6 +126,38 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
     def test_full_stack_git_apply_uses_recount_for_llm_hunks(self):
         self.assertIn("--recount", _git_apply_command())
         self.assertIn("--reverse", _git_apply_command(reverse=True))
+
+    def test_full_stack_manual_hunk_application_handles_bad_counts(self):
+        lines = [
+            "if error_norm > max_step:",
+            "    correction = error / error_norm * max_step",
+            "correction[2] = float(np.clip(correction[2], -0.018, 0.018))",
+            "",
+            "moved = False",
+        ]
+        hunk = {
+            "old_start": 1,
+            "lines": [
+                " if error_norm > max_step:",
+                "     correction = error / error_norm * max_step",
+                "-correction[2] = float(np.clip(correction[2], -0.018, 0.018))",
+                "+z_clamp = 0.07",
+                "+correction[2] = float(np.clip(correction[2], -z_clamp, z_clamp))",
+                " ",
+                " moved = False",
+            ],
+        }
+        self.assertEqual(
+            _apply_hunk_to_lines(lines, hunk),
+            [
+                "if error_norm > max_step:",
+                "    correction = error / error_norm * max_step",
+                "z_clamp = 0.07",
+                "correction[2] = float(np.clip(correction[2], -z_clamp, z_clamp))",
+                "",
+                "moved = False",
+            ],
+        )
 
     def test_migration_prompt_card_report_method(self):
         request = MigrationRequest.from_ids(
