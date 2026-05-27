@@ -71,7 +71,11 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         "- robot.hook_object(tool, obj)",
         "- robot.pull_with_tool(tool, obj, target)",
         "",
-        "# Hard constraints",
+        "# Safety constraints",
+        "- Do not fake success, bypass task outcomes, or directly modify simulator state.",
+        "- If the target cannot realize the task with the exposed API, set ret_val to a string beginning `infeasible:` and briefly state the reason.",
+        "",
+        "# Code-generation constraints",
         "- Objects returned by scene are opaque handles. Do not call methods on them.",
         "- Do not use obj.get_position(), obj.pose, obj.position, or distance math.",
         "- Do not import packages.",
@@ -96,6 +100,7 @@ def build_migration_prompt(request: MigrationRequest) -> str:
                 "- Do not call robot.grasp(tool) for l_shape_tool; direct tool grasp is rejected by this task wrapper.",
                 '- robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="toward_base") can tune xarm6 pulling.',
                 '- pull_frame may be "tool", "world", or "toward_base".',
+                "- If all exposed hook/pull parameter choices are infeasible for the target, set ret_val to `infeasible: ...` rather than adding unsupported low-level object access.",
             ]
         )
 

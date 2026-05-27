@@ -132,6 +132,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn(case.target_adapter_path, prompt)
         self.assertIn("def build_robot", prompt)
         self.assertIn("motion planning failed", prompt)
+        self.assertIn("Non-negotiable safety constraints", prompt)
+        self.assertIn("Migration design space", prompt)
+        self.assertIn("infeasible:", prompt)
+        self.assertIn("Do not fake success", prompt)
 
     def test_full_stack_patch_guard_extracts_allowed_diff(self):
         text = """```diff
@@ -534,6 +538,13 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
             ),
             "tool-use execution failure",
         )
+        self.assertEqual(
+            classify_failure(
+                success=False,
+                message="infeasible: target hook pose is outside the robot workspace",
+            ),
+            "impossible-task refusal failure",
+        )
 
     def test_failure_layer_classifier(self):
         self.assertEqual(
@@ -585,6 +596,8 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
         prompt = build_migration_prompt(request)
         self.assertIn("hook_object(tool, cube) already grasps", prompt)
         self.assertIn("Do not call robot.grasp(tool)", prompt)
+        self.assertIn("infeasible:", prompt)
+        self.assertIn("Do not fake success", prompt)
 
     def test_iterative_prompt_exposes_pull_tool_parameters(self):
         task = get_task_spec("pull_cube_tool")
@@ -620,6 +633,8 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
         self.assertIn("pull_frame", prompt)
         self.assertIn("Previous target attempts", prompt)
         self.assertIn("cube_distance", prompt)
+        self.assertIn("infeasible:", prompt)
+        self.assertIn("target adapter/controller migration required", prompt)
 
     def test_code_diff_marks_parameter_changes(self):
         diff = _code_diff(
@@ -692,6 +707,7 @@ diff --git a/maniskill_backend/skill_adapter.py b/maniskill_backend/skill_adapte
         text = report.to_prompt_section()
         self.assertIn("source-level tool-use order was already correct", text)
         self.assertIn("Do not add robot.grasp(tool)", text)
+        self.assertIn("infeasible: target skill wrapper or planner needs migration", text)
         self.assertNotIn("requires grasping the tool before pulling", text)
 
     def test_results_summary_and_jsonl(self):

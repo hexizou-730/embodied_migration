@@ -119,6 +119,7 @@ def classify_failure(
         or "requires sub" in text
         or "outside workspace" in text
         or "outside fixed-base" in text
+        or "infeasible" in text
         or "not feasible" in text
         or "cannot perform" in text
         or "exceeds the robot" in text

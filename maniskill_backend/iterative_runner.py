@@ -54,8 +54,12 @@ def build_iterative_prompt(
         "- robot.hook_object(tool, obj)",
         "- robot.pull_with_tool(tool, obj, target)",
         "",
-        "# Hard constraints",
+        "# Safety constraints",
         "- Output only executable Python code. Do not include Markdown.",
+        "- Do not fake success, bypass task outcomes, or directly modify simulator state.",
+        "- If the target cannot realize the task with the exposed API, set ret_val to a string beginning `infeasible:` and briefly state the reason.",
+        "",
+        "# Code-generation constraints",
         "- Objects returned by scene are opaque handles. Do not call methods on them.",
         "- Do not use obj.get_position(), obj.pose, obj.position, or distance math.",
         "- Do not import packages.",
@@ -79,6 +83,7 @@ def build_iterative_prompt(
                 "- For xarm6, you may tune hook_y_offset, behind_margin, tool_grasp_x_offset, pull distance, stages, and pull_frame.",
                 "- hook_object already grasps the L-shaped tool and positions it behind the cube.",
                 "- Do not call robot.grasp(tool) for l_shape_tool; direct tool grasp is rejected by this task wrapper.",
+                "- If the simulator feedback shows the failure is in target skill/controller reachability, you may return `infeasible: target adapter/controller migration required`.",
             ]
         )
 

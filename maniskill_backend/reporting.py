@@ -173,7 +173,7 @@ def build_real_failure_report(
             suggestions=[
                 "Keep the sequence hook_object(tool, cube) -> pull_with_tool(tool, cube, workspace).",
                 "Do not add robot.grasp(tool); hook_object already grasps and positions the L-shaped tool.",
-                "If high-level code cannot change pull distance or hook geometry, preserve the source sequence and report that the target skill wrapper or planner needs migration.",
+                "If high-level code cannot change pull distance or hook geometry enough to solve the failure, preserve the source sequence and report `infeasible: target skill wrapper or planner needs migration`.",
                 "Use only the allowed high-level skill API.",
             ],
         )
