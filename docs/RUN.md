@@ -1,430 +1,243 @@
-# Run Real ManiSkill Experiments
+# 运行指南：PullCube 迁移实验
 
-This project now keeps only the real ManiSkill simulation path. The old static
-fake runner and text-only benchmark have been removed.
+当前项目只保留一条主线：
 
-The research target is full cross-embodiment migration, not only rewriting the
-high-level LMP snippet. A complete migration trial must distinguish:
+```text
+任务：PullCube-v1 / pull_cube
+源机器人：panda
+目标机器人：fetch
+目标：把 Panda 上的拉方块任务迁移到 Fetch
+```
 
-- program migration: target LMP ordering, API choices, and exposed parameters;
-- execution migration: target skill wrapper, planner/control mode, grasp/contact
-  primitive, TCP/tool compensation, and other `env.step(action)` details.
-
-## Remote GPU Setup
-
-On the Polytechnique GPU machine:
+## 1. 进入项目和环境
 
 ```bash
 cd ~/Embodied/embodied_migration
-git pull
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate em-ms
+```
+
+如果在 Linux/NVIDIA 服务器上运行：
+
+```bash
 export VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json
 ```
 
-The xarm6 motion planner uses `mplib`/`toppra`, whose current wheels require
-NumPy 1.x:
+预期现象：
 
-```bash
-pip install "numpy>=1.24,<2" --force-reinstall
+```text
+(em-ms) ... embodied_migration $
 ```
 
-## Test
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-## Check ManiSkill
-
-`sim_check` uses the official ManiSkill env id because it talks directly to
-ManiSkill. The experiment runners below use the clearer task names.
+## 2. 检查依赖
 
 ```bash
 python -m maniskill_backend.sim_check \
-  --env PickCube-v1 \
+  --env PullCube-v1 \
   --robot panda \
   --obs-mode state \
   --control-mode pd_ee_delta_pos
 ```
 
-## One Real Trial
-
-Current task names:
+预期输出包含：
 
 ```text
-pick_cube      抓取方块       ManiSkill env: PickCube-v1
-stack_cube     堆叠方块       ManiSkill env: StackCube-v1
-pull_cube_tool 用工具拉方块   ManiSkill env: PullCubeTool-v1
-peg_insertion  侧向插 peg     ManiSkill env: PegInsertionSide-v1
+maniskill import ok
+env reset ok
 ```
 
-## Case 01: Pull Cube With Tool
+如果这里报 ManiSkill / Vulkan / numpy 错误，先修环境，不要继续跑迁移实验。
 
-The first fixed complete migration case is:
+## 3. 跑单元测试
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+预期输出最后是：
 
 ```text
-case id: case01_pull_cube_tool_panda_to_xarm6
-task: pull_cube_tool / PullCubeTool-v1
-source robot: panda
-target robot: xarm6_robotiq
-source control: pd_joint_pos
-target control: pd_joint_pos
-first seed: 0
-episode budget: 300
+OK
 ```
 
-`pick_cube` and `stack_cube` stay as support tasks. Case 01 is the one that
-must demonstrate both target LMP migration and target skill/controller
-migration.
+这些测试会确认：
 
-The intended research loop is automatic direct generation: the LLM receives the
-target failure log and writes a complete xarm6 target adapter module. The high
-level LMP file stays fixed unless a later experiment explicitly studies program
-generation.
+- 当前只接受 `pull_cube`；
+- 当前只接受 `panda` 和 `fetch`；
+- 旧的 `pull_cube_tool`、`stack_cube`、`peg_insertion` 等任务已不在主线；
+- 生成 adapter 的接口仍然可用。
 
-Panda smoke test:
+## 4. 跑 Panda 源端
 
 ```bash
 python -m maniskill_backend.real_runner \
-  --task pick_cube \
+  --task pull_cube \
   --robot panda \
   --method source-copy \
   --seed 0 \
   --control-mode pd_ee_delta_pos \
   --sim-backend auto \
-  --render-backend gpu
+  --render-backend gpu \
+  --max-episode-steps 100
 ```
 
-xarm6 with ManiSkill's official planner path:
-
-```bash
-python -m maniskill_backend.real_runner \
-  --task pick_cube \
-  --robot xarm6_robotiq \
-  --method source-copy \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu
-```
-
-For `pick_cube`, omitting `--control-mode` automatically selects:
+预期输出会打印 JSON 结果，关键字段类似：
 
 ```text
-panda -> pd_ee_delta_pos
-xarm6_robotiq -> pd_joint_pos
+"task_id": "pull_cube"
+"robot_uid": "panda"
+"method": "source-copy"
+"success": true
 ```
 
-Passing `--control-mode pd_ee_delta_pos` for xarm6 forces the raw delta-EE path.
-That path is useful for diagnosing controller portability, but it may fail even
-when the same high-level program succeeds through the official planner.
+如果 Panda 源端失败，说明源任务还没有建立好，不能进入迁移对比。
 
-## LLM Repair Trial
-
-`llm_card_report` is the program-level LLM adaptation baseline kept for real
-simulation. It first runs a real `source-copy` attempt with the same task,
-robot, seed, and sim settings. If that attempt fails, the execution log becomes
-the Failure Report shown to the LLM.
+## 5. 跑 Fetch 目标端 source-copy
 
 ```bash
 python -m maniskill_backend.real_runner \
-  --task pick_cube \
-  --robot xarm6_robotiq \
-  --method llm_card_report \
+  --task pull_cube \
+  --robot fetch \
+  --method source-copy \
   --seed 0 \
-  --control-mode pd_joint_pos \
+  --control-mode pd_ee_delta_pos \
   --sim-backend auto \
-  --render-backend gpu
+  --render-backend gpu \
+  --max-episode-steps 100
 ```
 
-## Target Adapter Module Generation
+可能输出两种结果。
 
-This is the main Case 01 runner:
+成功时：
+
+```text
+"robot_uid": "fetch"
+"success": true
+```
+
+失败时：
+
+```text
+"success": false
+"failure_type": "contact execution failure" 或其他失败类型
+"failure_layer": "skill_adapter" / "controller_primitive" / "task_outcome"
+```
+
+这一步的作用是得到目标机器人真实失败日志。
+
+## 6. 跑主实验：LLM 生成 Fetch adapter
 
 ```bash
 python -m maniskill_backend.module_generation_runner \
-  --case case01_pull_cube_tool_panda_to_xarm6 \
+  --case case01_pull_cube_panda_to_fetch \
   --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
 ```
 
-The runner:
-
-1. verifies the Panda source side;
-2. runs the unchanged xarm6 target-side program file;
-3. gives the real failure log and adapter context to the LLM;
-4. asks for one complete Python module, not a diff patch;
-5. writes `maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py`;
-6. runs unit tests;
-7. reruns real xarm6 simulation;
-8. repeats until success or budget exhaustion;
-9. writes a Chinese migration analysis comparing source and generated target code.
-
-The generated target adapter module is:
+预期流程：
 
 ```text
-maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py
+1. 检查 Panda 源端
+2. 检查 Fetch 目标端
+3. 如果 Fetch 失败，把 failure log 发给 LLM
+4. LLM 生成完整 Python adapter module
+5. 写入 maniskill_backend/generated_adapters/case01_fetch_pull_cube.py
+6. 跑单元测试
+7. 用生成的 adapter 重新跑 Fetch
+8. 写入结果文件
 ```
 
-Outputs:
+输出文件：
 
 ```text
 results/module_generation_trials.jsonl
 results/module_generation_trials.md
 ```
 
-Successful generated modules remain as local tracked diffs so they can be
-inspected, benchmarked, and committed. A generated module that fails unit tests
-is reverted before the next attempt.
-
-To run only the current generated adapter once:
+## 7. 单独测试当前生成的 Fetch adapter
 
 ```bash
 python -m maniskill_backend.real_runner \
-  --task pull_cube_tool \
-  --robot xarm6_robotiq \
+  --task pull_cube \
+  --robot fetch \
   --method target-module-generation \
   --seed 0 \
-  --control-mode pd_joint_pos \
+  --control-mode pd_ee_delta_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 300 \
-  --code-file maniskill_backend/case_programs/case01_pull_cube_tool.py \
-  --adapter-module maniskill_backend.generated_adapters.case01_xarm6_pull_tool
+  --max-episode-steps 100 \
+  --code-file maniskill_backend/case_programs/case01_pull_cube.py \
+  --adapter-module maniskill_backend.generated_adapters.case01_fetch_pull_cube
 ```
 
-`full_stack_runner` still exists as an optional legacy patch-loop comparison,
-but it is no longer the main route.
+预期输出：
 
-## Program-Only Iterative Baseline
-
-This runner automates the program-migration layer. It verifies that the source
-robot succeeds, asks the LLM to write target-robot code, runs the target code,
-feeds the simulator failure log back to the LLM, and repeats up to
-`--max-attempts`.
-
-Do not treat repeated LMP failure as the end of the migration experiment. If
-the source sequence is sound but the target robot cannot physically realize the
-same grasp, tool contact, planner route, or controller path, migrate the target
-execution layer through `maniskill_backend/generated_adapters/*.py` and rerun
-the same trial.
-
-For `pull_cube_tool`, the iterative runner exposes tunable target-code
-parameters:
-
-```python
-robot.hook_object(tool, cube, hook_y_offset=-0.067, behind_margin=0.0, tool_grasp_x_offset=0.08)
-robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="toward_base")
+```text
+"method": "target-module-generation"
+"robot_uid": "fetch"
+"success": true/false
 ```
 
-`pull_frame` can be `"tool"`, `"world"`, or `"toward_base"`. Panda keeps the
-official tool-local pull by default; xarm6 defaults to pulling toward its base.
-The wrapper also compensates for the held tool's actual offset from the TCP, so
-tool-contact targets are not treated as gripper-center targets.
-`tool_grasp_x_offset` lets xarm6 grasp deeper along the L-shaped tool handle
-when the Robotiq gripper cannot stably carry the official Panda grasp point.
+如果失败，重点看：
 
-Run:
+```text
+"failure_type"
+"failure_layer"
+"message"
+"execution_log"
+"final_info"
+```
+
+这些字段就是后续写论文时的失败分析证据。
+
+## 8. 跑 program-only baseline
 
 ```bash
 python -m maniskill_backend.iterative_runner \
-  --task pull_cube_tool \
+  --task pull_cube \
   --source-robot panda \
-  --target-robot xarm6_robotiq \
+  --target-robot fetch \
   --max-attempts 3 \
   --seed 0 \
-  --target-control-mode pd_joint_pos \
+  --target-control-mode pd_ee_delta_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 300
+  --max-episode-steps 100
 ```
 
-Outputs:
+这个 baseline 只让 LLM 改高层 LMP 代码，不改 skill adapter。
+
+如果它失败而 module generation 成功，就能说明：
 
 ```text
-results/iterative_trials.jsonl
-results/iterative_trials.md
-results/iterative_summary.csv
+program-only migration 不够；
+目标机器人还需要 skill/contact/controller 层迁移。
 ```
 
-## Case 01 Direct-Generation Workflow
-
-Use this order for `case01_pull_cube_tool_panda_to_xarm6`:
-
-1. Run the Panda source side and require real simulation success.
-2. Run xarm6 `source-copy` to expose the first portability failure.
-3. Run `module_generation_runner` so the LLM generates the target adapter
-   module directly.
-4. Inspect the generated module and the rerun result after each attempt.
-5. Rerun source-copy, program-only baselines, and benchmark commands around the
-   direct-generation result.
-6. Record both code levels: fixed target LMP code and generated adapter /
-   controller behavior.
-
-For Case 01, wrapper migration is already part of the experiment:
-xarm6 needs a target-specific tool grasp depth, held-tool pose compensation,
-contact correction, and a pull frame that is physically meaningful for its
-planner path.
-
-## Case 01 Real Benchmark
+## 9. 看结果
 
 ```bash
-python -m maniskill_backend.real_benchmark \
-  --task pull_cube_tool \
-  --robot xarm6_robotiq \
-  --methods source-copy,llm_card_report,oracle \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 300
+tail -n 120 results/module_generation_trials.md
+git diff -- maniskill_backend/generated_adapters/case01_fetch_pull_cube.py
+git status --short
 ```
 
-Running `python -m maniskill_backend.real_benchmark` with no CLI overrides now
-uses this Case 01 task/target/controller/seed budget.
+预期能看到：
 
-## Support Task: Stack Cube
+- 每轮是否调用了 LLM；
+- 每轮生成的 adapter 是否通过测试；
+- Fetch 最终是否成功；
+- 生成 adapter 和默认 adapter 的代码差异。
 
-`stack_cube` is a support task. It is more demanding than `pick_cube` because
-cube A must remain stably on cube B after release.
+## 10. 推荐演示顺序
 
-Panda source run:
+给老师演示时按这个顺序：
 
-```bash
-python -m maniskill_backend.real_runner \
-  --task stack_cube \
-  --robot panda \
-  --method source-copy \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 200
-```
-
-xarm6 target run:
-
-```bash
-python -m maniskill_backend.real_runner \
-  --task stack_cube \
-  --robot xarm6_robotiq \
-  --method source-copy \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 200
-```
-
-Benchmark:
-
-```bash
-python -m maniskill_backend.real_benchmark \
-  --task stack_cube \
-  --robot xarm6_robotiq \
-  --methods source-copy,llm_card_report,oracle \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 200
-```
-
-## Case 01 Commands: Pull Cube With Tool
-
-`pull_cube_tool` is a tool-use task. The source program must hook the cube with
-the L-shaped tool before pulling it back into the robot workspace.
-
-Panda source run:
-
-```bash
-python -m maniskill_backend.real_runner \
-  --task pull_cube_tool \
-  --robot panda \
-  --method source-copy \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 300
-```
-
-xarm6 target run:
-
-```bash
-python -m maniskill_backend.real_runner \
-  --task pull_cube_tool \
-  --robot xarm6_robotiq \
-  --method source-copy \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 300
-```
-
-Benchmark:
-
-```bash
-python -m maniskill_backend.real_benchmark \
-  --task pull_cube_tool \
-  --robot xarm6_robotiq \
-  --methods source-copy,llm_card_report,oracle \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 300
-```
-
-## Parked Task: Peg Insertion
-
-`peg_insertion` is currently parked because ManiSkill's official Panda solver
-also failed at seed 0 in this environment. Do not use it as a migration task
-until the official source side is reliable.
-
-Historical source-side check:
-
-```bash
-python -m maniskill_backend.real_runner \
-  --task peg_insertion \
-  --robot panda_wristcam \
-  --method source-copy \
-  --seed 0 \
-  --control-mode pd_joint_pos \
-  --sim-backend auto \
-  --render-backend gpu \
-  --max-episode-steps 500
-```
-
-Interpretation:
-
-```text
-panda_wristcam failed -> do not evaluate xarm6 yet
-```
-
-Outputs:
-
-```text
-results/real_trials.jsonl
-results/real_trials.md
-results/real_summary.csv
-```
-
-Open `results/real_trials.md` to inspect the Capability Card, Failure Report,
-generated code, raw LLM output, and real execution log.
-
-## Current Validated Result
-
-The current validated real simulation slice is:
-
-```text
-pick_cube + panda + pd_ee_delta_pos -> success
-pick_cube + xarm6_robotiq + pd_ee_delta_pos -> controller/skill-wrapper failure
-pick_cube + xarm6_robotiq + pd_joint_pos planner -> success
-stack_cube + official Panda solver -> success at seed 0
-pull_cube_tool + official Panda solver -> success at seed 0
-peg_insertion + official Panda solver -> failure at seed 0, parked
-```
+1. 打开 `README.md`，说明当前只做 `Panda -> Fetch` 的 `PullCube-v1`。
+2. 展示源程序只有 `robot.pull(cube, goal)`。
+3. 跑 `python -m unittest discover -s tests -v`。
+4. 跑 Panda source-copy，证明源端可行。
+5. 跑 Fetch source-copy，展示目标端成功或失败日志。
+6. 跑 `module_generation_runner`，展示 LLM 生成目标 adapter。
+7. 打开 `results/module_generation_trials.md`，解释迁移差异。

@@ -1,4 +1,4 @@
-"""Canonical full-stack migration cases for the ManiSkill experiments."""
+"""Canonical migration cases for the current ManiSkill experiments."""
 
 from __future__ import annotations
 
@@ -29,46 +29,46 @@ class FullMigrationCase:
     notes: str = ""
 
 
-CASE01_PULL_CUBE_TOOL = FullMigrationCase(
-    case_id="case01_pull_cube_tool_panda_to_xarm6",
+CASE01_PULL_CUBE = FullMigrationCase(
+    case_id="case01_pull_cube_panda_to_fetch",
     case_number=1,
-    title="PullCubeTool Panda to xarm6",
-    task_id="pull_cube_tool",
+    title="PullCube Panda to Fetch",
+    task_id="pull_cube",
     source_robot="panda",
-    target_robot="xarm6_robotiq",
-    source_control_mode="pd_joint_pos",
-    target_control_mode="pd_joint_pos",
-    target_program_path="maniskill_backend/case_programs/case01_pull_cube_tool.py",
-    target_adapter_module="maniskill_backend.generated_adapters.case01_xarm6_pull_tool",
-    target_adapter_path="maniskill_backend/generated_adapters/case01_xarm6_pull_tool.py",
+    target_robot="fetch",
+    source_control_mode="pd_ee_delta_pos",
+    target_control_mode="pd_ee_delta_pos",
+    target_program_path="maniskill_backend/case_programs/case01_pull_cube.py",
+    target_adapter_module="maniskill_backend.generated_adapters.case01_fetch_pull_cube",
+    target_adapter_path="maniskill_backend/generated_adapters/case01_fetch_pull_cube.py",
     seed=0,
     max_attempts=3,
-    max_episode_steps=300,
+    max_episode_steps=100,
     migration_layers=(
         "program",
         "skill_adapter",
         "controller_primitive",
+        "contact_primitive",
     ),
     required_evidence=(
         "Panda source task stack succeeds in real ManiSkill simulation.",
-        "xarm6 source-copy exposes target portability failures.",
+        "Fetch source-copy exposes target portability evidence.",
         "LLM-generated target adapter modules and real failure feedback are saved.",
-        "LLM target-module changes are recorded with physical evidence and migration analysis.",
-        "Final xarm6 success is evaluated with real success state and logs.",
+        "Final Fetch success is evaluated with real success state and logs.",
     ),
     notes=(
-        "First complete migration case. Tool use forces target-specific grasp, "
-        "held-tool compensation, contact correction, and pull-frame choices."
+        "Primary clean migration case. PullCube-v1 is a contact-rich pulling "
+        "task supported by both active embodiments."
     ),
 )
 
 
 FULL_MIGRATION_CASES: Dict[str, FullMigrationCase] = {
-    CASE01_PULL_CUBE_TOOL.case_id: CASE01_PULL_CUBE_TOOL,
+    CASE01_PULL_CUBE.case_id: CASE01_PULL_CUBE,
 }
 
-PRIMARY_FULL_MIGRATION_CASE_ID = CASE01_PULL_CUBE_TOOL.case_id
-PRIMARY_FULL_MIGRATION_CASE = CASE01_PULL_CUBE_TOOL
+PRIMARY_FULL_MIGRATION_CASE_ID = CASE01_PULL_CUBE.case_id
+PRIMARY_FULL_MIGRATION_CASE = CASE01_PULL_CUBE
 
 
 def get_full_migration_case(case_id: str) -> FullMigrationCase:
@@ -76,7 +76,7 @@ def get_full_migration_case(case_id: str) -> FullMigrationCase:
         return FULL_MIGRATION_CASES[case_id]
     except KeyError as exc:
         available = ", ".join(sorted(FULL_MIGRATION_CASES))
-        raise KeyError(f"Unknown full migration case {case_id!r}. Available: {available}") from exc
+        raise KeyError(f"Unknown migration case {case_id!r}. Available: {available}") from exc
 
 
 def iter_full_migration_cases() -> Iterable[FullMigrationCase]:

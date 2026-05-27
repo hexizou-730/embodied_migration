@@ -154,10 +154,10 @@ bash scripts/setup_ubuntu_maniskill.sh --yes --conda-dir "$HOME/miniforge3"
 
 ```bash
 conda activate em-ms
-python -m mani_skill.examples.demo_random_action -e PickCube-v1 --render-mode human
+python -m mani_skill.examples.demo_random_action -e PullCube-v1 --render-mode human
 ```
 
-期望现象：SAPIEN/ManiSkill viewer 打开，`PickCube-v1` 场景开始随机动作。
+期望现象：SAPIEN/ManiSkill viewer 打开，`PullCube-v1` 场景开始随机动作。
 
 ## 5. 常见问题
 

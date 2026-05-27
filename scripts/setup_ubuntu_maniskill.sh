@@ -284,7 +284,7 @@ cat <<EOF
 
 Next commands:
   conda activate $ENV_NAME
-  python -m mani_skill.examples.demo_random_action -e PickCube-v1 --render-mode human
+  python -m mani_skill.examples.demo_random_action -e PullCube-v1 --render-mode human
 
 If NVIDIA driver was installed or apt upgraded the kernel, reboot first:
   sudo reboot

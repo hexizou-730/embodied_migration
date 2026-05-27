@@ -64,12 +64,7 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         "# Allowed API",
         "- scene.get_object(name)",
         "- scene.get_region(name)",
-        "- robot.grasp(obj)",
-        "- robot.place(obj, target)",
-        "- robot.align_to_target(obj, target, tolerance)",
-        "- robot.insert(obj, target, speed)",
-        "- robot.hook_object(tool, obj)",
-        "- robot.pull_with_tool(tool, obj, target)",
+        "- robot.pull(obj, target)",
         "",
         "# Safety constraints",
         "- Do not fake success, bypass task outcomes, or directly modify simulator state.",
@@ -90,17 +85,15 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         f"# Target Robot: {request.target_profile.name}",
     ]
 
-    if request.task.task_id == "pull_cube_tool":
+    if request.task.task_id == "pull_cube":
         lines.extend(
             [
                 "",
                 "# Task-specific API note",
-                "- For pull_cube_tool, robot.hook_object(tool, cube) already grasps the L-shaped tool and positions it behind the cube.",
-                "- For xarm6, robot.hook_object(tool, cube, tool_grasp_x_offset=0.08) grasps deeper along the tool handle.",
-                "- Do not call robot.grasp(tool) for l_shape_tool; direct tool grasp is rejected by this task wrapper.",
-                '- robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="toward_base") can tune xarm6 pulling.',
-                '- pull_frame may be "tool", "world", or "toward_base".',
-                "- If all exposed hook/pull parameter choices are infeasible for the target, set ret_val to `infeasible: ...` rather than adding unsupported low-level object access.",
+                "- For PullCube-v1, use robot.pull(cube, goal).",
+                "- robot.pull(cube, goal, contact_x_offset=0.07, contact_z_offset=0.02, stages=4) can tune the contact primitive.",
+        "- Do not invent grasp/place/tool APIs for PullCube-v1; this is a contact-pulling task.",
+                "- If all exposed contact parameter choices are infeasible for the target, set ret_val to `infeasible: ...` rather than adding unsupported low-level object access.",
             ]
         )
 

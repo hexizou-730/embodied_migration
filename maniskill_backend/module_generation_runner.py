@@ -24,8 +24,8 @@ from .tasks import get_task_spec
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PULL_TOOL_ADAPTER_CONTEXT = "maniskill_backend/skill_adapter.py"
-PULL_TOOL_ADAPTER_WINDOWS = ((809, 1415),)
+ADAPTER_CONTEXT_PATH = "maniskill_backend/skill_adapter.py"
+ADAPTER_CONTEXT_WINDOWS = ((1, 380),)
 MODULE_FENCE = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 ALLOWED_IMPORT_PREFIXES = (
     "__future__",
@@ -106,7 +106,7 @@ def build_module_generation_prompt(
     target_profile = get_robot_profile(case.target_robot)
     current_module = _read_file(case.target_adapter_path)
     target_program = _read_file(case.target_program_path)
-    source_adapter_context = _read_context(PULL_TOOL_ADAPTER_CONTEXT, PULL_TOOL_ADAPTER_WINDOWS)
+    source_adapter_context = _read_context(ADAPTER_CONTEXT_PATH, ADAPTER_CONTEXT_WINDOWS)
 
     lines = [
         "You are generating target-specific robot execution code for a real ManiSkill migration case.",
@@ -127,13 +127,13 @@ def build_module_generation_prompt(
         "# Migration design space",
         f"- Implement target-side execution behavior for {case.target_robot} in this generated module.",
         "- Keep the public high-level LMP API compatible with the fixed target program, but you may reinterpret skill defaults and optional parameters inside the adapter.",
-        "- You may subclass ManiSkillPullCubeToolPlannerRobot and override methods such as hook_object, pull_with_tool, _move_to_tool_pose, _correct_actual_tool_position, or _pull_target_pose.",
-        "- You may change grasp strategy, hook approach poses, intermediate waypoints, pull frame, pull distance, staged motion, planner preference, TCP/tool compensation, and controller-level fallback logic.",
+        "- You may subclass ManiSkillPullCubeRobot and override methods such as pull, _move_towards, _pull_cube_success, or _pull_diagnostics.",
+        "- You may change contact side, contact height, intermediate waypoints, drag distance, staged motion, gripper state during contact, and controller-level fallback logic.",
         "- You may import numpy, sapien, mani_skill motion-planning helpers, and maniskill_backend.skill_adapter symbols.",
         "",
         "# Infeasibility policy",
         "- If the target embodiment cannot physically realize the task under the current scene geometry, return a real failure from the relevant skill with a message beginning `infeasible:` and include the reachability/planner evidence.",
-        "- Prefer explicit infeasibility evidence over repeated tiny pose corrections that do not change the measured tool/object error.",
+        "- Prefer explicit infeasibility evidence over repeated tiny contact corrections that do not change the measured cube/goal error.",
         "- Do not mark infeasible cases as success.",
         "",
         "# Case",
@@ -213,7 +213,7 @@ def build_migration_analysis_prompt(
 ) -> str:
     """Ask the LLM to explain the concrete code migration after generation."""
 
-    source_adapter_context = _read_context(PULL_TOOL_ADAPTER_CONTEXT, PULL_TOOL_ADAPTER_WINDOWS)
+    source_adapter_context = _read_context(ADAPTER_CONTEXT_PATH, ADAPTER_CONTEXT_WINDOWS)
     generated_module = _read_file(case.target_adapter_path)
     return "\n".join(
         [
@@ -222,9 +222,9 @@ def build_migration_analysis_prompt(
             "",
             "# What to compare",
             "- source Panda execution assumptions",
-            "- generated xarm6 target adapter changes",
+            "- generated target adapter changes",
             "- failure evidence that motivated the target-side changes",
-            "- which layer changed: program, skill adapter, controller primitive, contact/tool geometry, or infeasibility policy",
+            "- which layer changed: program, skill adapter, controller primitive, contact geometry, or infeasibility policy",
             "",
             "# Case result",
             "```json",

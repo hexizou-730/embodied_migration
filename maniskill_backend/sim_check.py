@@ -66,7 +66,7 @@ def make_zero_action(env: Any) -> Any:
 
 def run_check(
     *,
-    env_id: str = "PegInsertionSide-v1",
+    env_id: str = "PullCube-v1",
     robot_uid: Optional[str] = None,
     obs_mode: str = "state",
     control_mode: Optional[str] = None,
@@ -210,7 +210,7 @@ def _first_existing(info: Dict[str, Any], keys: Iterable[str]) -> Any:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check whether ManiSkill can run locally.")
-    parser.add_argument("--env", default="PegInsertionSide-v1")
+    parser.add_argument("--env", default="PullCube-v1")
     parser.add_argument("--robot", default="", help="Optional robot uid; empty uses task default.")
     parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--control-mode", default="")

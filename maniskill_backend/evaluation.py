@@ -14,6 +14,7 @@ FAILURE_TYPES = (
     "gripper/force failure",
     "alignment failure",
     "placement stability failure",
+    "contact execution failure",
     "insertion failure",
     "insertion speed failure",
     "tool-use ordering failure",
@@ -87,6 +88,8 @@ def classify_failure(
     ]
     text = " ".join(candidates).lower()
 
+    if _looks_like_infeasible_failure(text):
+        return "impossible-task refusal failure"
     if "unreachable" in text or "reach" in text:
         return "reachability failure"
     if (
@@ -96,6 +99,8 @@ def classify_failure(
         or "cube_distance" in text
     ):
         return "tool-use execution failure"
+    if "not pulled" in text or "pull" in text and "target" in text or "contact" in text:
+        return "contact execution failure"
     if "grasp" in text or "gripper" in text or "force" in text:
         return "gripper/force failure"
     if "ordering" in text or "called before" in text:
@@ -110,23 +115,6 @@ def classify_failure(
         return "insertion speed failure"
     if "not placed" in text or "not at goal" in text or "place" in text:
         return "execution failure"
-    if (
-        "impossible" in text
-        or "unsafe" in text
-        or "refuse" in text
-        or "sub-centimeter" in text
-        or "sub-cm" in text
-        or "requires sub" in text
-        or "outside workspace" in text
-        or "outside fixed-base" in text
-        or "infeasible" in text
-        or "not feasible" in text
-        or "cannot perform" in text
-        or "exceeds the robot" in text
-        or "beyond the capability" in text
-    ):
-        return "impossible-task refusal failure"
-
     ret_val_text = str(info.get("ret_val", "")).lower()
     if "failure" in ret_val_text:
         log = info.get("execution_log") or []
@@ -137,6 +125,27 @@ def classify_failure(
             return "impossible-task refusal failure"
 
     return "unknown failure"
+
+
+def _looks_like_infeasible_failure(text: str) -> bool:
+    return any(
+        phrase in text
+        for phrase in (
+            "impossible",
+            "unsafe",
+            "refuse",
+            "sub-centimeter",
+            "sub-cm",
+            "requires sub",
+            "outside workspace",
+            "outside fixed-base",
+            "infeasible",
+            "not feasible",
+            "cannot perform",
+            "exceeds the robot",
+            "beyond the capability",
+        )
+    )
 
 
 def classify_failure_layer(

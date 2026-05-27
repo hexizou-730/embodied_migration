@@ -1,8 +1,4 @@
-"""High-level skill API surface exposed to LMP programs.
-
-The concrete ManiSkill implementation will come later. For now these interfaces
-let us build prompts, static checks, and oracle/source-copy program shapes.
-"""
+"""High-level PullCube skill API surface exposed to LMP programs."""
 
 from __future__ import annotations
 
@@ -29,22 +25,7 @@ class SceneLike(Protocol):
 
 
 class RobotSkillAPI(Protocol):
-    def grasp(self, obj: Any) -> bool:
-        ...
-
-    def align_to_target(self, obj: Any, target: Any, tolerance: float) -> bool:
-        ...
-
-    def insert(self, obj: Any, target: Any, speed: float) -> bool:
-        ...
-
-    def place(self, obj: Any, target: Any) -> bool:
-        ...
-
-    def hook_object(self, tool: Any, obj: Any) -> bool:
-        ...
-
-    def pull_with_tool(self, tool: Any, obj: Any, target: Any) -> bool:
+    def pull(self, obj: Any, target: Any) -> bool:
         ...
 
 

@@ -17,71 +17,30 @@ from .migration import MigrationRequest, build_migration_prompt, get_source_copy
 from .reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
 from .sim_check import diagnose_graphics_stack
 from .skill_adapter import (
-    ManiSkillPandaPegInsertionPlannerRobot,
-    ManiSkillPegInsertionRobot,
-    ManiSkillPickCubeRobot,
-    ManiSkillPullCubeToolPlannerRobot,
+    ManiSkillPullCubeRobot,
     ManiSkillSceneAdapter,
-    ManiSkillStackCubePlannerRobot,
-    ManiSkillXArmPickCubePlannerRobot,
 )
 from .tasks import get_task_spec
 
 
-SUPPORTED_REAL_TASKS = ("pick_cube", "peg_insertion", "stack_cube", "pull_cube_tool")
+SUPPORTED_REAL_TASKS = ("pull_cube",)
 
 DEFAULT_CONTROL_MODE: Dict[str, str] = {
-    "pick_cube": "pd_ee_delta_pos",
-    "peg_insertion": "pd_ee_pose",
-    "stack_cube": "pd_joint_pos",
-    "pull_cube_tool": "pd_joint_pos",
+    "pull_cube": "pd_ee_delta_pos",
 }
 
 
 def _default_control_mode(task_id: str, robot_uid: str) -> str:
-    if task_id == "pick_cube" and robot_uid.startswith("xarm6"):
-        return "pd_joint_pos"
-    if task_id == "peg_insertion" and robot_uid in {"panda", "panda_wristcam"}:
-        return "pd_joint_pos"
-    if task_id == "stack_cube" and robot_uid in {"panda", "xarm6_robotiq"}:
-        return "pd_joint_pos"
-    if task_id == "pull_cube_tool" and robot_uid in {"panda", "xarm6_robotiq"}:
-        return "pd_joint_pos"
     return DEFAULT_CONTROL_MODE.get(task_id, "pd_ee_delta_pos")
 
 
 def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: str) -> Any:
-    if task_id == "pick_cube":
-        if robot_uid.startswith("xarm6"):
-            if control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
-                return ManiSkillXArmPickCubePlannerRobot(env, control_mode=control_mode)
-            return ManiSkillPickCubeRobot(
-                env,
-                control_mode=control_mode,
-                gripper_open=-1.0,
-                gripper_close=1.0,
-                move_steps=36,
-                grip_steps=10,
-                settle_steps=12,
-            )
-        return ManiSkillPickCubeRobot(env, control_mode=control_mode)
-    if task_id == "peg_insertion":
-        if robot_uid in {"panda", "panda_wristcam"} and control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
-            return ManiSkillPandaPegInsertionPlannerRobot(env, control_mode=control_mode)
-        return ManiSkillPegInsertionRobot(env, control_mode=control_mode)
-    if task_id == "stack_cube":
-        if robot_uid in {"panda", "xarm6_robotiq"} and control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
-            return ManiSkillStackCubePlannerRobot(env, robot_uid=robot_uid, control_mode=control_mode)
+    if task_id == "pull_cube":
+        if robot_uid in {"panda", "fetch"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
+            return ManiSkillPullCubeRobot(env, robot_uid=robot_uid, control_mode=control_mode)
         raise ValueError(
-            "StackCube real runner currently supports panda/xarm6_robotiq with "
-            f"pd_joint_pos-style planner control, got robot={robot_uid!r}, control_mode={control_mode!r}."
-        )
-    if task_id == "pull_cube_tool":
-        if robot_uid in {"panda", "xarm6_robotiq"} and control_mode in {"pd_joint_pos", "pd_joint_pos_vel"}:
-            return ManiSkillPullCubeToolPlannerRobot(env, robot_uid=robot_uid, control_mode=control_mode)
-        raise ValueError(
-            "PullCubeTool real runner currently supports panda/xarm6_robotiq with "
-            f"pd_joint_pos-style planner control, got robot={robot_uid!r}, control_mode={control_mode!r}."
+            "PullCube real runner currently supports panda/fetch with "
+            f"pd_ee_delta_* control, got robot={robot_uid!r}, control_mode={control_mode!r}."
         )
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")
 
@@ -98,7 +57,7 @@ def _build_robot_adapter_from_module(adapter_module: str, env: Any, control_mode
 
 def run_real_trial(
     *,
-    task_id: str = "pick_cube",
+    task_id: str = "pull_cube",
     robot_uid: str = "panda",
     method: str = "source-copy",
     seed: int = 0,
@@ -355,8 +314,6 @@ def _failure_message(robot: Any, fallback: str) -> str:
 
 
 def _normalize_robot_uid(task_id: str, robot_uid: str) -> str:
-    if task_id == "peg_insertion" and robot_uid == "panda":
-        return "panda_wristcam"
     return robot_uid
 
 
@@ -412,7 +369,7 @@ def _jsonable(value: Any) -> Any:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run real ManiSkill-backed LMP trials.")
-    parser.add_argument("--task", default="pick_cube")
+    parser.add_argument("--task", default="pull_cube")
     parser.add_argument("--robot", default="panda")
     parser.add_argument("--method", default="source-copy")
     parser.add_argument("--seed", type=int, default=0)

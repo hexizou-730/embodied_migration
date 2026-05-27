@@ -1,9 +1,9 @@
-"""Reporting helpers for real ManiSkill trials."""
+"""Reporting helpers for PullCube ManiSkill trials."""
 
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 from lmp.failure_report import FailureReport
 
@@ -18,17 +18,13 @@ def success_from_ret_val(ret_val: Any) -> bool:
     if ret_val is None:
         return False
     if isinstance(ret_val, str):
-        return not ret_val.lower().startswith("failure")
+        lowered = ret_val.lower()
+        return not (lowered.startswith("failure") or lowered.startswith("infeasible"))
     return bool(ret_val)
 
 
 def build_oracle_code(task: TaskSpec) -> str:
-    """Return the hand-written real-simulation baseline for a task.
-
-    The real benchmark currently exposes only task programs that can be executed
-    against ManiSkill skill adapters, so the oracle is the validated source
-    program rather than a hidden static shortcut.
-    """
+    """Return the current source program as the deterministic baseline."""
 
     return task.source_program.strip()
 
@@ -50,139 +46,15 @@ def build_real_failure_report(
         )
     )
 
-    if task.task_id == "pick_cube":
-        failed_api = str((failed_event or {}).get("api", "unknown skill"))
-        return FailureReport(
-            task_name=task.task_id,
-            instruction=task.instruction,
-            robot_name=target_profile.name,
-            expected={
-                "execution_result": "success",
-                "grasp_cube": "robot.grasp(cube) returns True",
-                "place_cube": "robot.place(cube, goal) returns True after grasp succeeds",
-            },
-            actual={
-                "execution_result": "failure",
-                "failure_type": failed_record.failure_type,
-                "failure_layer": failed_record.failure_layer,
-                "message": message,
-                "failed_skill_call": failed_step,
-            },
-            diagnosis=[
-                f"Execution log failed at {failed_step}.",
-                message,
-                (
-                    "The failing operation was a real ManiSkill-backed skill "
-                    f"wrapper call: {failed_api}."
-                ),
-            ],
-            suggestions=[
-                "Keep the grasp guard: only call place after robot.grasp(cube) returns True.",
-                "If grasp fails, set ret_val to a clear failure string.",
-                "Use only the allowed high-level skill API; do not invent object pose APIs.",
-                "If the same code succeeds under a planner control mode, report this as a controller/skill-wrapper portability issue.",
-            ],
-        )
-
-    if task.task_id == "peg_insertion":
-        return FailureReport(
-            task_name=task.task_id,
-            instruction=task.instruction,
-            robot_name=target_profile.name,
-            expected={
-                "execution_result": "success",
-                "grasp_peg": "robot.grasp(peg) returns True",
-                "align_peg": "robot.align_to_target(peg, hole, tolerance=...) returns True",
-                "insert_peg": "robot.insert(peg, hole, speed=...) returns True",
-            },
-            actual={
-                "execution_result": "failure",
-                "failure_type": failed_record.failure_type,
-                "failure_layer": failed_record.failure_layer,
-                "message": message,
-                "failed_skill_call": failed_step,
-            },
-            diagnosis=[
-                f"Execution log failed at {failed_step}.",
-                message,
-                "Peg insertion is contact-sensitive, so alignment and insertion speed must be conservative.",
-            ],
-            suggestions=[
-                "Call align_to_target before insert and check its return value.",
-                "Choose tolerance no tighter than the target Capability Card recommends.",
-                "Choose insertion speed no faster than the target Capability Card limit.",
-                "Use explicit numeric values from the prompt instead of hidden robot fields.",
-            ],
-        )
-
-    if task.task_id == "stack_cube":
-        return FailureReport(
-            task_name=task.task_id,
-            instruction=task.instruction,
-            robot_name=target_profile.name,
-            expected={
-                "execution_result": "success",
-                "grasp_cubeA": "robot.grasp(cubeA) returns True",
-                "place_cubeA_on_cubeB": "robot.place(cubeA, cubeB) returns True",
-                "stack_state": "cubeA is on cubeB and static after release",
-            },
-            actual={
-                "execution_result": "failure",
-                "failure_type": failed_record.failure_type,
-                "failure_layer": failed_record.failure_layer,
-                "message": message,
-                "failed_skill_call": failed_step,
-            },
-            diagnosis=[
-                f"Execution log failed at {failed_step}.",
-                message,
-                "Stacking requires both placement accuracy and post-release stability.",
-            ],
-            suggestions=[
-                "Keep the grasp guard: only call place after robot.grasp(cubeA) returns True.",
-                "Place cubeA on cubeB using the high-level place API, not raw object pose access.",
-                "If placement fails after release, treat it as a skill-wrapper/controller stability issue.",
-                "Use only the allowed high-level skill API.",
-            ],
-        )
-
-    if task.task_id == "pull_cube_tool":
-        return FailureReport(
-            task_name=task.task_id,
-            instruction=task.instruction,
-            robot_name=target_profile.name,
-            expected={
-                "execution_result": "success",
-                "hook_tool": "robot.hook_object(l_shape_tool, cube) returns True",
-                "pull_cube": "robot.pull_with_tool(l_shape_tool, cube, workspace) returns True",
-                "workspace_state": "cube is pulled back into the robot workspace",
-            },
-            actual={
-                "execution_result": "failure",
-                "failure_type": failed_record.failure_type,
-                "failure_layer": failed_record.failure_layer,
-                "message": message,
-                "failed_skill_call": failed_step,
-            },
-            diagnosis=[
-                f"Execution log failed at {failed_step}.",
-                message,
-                "The source-level tool-use order was already correct: hook_object succeeded before pull_with_tool.",
-                "The failure happened during the physical pull, so it is a tool-use execution or skill-wrapper issue rather than a missing direct grasp call.",
-            ],
-            suggestions=[
-                "Keep the sequence hook_object(tool, cube) -> pull_with_tool(tool, cube, workspace).",
-                "Do not add robot.grasp(tool); hook_object already grasps and positions the L-shaped tool.",
-                "If high-level code cannot change pull distance or hook geometry enough to solve the failure, preserve the source sequence and report `infeasible: target skill wrapper or planner needs migration`.",
-                "Use only the allowed high-level skill API.",
-            ],
-        )
-
     return FailureReport(
         task_name=task.task_id,
         instruction=task.instruction,
         robot_name=target_profile.name,
-        expected={"execution_result": "success"},
+        expected={
+            "execution_result": "success",
+            "pull_cube": "robot.pull(cube, goal) returns True",
+            "target_state": "cube is pulled onto the goal region",
+        },
         actual={
             "execution_result": "failure",
             "failure_type": failed_record.failure_type,
@@ -190,12 +62,36 @@ def build_real_failure_report(
             "message": message,
             "failed_skill_call": failed_step,
         },
-        diagnosis=[f"Execution log failed at {failed_step}.", message],
+        diagnosis=[
+            f"Execution log failed at {failed_step}.",
+            message,
+            "PullCube-v1 is a contact task, so failure is contact/controller migration evidence.",
+        ],
         suggestions=[
+            "Use robot.pull(cube, goal) and tune only exposed contact parameters.",
+            "Do not add robot.grasp(cube); PullCube-v1 is solved by contact pulling.",
+            "If contact parameters cannot solve the failure, report `infeasible: target contact/controller migration required`.",
             "Use only the allowed high-level skill API.",
-            "Check each skill return value before calling the next skill.",
         ],
     )
+
+
+def _first_failed_event(execution_log: Any) -> dict[str, Any] | None:
+    if not isinstance(execution_log, list):
+        return None
+    for event in execution_log:
+        if isinstance(event, dict) and event.get("ok") is False:
+            return event
+    return None
+
+
+def _format_failed_step(event: dict[str, Any] | None) -> str:
+    if not event:
+        return "unknown"
+    step = event.get("step", "?")
+    api = event.get("api", "unknown")
+    args = event.get("args", {})
+    return f"step {step}: {api}({args})"
 
 
 def _sanitize_failure_message(message: str) -> str:
@@ -206,28 +102,7 @@ def _sanitize_failure_message(message: str) -> str:
     )
     text = re.sub(
         r"exceeds [\w_]+ limit [0-9.]+",
-        "exceeds the target robot insertion speed limit",
+        "exceeds the target robot limit",
         text,
     )
     return text
-
-
-def _first_failed_event(execution_log: Any) -> Optional[Dict[str, Any]]:
-    if not isinstance(execution_log, list):
-        return None
-    for event in execution_log:
-        if isinstance(event, dict) and event.get("ok") is False:
-            return event
-    return None
-
-
-def _format_failed_step(event: Optional[Dict[str, Any]]) -> str:
-    if not event:
-        return "unknown skill call"
-    step = event.get("step", "?")
-    api = event.get("api", "unknown_api")
-    args = event.get("args", {})
-    if isinstance(args, dict) and args:
-        arg_text = ", ".join(f"{key}={value!r}" for key, value in sorted(args.items()))
-        return f"step {step}: {api}({arg_text})"
-    return f"step {step}: {api}(...)"

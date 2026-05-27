@@ -47,12 +47,7 @@ def build_iterative_prompt(
         "# Allowed API",
         "- scene.get_object(name)",
         "- scene.get_region(name)",
-        "- robot.grasp(obj)",
-        "- robot.place(obj, target)",
-        "- robot.align_to_target(obj, target, tolerance)",
-        "- robot.insert(obj, target, speed)",
-        "- robot.hook_object(tool, obj)",
-        "- robot.pull_with_tool(tool, obj, target)",
+        "- robot.pull(obj, target)",
         "",
         "# Safety constraints",
         "- Output only executable Python code. Do not include Markdown.",
@@ -72,18 +67,15 @@ def build_iterative_prompt(
         "",
         target_profile.to_prompt_section(),
     ]
-    if task.task_id == "pull_cube_tool":
+    if task.task_id == "pull_cube":
         lines.extend(
             [
                 "",
                 "# Extra tunable API for this task",
-                "- robot.hook_object(tool, cube, hook_y_offset=-0.067, behind_margin=0.0, approach_extra=0.08, lift_height=0.35, tool_grasp_x_offset=0.08)",
-                '- robot.pull_with_tool(tool, cube, workspace, distance=0.35, stages=1, pull_frame="toward_base")',
-                '- pull_frame can be "tool", "world", or "toward_base".',
-                "- For xarm6, you may tune hook_y_offset, behind_margin, tool_grasp_x_offset, pull distance, stages, and pull_frame.",
-                "- hook_object already grasps the L-shaped tool and positions it behind the cube.",
-                "- Do not call robot.grasp(tool) for l_shape_tool; direct tool grasp is rejected by this task wrapper.",
-                "- If the simulator feedback shows the failure is in target skill/controller reachability, you may return `infeasible: target adapter/controller migration required`.",
+                "- robot.pull(cube, goal, contact_x_offset=0.07, contact_z_offset=0.02, drag_extra=0.02, stages=4)",
+                "- You may tune contact_x_offset, contact_z_offset, drag_extra, and stages.",
+                "- Do not invent grasp/place/tool APIs for PullCube-v1; this is a contact-pulling task.",
+                "- If simulator feedback shows the failure is in target contact/controller reachability, you may return `infeasible: target adapter/controller migration required`.",
             ]
         )
 
