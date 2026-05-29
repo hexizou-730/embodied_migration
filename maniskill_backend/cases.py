@@ -96,10 +96,45 @@ CASE02_PULL_CUBE_XARM6 = FullMigrationCase(
     ),
 )
 
+CASE03_PULL_CUBE_XARM6_DIAGNOSTIC_LLM = FullMigrationCase(
+    case_id="case03_pull_cube_panda_to_xarm6_diagnostic_llm",
+    case_number=3,
+    title="PullCube Panda to xarm6_robotiq with diagnostic LLM feedback",
+    task_id="pull_cube",
+    source_robot="panda",
+    target_robot="xarm6_robotiq",
+    source_control_mode="pd_ee_delta_pos",
+    target_control_mode="pd_ee_delta_pos",
+    target_program_path="maniskill_backend/case_programs/case01_pull_cube.py",
+    target_adapter_module="maniskill_backend.generated_adapters.case03_xarm6_diagnostic_llm_pull_cube",
+    target_adapter_path="maniskill_backend/generated_adapters/case03_xarm6_diagnostic_llm_pull_cube.py",
+    seed=0,
+    max_attempts=3,
+    max_episode_steps=500,
+    migration_layers=(
+        "program",
+        "skill_adapter",
+        "controller_primitive",
+        "contact_primitive",
+    ),
+    required_evidence=(
+        "Panda source task stack succeeds in real ManiSkill simulation.",
+        "A non-oracle xarm6 template fails before LLM generation.",
+        "The LLM receives xarm6 diagnostic evidence including the successful raw contact sequence.",
+        "The generated adapter is evaluated with real ManiSkill execution.",
+    ),
+    notes=(
+        "LLM-with-diagnostic-feedback case. This case is separate from the "
+        "human-written oracle adapter so LLM-generated success can be measured "
+        "without conflating it with hand-authored code."
+    ),
+)
+
 
 FULL_MIGRATION_CASES: Dict[str, FullMigrationCase] = {
     CASE01_PULL_CUBE.case_id: CASE01_PULL_CUBE,
     CASE02_PULL_CUBE_XARM6.case_id: CASE02_PULL_CUBE_XARM6,
+    CASE03_PULL_CUBE_XARM6_DIAGNOSTIC_LLM.case_id: CASE03_PULL_CUBE_XARM6_DIAGNOSTIC_LLM,
 }
 
 PRIMARY_FULL_MIGRATION_CASE_ID = CASE02_PULL_CUBE_XARM6.case_id

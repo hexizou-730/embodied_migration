@@ -510,6 +510,62 @@ Panda 的 closed-loop contact pull
 
 这说明同一个 LMP 程序可以保持不变，但不同 embodiment 需要不同的执行适配层。
 
+### 4.8 下一步：LLM-with-diagnostic 生成实验
+
+需要特别区分：
+
+```text
+xarm6 oracle adapter 成功 != LLM 自动迁移成功
+```
+
+当前 xarm6 成功 adapter 是根据诊断结果手写的 oracle，因此只能作为：
+
+- 可行性上限；
+- 成功 contact primitive 证据；
+- 给 LLM 的诊断反馈。
+
+为了验证 LLM 能否在诊断反馈后生成成功迁移代码，新增独立 case：
+
+```text
+case03_pull_cube_panda_to_xarm6_diagnostic_llm
+```
+
+这个 case 使用一个故意不完整的 seed adapter：
+
+```text
+x_plus → down
+```
+
+该 seed adapter 会失败，因为它省略了关键动作：
+
+```text
+drag_x_minus
+```
+
+然后 prompt 会给 Opus 4.6 提供诊断发现的成功轨迹：
+
+```text
+x_plus:       (0.8, 0.0, 0.0), steps=100
+down:         (0.0, 0.0, -0.8), steps=80
+drag_x_minus: (-0.8, 0.0, -0.05), steps=160
+```
+
+如果 LLM 在 `case03` 中生成的 adapter 成功，才可以写成：
+
+```text
+LLM with diagnostic feedback generated a successful xarm6 migration adapter.
+```
+
+运行命令：
+
+```bash
+python -m maniskill_backend.module_generation_runner \
+  --case case03_pull_cube_panda_to_xarm6_diagnostic_llm \
+  --max-attempts 3 \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
 ## 5. 最新诊断：Fetch 接触侧不可达
 
 为了判断 Fetch 是不是只是 Z 轴高度不够，我们做了 Z 轴下降测试。
