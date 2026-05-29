@@ -58,7 +58,7 @@ TASK_SPECS: Dict[str, TaskSpec] = {
         instruction="Pull the cube backward onto the target region.",
         instruction_cn="把方块向后拉到目标区域。",
         source_robot="panda",
-        target_robots=("panda", "fetch"),
+        target_robots=("panda", "fetch", "xarm6_robotiq"),
         source_program=PULL_CUBE_SOURCE,
         expected_failure_modes=(
             "contact execution failure",
@@ -68,7 +68,8 @@ TASK_SPECS: Dict[str, TaskSpec] = {
         ),
         notes=(
             "Current primary migration task. PullCube-v1 is an official "
-            "ManiSkill pulling/contact task supported by panda and fetch."
+            "ManiSkill pulling/contact task currently studied with panda, fetch, "
+            "and xarm6_robotiq."
         ),
     ),
 }

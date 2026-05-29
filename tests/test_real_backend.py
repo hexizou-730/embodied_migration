@@ -33,37 +33,43 @@ from maniskill_backend.view import records_to_md
 
 
 class RealBackendTest(unittest.TestCase):
-    def test_current_scope_is_pull_cube_panda_to_fetch(self):
-        self.assertEqual([profile.name for profile in iter_robot_profiles()], ["panda", "fetch"])
+    def test_current_scope_is_pull_cube_panda_to_fetch_and_xarm6(self):
+        self.assertEqual([profile.name for profile in iter_robot_profiles()], ["panda", "fetch", "xarm6_robotiq"])
         self.assertEqual([task.task_id for task in iter_task_specs()], ["pull_cube"])
         task = get_task_spec("PullCube-v1")
         self.assertEqual(task.task_id, "pull_cube")
         self.assertEqual(task.maniskill_env_id, "PullCube-v1")
         self.assertEqual(task.source_robot, "panda")
-        self.assertEqual(task.target_robots, ("panda", "fetch"))
+        self.assertEqual(task.target_robots, ("panda", "fetch", "xarm6_robotiq"))
         self.assertIn("robot.pull", task.source_program)
 
-    def test_case01_is_pull_cube_migration(self):
+    def test_primary_case_is_xarm6_success_candidate(self):
         case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
         self.assertIs(case, PRIMARY_FULL_MIGRATION_CASE)
-        self.assertEqual(case.case_id, "case01_pull_cube_panda_to_fetch")
+        self.assertEqual(case.case_id, "case02_pull_cube_panda_to_xarm6")
         self.assertEqual(case.task_id, "pull_cube")
         self.assertEqual(case.source_robot, "panda")
-        self.assertEqual(case.target_robot, "fetch")
+        self.assertEqual(case.target_robot, "xarm6_robotiq")
         self.assertEqual(case.target_control_mode, "pd_ee_delta_pos")
         self.assertEqual(case.target_program_path, "maniskill_backend/case_programs/case01_pull_cube.py")
-        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case01_fetch_pull_cube")
-        self.assertEqual(case.target_adapter_path, "maniskill_backend/generated_adapters/case01_fetch_pull_cube.py")
+        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case02_xarm6_pull_cube")
+        self.assertEqual(case.target_adapter_path, "maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py")
         self.assertIn("contact_primitive", case.migration_layers)
+
+    def test_case01_remains_fetch_failure_case(self):
+        case = get_full_migration_case("case01_pull_cube_panda_to_fetch")
+        self.assertEqual(case.target_robot, "fetch")
+        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case01_fetch_pull_cube")
 
     def test_profiles_are_promptable(self):
         panda = get_robot_profile("panda").to_prompt_section()
         fetch = get_robot_profile("fetch").to_prompt_section()
+        xarm = get_robot_profile("xarm6_robotiq").to_prompt_section()
         self.assertIn("Robot Profile: panda", panda)
         self.assertIn("Robot Profile: fetch", fetch)
+        self.assertIn("Robot Profile: xarm6_robotiq", xarm)
         self.assertIn("mobile_base", fetch)
-        with self.assertRaises(KeyError):
-            get_robot_profile("xarm6_robotiq")
+        self.assertIn("fixed-base", xarm)
 
     def test_method_set_is_real_only(self):
         self.assertEqual(METHODS, ("source-copy", "llm_card_report", "oracle"))
@@ -170,6 +176,9 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         robot = _build_robot_adapter("pull_cube", Env(), "pd_ee_delta_pos", "fetch")
         self.assertIsInstance(robot, ManiSkillPullCubeRobot)
         self.assertEqual(robot.robot_uid, "fetch")
+        xarm_robot = _build_robot_adapter("pull_cube", Env(), "pd_ee_delta_pos", "xarm6_robotiq")
+        self.assertIsInstance(xarm_robot, ManiSkillPullCubeRobot)
+        self.assertEqual(xarm_robot.robot_uid, "xarm6_robotiq")
 
     def test_generated_target_adapter_module_loads(self):
         class Space:
@@ -189,6 +198,34 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         )
         self.assertIsInstance(robot, ManiSkillPullCubeRobot)
         self.assertEqual(robot.robot_uid, "fetch")
+        xarm_robot = _build_robot_adapter_from_module(
+            "maniskill_backend.generated_adapters.case02_xarm6_pull_cube",
+            Env(),
+            "pd_ee_delta_pos",
+            "xarm6_robotiq",
+        )
+        self.assertIsInstance(xarm_robot, ManiSkillPullCubeRobot)
+        self.assertEqual(xarm_robot.robot_uid, "xarm6_robotiq")
+
+        class XArmSpace:
+            shape = (9,)
+            dtype = np.float32
+            low = -np.ones(9, dtype=np.float32)
+            high = np.ones(9, dtype=np.float32)
+
+        class XArmEnv:
+            action_space = XArmSpace()
+
+        xarm_wide = _build_robot_adapter_from_module(
+            "maniskill_backend.generated_adapters.case02_xarm6_pull_cube",
+            XArmEnv(),
+            "pd_ee_delta_pos",
+            "xarm6_robotiq",
+        )
+        action = xarm_wide._make_action(np.array([0.2, -0.1, 0.05]), gripper=-1.0)
+        self.assertEqual(action.shape, (9,))
+        self.assertTrue(np.allclose(action[:3], np.array([0.2, -0.1, 0.05])))
+        self.assertTrue(np.allclose(action[3:], -np.ones(6)))
 
     def test_pull_cube_robot_action_shape(self):
         class Space:

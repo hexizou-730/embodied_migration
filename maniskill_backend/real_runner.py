@@ -36,10 +36,10 @@ def _default_control_mode(task_id: str, robot_uid: str) -> str:
 
 def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: str) -> Any:
     if task_id == "pull_cube":
-        if robot_uid in {"panda", "fetch"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
+        if robot_uid in {"panda", "fetch", "xarm6_robotiq"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
             return ManiSkillPullCubeRobot(env, robot_uid=robot_uid, control_mode=control_mode)
         raise ValueError(
-            "PullCube real runner currently supports panda/fetch with "
+            "PullCube real runner currently supports panda/fetch/xarm6_robotiq with "
             f"pd_ee_delta_* control, got robot={robot_uid!r}, control_mode={control_mode!r}."
         )
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")

@@ -62,13 +62,48 @@ CASE01_PULL_CUBE = FullMigrationCase(
     ),
 )
 
+CASE02_PULL_CUBE_XARM6 = FullMigrationCase(
+    case_id="case02_pull_cube_panda_to_xarm6",
+    case_number=2,
+    title="PullCube Panda to xarm6_robotiq",
+    task_id="pull_cube",
+    source_robot="panda",
+    target_robot="xarm6_robotiq",
+    source_control_mode="pd_ee_delta_pos",
+    target_control_mode="pd_ee_delta_pos",
+    target_program_path="maniskill_backend/case_programs/case01_pull_cube.py",
+    target_adapter_module="maniskill_backend.generated_adapters.case02_xarm6_pull_cube",
+    target_adapter_path="maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py",
+    seed=0,
+    max_attempts=3,
+    max_episode_steps=300,
+    migration_layers=(
+        "program",
+        "skill_adapter",
+        "controller_primitive",
+        "contact_primitive",
+    ),
+    required_evidence=(
+        "Panda source task stack succeeds in real ManiSkill simulation.",
+        "xarm6_robotiq source-copy or initial adapter execution exposes target portability evidence.",
+        "Target adapter changes are evaluated through real ManiSkill execution.",
+        "Final success or failure is evaluated with real success state and logs.",
+    ),
+    notes=(
+        "Primary success-candidate migration case. xarm6_robotiq is a fixed-base "
+        "single-arm target, so this case should isolate controller/contact "
+        "migration without Fetch-style mobile-base reachability failures."
+    ),
+)
+
 
 FULL_MIGRATION_CASES: Dict[str, FullMigrationCase] = {
     CASE01_PULL_CUBE.case_id: CASE01_PULL_CUBE,
+    CASE02_PULL_CUBE_XARM6.case_id: CASE02_PULL_CUBE_XARM6,
 }
 
-PRIMARY_FULL_MIGRATION_CASE_ID = CASE01_PULL_CUBE.case_id
-PRIMARY_FULL_MIGRATION_CASE = CASE01_PULL_CUBE
+PRIMARY_FULL_MIGRATION_CASE_ID = CASE02_PULL_CUBE_XARM6.case_id
+PRIMARY_FULL_MIGRATION_CASE = CASE02_PULL_CUBE_XARM6
 
 
 def get_full_migration_case(case_id: str) -> FullMigrationCase:

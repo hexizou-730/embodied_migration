@@ -1,4 +1,4 @@
-"""Robot capability profiles for the current two-robot migration study."""
+"""Robot capability profiles for the current PullCube migration study."""
 
 from __future__ import annotations
 
@@ -111,6 +111,38 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
                 "move_to_contact",
                 "drag_contact",
                 "base_aware_contact",
+            ],
+        ),
+    ),
+    "xarm6_robotiq": RobotProfile(
+        name="xarm6_robotiq",
+        role="target robot / fixed single arm",
+        notes=(
+            "High-probability target embodiment for PullCube-v1 migration. "
+            "Unlike Fetch, this target keeps a fixed-base single-arm structure, "
+            "so the migration should focus on reach, TCP/contact geometry, and "
+            "controller response rather than mobile-base coordination."
+        ),
+        card=_card(
+            reach_m=0.70,
+            payload_kg=5.0,
+            repeatability_m=0.0001,
+            dof=6,
+            gripper_type="parallel_jaw",
+            mobile_base=False,
+            workspace_radius_m=0.70,
+            ik_accuracy_m=0.02,
+            recommended_alignment_tolerance_m=0.015,
+            available_skills=[
+                "pull",
+                "move_to_contact",
+                "drag_contact",
+            ],
+            migration_notes=[
+                "Fixed-base target: do not use mobile-base actions.",
+                "Compared with Panda, xarm6 has less kinematic redundancy.",
+                "Prefer conservative contact heights and staged dragging.",
+                "If PullCube contact fails, tune contact side/offset and motion steps before declaring infeasible.",
             ],
         ),
     ),
