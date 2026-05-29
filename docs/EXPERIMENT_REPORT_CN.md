@@ -320,6 +320,83 @@ goal_pos = [-0.2007, 0.0536, 0.0010]
 
 这说明 Fetch 当前建立接触的方向是错的。
 
+### 4.5 xarm6_robotiq 目标迁移实验
+
+在 Fetch 被记录为失败案例后，新增目标机器人：
+
+```text
+xarm6_robotiq
+```
+
+对应迁移 case：
+
+```text
+case02_pull_cube_panda_to_xarm6
+```
+
+运行命令：
+
+```bash
+python -m maniskill_backend.module_generation_runner \
+  --case case02_pull_cube_panda_to_xarm6 \
+  --max-attempts 3 \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+使用模型：
+
+```text
+anthropic/claude-opus-4.6
+```
+
+实验结果：
+
+```text
+最终结果：失败
+迭代次数：3
+主要失败层：skill_adapter / contact geometry
+```
+
+xarm6_robotiq 和 Panda 的关键差异：
+
+| 项目 | Panda | xarm6_robotiq |
+|---|---|---|
+| DoF | 7 | 6 |
+| 动作空间 | 4维 | 9维 |
+| 夹爪 | Panda parallel jaw | Robotiq 多指夹爪 |
+| 底盘 | 固定 | 固定 |
+| 主要迁移难点 | 原始成功 | 动作映射 + 接触维持 |
+
+LLM 生成的 adapter 主要修改：
+
+- 重写动作空间映射：`action[0:3]` 作为 xyz，`action[3:]` 作为 gripper / hand 维度；
+- 放宽动作空间校验，支持 xarm6 的 9 维动作空间；
+- 增加运动步数，减小单步最大位移；
+- 调整接触偏移：`contact_x_offset` 和 `contact_z_offset`；
+- 增加持续下压力；
+- 使用多组接触候选参数重试；
+- 增加按压阶段，试图让末端执行器和方块建立稳定接触。
+
+失败证据：
+
+```text
+R2: cube_goal_xy = 0.2000m, tcp_cube_xy = 0.1024m
+R3: cube_goal_xy = 0.1488m, tcp_cube_xy = 0.0896m
+```
+
+解释：
+
+- R2 中方块基本没有移动，说明接触没有有效建立；
+- R3 中方块移动了约 5 cm，说明 xarm6 已经能产生部分有效接触；
+- 但目标需要约 20 cm 的移动，当前只完成约 25%；
+- TCP 与 cube 的 xy 距离仍在约 9 cm，接触保持不够稳定；
+- 目前不是 Fetch 那种“完全无法到正确接触侧”的不可行问题，而是接触-拖拽控制不足。
+
+当前结论：
+
+**Panda → xarm6_robotiq 比 Panda → Fetch 更接近成功，但仍未完成任务。失败主要来自 contact primitive / skill adapter 层，下一步应针对 xarm6 做更明确的接触诊断和手写 oracle adapter。**
+
 ## 5. 最新诊断：Fetch 接触侧不可达
 
 为了判断 Fetch 是不是只是 Z 轴高度不够，我们做了 Z 轴下降测试。
@@ -424,6 +501,7 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | LLM adapter generation | 已跑 | 能修改 adapter，但未成功 |
 | Fetch oracle adapter | 已跑 | 仍失败，说明不是单纯 LLM 质量问题 |
 | 接触侧诊断 | 已完成 | Fetch 无法到正确接触侧 |
+| xarm6 module generation | 已跑 | 3轮后仍失败，但方块已向目标方向移动约 5 cm |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
@@ -467,7 +545,18 @@ python -m maniskill_backend.module_generation_runner \
   --render-backend gpu
 ```
 
-### 9.1 固定当前失败案例
+### 9.1 xarm6 下一步诊断
+
+xarm6 当前不是完全不可行，而是接触拖拽不足。下一步应优先做：
+
+1. 读取 xarm6 最终生成 adapter，确认 LLM 具体改了哪些接触参数；
+2. 做 xarm6 的 action-space 诊断，确认 9维动作中哪些维度真正控制 gripper；
+3. 做接触方向诊断，测试 `x+` 接近、`z` 下压、`x-` 拖拽是否能稳定推动 cube；
+4. 手写一个最小 xarm6 oracle adapter，验证成功上限；
+5. 如果 oracle 成功，再让 LLM 模仿该结构生成 adapter；
+6. 如果 oracle 也失败，则把 xarm6 记录为 contact-force/control-primitive failure。
+
+### 9.2 固定当前失败案例
 
 接下来应把 Fetch 的失败明确记录为：
 
@@ -477,7 +566,7 @@ target embodiment infeasible under current scene geometry
 
 并在代码/日志中把这类失败从普通 execution failure 中区分出来。
 
-### 9.2 选择新的目标机器人或新任务设置
+### 9.3 选择新的目标机器人或新任务设置
 
 为了让论文不仅有失败案例，还需要至少一个成功迁移案例。
 
