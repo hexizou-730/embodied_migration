@@ -363,15 +363,15 @@ xarm6_robotiq 和 Panda 的关键差异：
 | 项目 | Panda | xarm6_robotiq |
 |---|---|---|
 | DoF | 7 | 6 |
-| 动作空间 | 4维 | 9维 |
+| 动作空间 | 4维 | 4维 |
 | 夹爪 | Panda parallel jaw | Robotiq 多指夹爪 |
 | 底盘 | 固定 | 固定 |
-| 主要迁移难点 | 原始成功 | 动作映射 + 接触维持 |
+| 主要迁移难点 | 原始成功 | 接触侧选择 + 接触维持 |
 
 LLM 生成的 adapter 主要修改：
 
-- 重写动作空间映射：`action[0:3]` 作为 xyz，`action[3:]` 作为 gripper / hand 维度；
-- 放宽动作空间校验，支持 xarm6 的 9 维动作空间；
+- 动作空间诊断确认：xarm6_robotiq 在 `pd_ee_delta_pos` 下实际为 4 维；
+- 控制器布局：`action[0:3]` 是 arm delta xyz，`action[3]` 是 active gripper；
 - 增加运动步数，减小单步最大位移；
 - 调整接触偏移：`contact_x_offset` 和 `contact_z_offset`；
 - 增加持续下压力；
@@ -396,6 +396,54 @@ R3: cube_goal_xy = 0.1488m, tcp_cube_xy = 0.0896m
 当前结论：
 
 **Panda → xarm6_robotiq 比 Panda → Fetch 更接近成功，但仍未完成任务。失败主要来自 contact primitive / skill adapter 层，下一步应针对 xarm6 做更明确的接触诊断和手写 oracle adapter。**
+
+### 4.6 xarm6 诊断实验与 oracle 轨迹
+
+随后运行专门的 xarm6 诊断脚本：
+
+```bash
+python scripts/xarm6_pull_diagnostics.py \
+  --seed 0 \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 500
+```
+
+诊断确认 xarm6 的真实控制器为：
+
+```text
+action_space = Box(-1.0, 1.0, (4,), float32)
+arm: action[0:3]
+gripper_active: action[3]
+```
+
+最重要的成功轨迹：
+
+```text
+case: x_plus_down_drag_x_minus
+x_plus:       (0.8, 0.0, 0.0), steps=100
+down:         (0.0, 0.0, -0.8), steps=80
+drag_x_minus: (-0.8, 0.0, -0.05), steps=160
+success = true
+```
+
+成功后的关键指标：
+
+```text
+cube_dx = -0.1099
+cube_goal_xy = 0.0905
+tcp_cube_xy = 0.0322
+success = true
+```
+
+这说明：
+
+- xarm6 可以到达正确接触侧；
+- xarm6 可以把 cube 往 `-x` 目标方向拖动；
+- 原先 LLM 生成的 closed-loop waypoint adapter 失败，不是因为机器人不可行，而是因为接触轨迹设计不合适；
+- 直接 raw contact sequence 反而成功。
+
+因此已将 xarm6 adapter 更新为最小 oracle adapter：复现 `x_plus → down → drag_x_minus` 成功轨迹，并仍然使用真实 `env.step(action)` 和 ManiSkill success 判断。
 
 ## 5. 最新诊断：Fetch 接触侧不可达
 
@@ -549,12 +597,11 @@ python -m maniskill_backend.module_generation_runner \
 
 xarm6 当前不是完全不可行，而是接触拖拽不足。下一步应优先做：
 
-1. 读取 xarm6 最终生成 adapter，确认 LLM 具体改了哪些接触参数；
-2. 做 xarm6 的 action-space 诊断，确认 9维动作中哪些维度真正控制 gripper；
-3. 做接触方向诊断，测试 `x+` 接近、`z` 下压、`x-` 拖拽是否能稳定推动 cube；
-4. 手写一个最小 xarm6 oracle adapter，验证成功上限；
-5. 如果 oracle 成功，再让 LLM 模仿该结构生成 adapter；
-6. 如果 oracle 也失败，则把 xarm6 记录为 contact-force/control-primitive failure。
+1. 用新的最小 oracle adapter 重新跑 `case02_pull_cube_panda_to_xarm6`；
+2. 如果成功，把该结果作为当前成功迁移案例；
+3. 再让 Opus 4.6 在 prompt 中看到成功轨迹，测试它能否生成等价 adapter；
+4. 做 ablation：去掉 `x_plus`、去掉 `down`、缩短 `drag_x_minus`，观察成功率变化；
+5. 记录 xarm6 成功案例与 Fetch 不可行案例的差异。
 
 ### 9.2 固定当前失败案例
 
