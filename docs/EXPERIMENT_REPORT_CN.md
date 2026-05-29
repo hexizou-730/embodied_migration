@@ -393,9 +393,9 @@ R3: cube_goal_xy = 0.1488m, tcp_cube_xy = 0.0896m
 - TCP 与 cube 的 xy 距离仍在约 9 cm，接触保持不够稳定；
 - 目前不是 Fetch 那种“完全无法到正确接触侧”的不可行问题，而是接触-拖拽控制不足。
 
-当前结论：
+阶段性结论：
 
-**Panda → xarm6_robotiq 比 Panda → Fetch 更接近成功，但仍未完成任务。失败主要来自 contact primitive / skill adapter 层，下一步应针对 xarm6 做更明确的接触诊断和手写 oracle adapter。**
+**Panda → xarm6_robotiq 比 Panda → Fetch 更接近成功。最初的 LLM-generated adapter 仍未完成任务，失败主要来自 contact primitive / skill adapter 层，因此后续针对 xarm6 做了更明确的接触诊断和手写 oracle adapter。**
 
 ### 4.6 xarm6 诊断实验与 oracle 轨迹
 
@@ -444,6 +444,71 @@ success = true
 - 直接 raw contact sequence 反而成功。
 
 因此已将 xarm6 adapter 更新为最小 oracle adapter：复现 `x_plus → down → drag_x_minus` 成功轨迹，并仍然使用真实 `env.step(action)` 和 ManiSkill success 判断。
+
+### 4.7 xarm6 oracle adapter 真实执行成功
+
+将诊断得到的成功轨迹写入：
+
+```text
+maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py
+```
+
+随后在远程服务器运行真实 xarm6 目标 adapter：
+
+```bash
+python -m maniskill_backend.real_runner \
+  --task pull_cube \
+  --robot xarm6_robotiq \
+  --method target-module-generation \
+  --seed 0 \
+  --control-mode pd_ee_delta_pos \
+  --sim-backend auto \
+  --render-backend gpu \
+  --max-episode-steps 500 \
+  --code-file maniskill_backend/case_programs/case01_pull_cube.py \
+  --adapter-module maniskill_backend.generated_adapters.case02_xarm6_pull_cube
+```
+
+最终输出：
+
+```text
+success = true
+failure_type = success
+failure_layer = success
+message = ret_val=True
+elapsed_steps = 191
+```
+
+执行日志：
+
+```text
+api = pull
+args = {"obj": "cube", "target": "goal", "oracle": true}
+result = true
+ok = true
+```
+
+结论：
+
+**Panda → xarm6_robotiq 当前已经形成第一个成功迁移案例。**
+
+这个成功不是通过修改高层程序得到的，高层程序仍然是：
+
+```python
+cube = scene.get_object("cube")
+goal = scene.get_region("goal")
+ret_val = robot.pull(cube, goal)
+```
+
+真正发生迁移的是目标机器人 adapter：
+
+```text
+Panda 的 closed-loop contact pull
+→ xarm6 的 measured raw contact sequence
+→ x_plus → down → drag_x_minus
+```
+
+这说明同一个 LMP 程序可以保持不变，但不同 embodiment 需要不同的执行适配层。
 
 ## 5. 最新诊断：Fetch 接触侧不可达
 
@@ -550,6 +615,8 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | Fetch oracle adapter | 已跑 | 仍失败，说明不是单纯 LLM 质量问题 |
 | 接触侧诊断 | 已完成 | Fetch 无法到正确接触侧 |
 | xarm6 module generation | 已跑 | 3轮后仍失败，但方块已向目标方向移动约 5 cm |
+| xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
+| xarm6 oracle adapter | 成功 | `success=true`, `elapsed_steps=191` |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
