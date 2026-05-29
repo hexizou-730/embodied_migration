@@ -510,7 +510,7 @@ Panda 的 closed-loop contact pull
 
 这说明同一个 LMP 程序可以保持不变，但不同 embodiment 需要不同的执行适配层。
 
-### 4.8 下一步：LLM-with-diagnostic 生成实验
+### 4.8 下一步：LLM 生成迁移代码的严格实验
 
 需要特别区分：
 
@@ -522,45 +522,63 @@ xarm6 oracle adapter 成功 != LLM 自动迁移成功
 
 - 可行性上限；
 - 成功 contact primitive 证据；
-- 给 LLM 的诊断反馈。
+- 后续对比的 oracle upper bound。
 
-为了验证 LLM 能否在诊断反馈后生成成功迁移代码，新增独立 case：
-
-```text
-case03_pull_cube_panda_to_xarm6_diagnostic_llm
-```
-
-这个 case 使用一个故意不完整的 seed adapter：
+为了避免“把答案直接喂给 LLM”，后续把 xarm6 分成两个 LLM 条件：
 
 ```text
-x_plus → down
+case03_pull_cube_panda_to_xarm6_failure_feedback
+case04_pull_cube_panda_to_xarm6_abstract_hint
 ```
 
-该 seed adapter 会失败，因为它省略了关键动作：
+两者都从非 oracle 的失败 seed adapter 开始，且都不提供完整成功轨迹。
+
+| Case | 给 LLM 的信息 | 是否泄露完整答案 | 研究含义 |
+|---|---|---|---|
+| `case03` | action space、target profile、失败日志、当前失败 adapter | 否 | 测试 LLM 是否能仅凭失败反馈迁移 |
+| `case04` | case03 信息 + 抽象策略提示 | 否 | 测试 LLM 是否能把抽象接触策略变成代码 |
+| `case02` | 人类诊断出的完整成功轨迹写入 adapter | 是 | oracle upper bound，不算 LLM 自主成功 |
+
+`case04` 允许给出的抽象策略是：
 
 ```text
-drag_x_minus
+从 cube 的正确接触侧建立接触；
+下降到接触高度；
+保持轻微下压力；
+沿 goal 方向拖拽。
 ```
 
-然后 prompt 会给 Opus 4.6 提供诊断发现的成功轨迹：
+但不能给：
 
 ```text
-x_plus:       (0.8, 0.0, 0.0), steps=100
-down:         (0.0, 0.0, -0.8), steps=80
-drag_x_minus: (-0.8, 0.0, -0.05), steps=160
+具体动作数值
+具体 step 数
+完整 oracle 轨迹
 ```
 
-如果 LLM 在 `case03` 中生成的 adapter 成功，才可以写成：
+如果 `case03` 成功，可以写：
 
 ```text
-LLM with diagnostic feedback generated a successful xarm6 migration adapter.
+LLM generated a successful migration adapter from failure feedback.
 ```
 
-运行命令：
+如果 `case04` 成功，可以写：
+
+```text
+LLM generated a successful migration adapter from abstract diagnostic guidance.
+```
+
+运行命令分别为：
 
 ```bash
 python -m maniskill_backend.module_generation_runner \
-  --case case03_pull_cube_panda_to_xarm6_diagnostic_llm \
+  --case case03_pull_cube_panda_to_xarm6_failure_feedback \
+  --max-attempts 3 \
+  --sim-backend auto \
+  --render-backend gpu
+
+python -m maniskill_backend.module_generation_runner \
+  --case case04_pull_cube_panda_to_xarm6_abstract_hint \
   --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
