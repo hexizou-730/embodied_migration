@@ -120,8 +120,19 @@ class ManiSkillDeltaEERobot:
         return getattr(self.env, "unwrapped", self.env)
 
     def _actor_pos(self, name: str) -> np.ndarray:
-        actor = getattr(self._base_env(), name)
-        return _to_numpy(actor.pose.p)
+        base = self._base_env()
+        aliases = {
+            "cube": ("cube", "obj"),
+            "goal": ("goal", "goal_region", "goal_site"),
+            "goal_region": ("goal_region", "goal_site", "goal"),
+            "goal_site": ("goal_site", "goal_region", "goal"),
+        }
+        for candidate in aliases.get(name, (name,)):
+            actor = getattr(base, candidate, None)
+            if actor is not None:
+                return _to_numpy(actor.pose.p)
+        available = ", ".join(k for k in aliases.get(name, (name,)))
+        raise AttributeError(f"{base.__class__.__name__} has none of the actor attributes: {available}")
 
     def _tcp_pos(self) -> np.ndarray:
         agent = self._base_env().agent
