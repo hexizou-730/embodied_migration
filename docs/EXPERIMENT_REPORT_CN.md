@@ -443,17 +443,17 @@ success = true
 - 原先 LLM 生成的 closed-loop waypoint adapter 失败，不是因为机器人不可行，而是因为接触轨迹设计不合适；
 - 直接 raw contact sequence 反而成功。
 
-因此已将 xarm6 adapter 更新为最小 oracle adapter：复现 `x_plus → down → drag_x_minus` 成功轨迹，并仍然使用真实 `env.step(action)` 和 ManiSkill success 判断。
+因此保留一个最小 oracle adapter 作为内部可行性证据：复现 `x_plus → down → drag_x_minus` 成功轨迹，并仍然使用真实 `env.step(action)` 和 ManiSkill success 判断。该 oracle 不作为 LLM 自动迁移结果。
 
 ### 4.7 xarm6 oracle adapter 真实执行成功
 
-将诊断得到的成功轨迹写入：
+将诊断得到的成功轨迹独立保存在：
 
 ```text
-maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py
+maniskill_backend/oracles/xarm6_pull_cube_oracle.py
 ```
 
-随后在远程服务器运行真实 xarm6 目标 adapter：
+随后在远程服务器运行真实 xarm6 oracle：
 
 ```bash
 python -m maniskill_backend.real_runner \
@@ -466,7 +466,7 @@ python -m maniskill_backend.real_runner \
   --render-backend gpu \
   --max-episode-steps 500 \
   --code-file maniskill_backend/case_programs/case01_pull_cube.py \
-  --adapter-module maniskill_backend.generated_adapters.case02_xarm6_pull_cube
+  --adapter-module maniskill_backend.oracles.xarm6_pull_cube_oracle
 ```
 
 最终输出：
@@ -490,7 +490,7 @@ ok = true
 
 结论：
 
-**Panda → xarm6_robotiq 当前已经形成第一个成功迁移案例。**
+**Panda → xarm6_robotiq 当前已证明物理上可行，但还不能称为 LLM 自动迁移成功案例。**
 
 这个成功不是通过修改高层程序得到的，高层程序仍然是：
 
@@ -500,7 +500,7 @@ goal = scene.get_region("goal")
 ret_val = robot.pull(cube, goal)
 ```
 
-真正发生迁移的是目标机器人 adapter：
+人工验证过的目标机器人 adapter 变化是：
 
 ```text
 Panda 的 closed-loop contact pull
@@ -508,9 +508,9 @@ Panda 的 closed-loop contact pull
 → x_plus → down → drag_x_minus
 ```
 
-这说明同一个 LMP 程序可以保持不变，但不同 embodiment 需要不同的执行适配层。
+这说明同一个 LMP 程序可以保持不变，但不同 embodiment 需要不同的执行适配层。下一步需要验证 LLM 能否自动生成这样的目标执行适配层。
 
-### 4.8 下一步：LLM 生成迁移代码的严格实验
+### 4.8 当前主线：LLM 自动生成 xarm6 迁移代码
 
 需要特别区分：
 
@@ -518,67 +518,49 @@ Panda 的 closed-loop contact pull
 xarm6 oracle adapter 成功 != LLM 自动迁移成功
 ```
 
-当前 xarm6 成功 adapter 是根据诊断结果手写的 oracle，因此只能作为：
+当前 xarm6 成功 oracle 是根据诊断结果手写的，因此只能作为：
 
 - 可行性上限；
 - 成功 contact primitive 证据；
 - 后续对比的 oracle upper bound。
 
-为了避免“把答案直接喂给 LLM”，后续把 xarm6 分成两个 LLM 条件：
+为了优先完成最主要的问题，当前只保留一个 xarm6 主实验：
 
 ```text
-case03_pull_cube_panda_to_xarm6_failure_feedback
-case04_pull_cube_panda_to_xarm6_abstract_hint
+case02_pull_cube_panda_to_xarm6
 ```
 
-两者都从非 oracle 的失败 seed adapter 开始，且都不提供完整成功轨迹。
-
-| Case | 给 LLM 的信息 | 是否泄露完整答案 | 研究含义 |
-|---|---|---|---|
-| `case03` | action space、target profile、失败日志、当前失败 adapter | 否 | 测试 LLM 是否能仅凭失败反馈迁移 |
-| `case04` | case03 信息 + 抽象策略提示 | 否 | 测试 LLM 是否能把抽象接触策略变成代码 |
-| `case02` | 人类诊断出的完整成功轨迹写入 adapter | 是 | oracle upper bound，不算 LLM 自主成功 |
-
-`case04` 允许给出的抽象策略是：
+`case02` 从非 oracle 的 waypoint seed adapter 开始。Prompt 允许给出：
 
 ```text
-从 cube 的正确接触侧建立接触；
+真实 action space：arm[0:3] + gripper[3]；
+从 cube 运动方向相反的一侧建立接触；
 下降到接触高度；
 保持轻微下压力；
 沿 goal 方向拖拽。
 ```
 
-但不能给：
+Prompt 不会给出：
 
 ```text
-具体动作数值
-具体 step 数
-完整 oracle 轨迹
+人工 oracle 的具体动作数值；
+人工 oracle 的具体 step 数；
+完整成功轨迹；
+oracle 文件内容。
 ```
 
-如果 `case03` 成功，可以写：
+这样既不是让 LLM 在完全没有物理先验的情况下盲试，也没有把人工答案直接泄露给模型。如果 `case02` 成功，可以写：
 
 ```text
-LLM generated a successful migration adapter from failure feedback.
+LLM generated a successful target adapter from embodiment constraints,
+an abstract contact strategy, and real execution feedback.
 ```
 
-如果 `case04` 成功，可以写：
-
-```text
-LLM generated a successful migration adapter from abstract diagnostic guidance.
-```
-
-运行命令分别为：
+远程运行命令为：
 
 ```bash
 python -m maniskill_backend.module_generation_runner \
-  --case case03_pull_cube_panda_to_xarm6_failure_feedback \
-  --max-attempts 3 \
-  --sim-backend auto \
-  --render-backend gpu
-
-python -m maniskill_backend.module_generation_runner \
-  --case case04_pull_cube_panda_to_xarm6_abstract_hint \
+  --case case02_pull_cube_panda_to_xarm6 \
   --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
@@ -690,7 +672,8 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | 接触侧诊断 | 已完成 | Fetch 无法到正确接触侧 |
 | xarm6 module generation | 已跑 | 3轮后仍失败，但方块已向目标方向移动约 5 cm |
 | xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
-| xarm6 oracle adapter | 成功 | `success=true`, `elapsed_steps=191` |
+| xarm6 oracle adapter | 成功 | 内部可行性证据：`success=true`, `elapsed_steps=191` |
+| xarm6 LLM 自动生成主线 | 待重跑 | `case02` 已恢复为非 oracle seed，等待 Opus 4.6 自动生成 |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
@@ -734,14 +717,14 @@ python -m maniskill_backend.module_generation_runner \
   --render-backend gpu
 ```
 
-### 9.1 xarm6 下一步诊断
+### 9.1 xarm6 下一步主实验
 
-xarm6 当前不是完全不可行，而是接触拖拽不足。下一步应优先做：
+xarm6 已通过独立 oracle 证明可行。下一步只跑一个主实验：
 
-1. 用新的最小 oracle adapter 重新跑 `case02_pull_cube_panda_to_xarm6`；
-2. 如果成功，把该结果作为当前成功迁移案例；
-3. 再让 Opus 4.6 在 prompt 中看到成功轨迹，测试它能否生成等价 adapter；
-4. 做 ablation：去掉 `x_plus`、去掉 `down`、缩短 `drag_x_minus`，观察成功率变化；
+1. 用非 oracle seed adapter 运行 `case02_pull_cube_panda_to_xarm6`；
+2. 让 Opus 4.6 根据 embodiment 约束、抽象接触策略和真实失败反馈生成完整目标 adapter；
+3. 用真实 ManiSkill `env.step(action)` 和 success signal 验证生成结果；
+4. 成功后再做 ablation 和统计重复实验；
 5. 记录 xarm6 成功案例与 Fetch 不可行案例的差异。
 
 ### 9.2 固定当前失败案例

@@ -140,7 +140,7 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Do not combine long base driving, five contact retries, and overshoot in one attempt; preserve episode budget for contact and drag.",
         ]
     if case.target_robot == "xarm6_robotiq":
-        lines = [
+        return [
             *common,
             "# Mandatory xarm6_robotiq migration constraints for this case",
             "- xarm6_robotiq is a fixed-base single-arm target. Do not invent mobile-base actions, navigation APIs, or Fetch-style base/body control.",
@@ -150,30 +150,12 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Start from compact pd_ee_delta_pos assumptions: arm delta xyz plus gripper. Map xyz to action[0:3] and gripper to action[3] for the observed 4D controller.",
             "- For PullCube seed 0, the cube must move toward negative x. Preserve the correct contact side: approach from the positive-x side of the cube and drag toward the goal.",
             "- Tune contact_x_offset around 0.04-0.08m and contact_z_offset around 0.006-0.02m; try only a small candidate set before declaring failure.",
+            "- Abstract contact strategy: establish contact from the cube side opposite the desired motion, descend to contact height, maintain slight downward pressure, and drag toward the negative-x goal direction.",
+            "- If waypoint tracking loses contact, you may implement bounded staged raw arm actions through env.step(action). Choose your own values and step counts.",
+            "- Do not assume access to a successful human oracle trajectory. Do not copy an exact action tuple sequence or measured step counts.",
+            "- Success must come only from real env.step execution and the ManiSkill task success signal.",
             "- If target execution fails, report whether the failure is reachability, action-space mapping, contact establishment, or task outcome.",
         ]
-        if case.case_id == "case03_pull_cube_panda_to_xarm6_failure_feedback":
-            lines.extend(
-                [
-                    "",
-                    "# Case03 strictness",
-                    "- This is the strict failure-feedback condition.",
-                    "- Do not assume access to a successful oracle trajectory.",
-                    "- Do not use hard-coded action values or step counts from the human oracle.",
-                    "- Infer a target adapter only from the source program, target profile, current seed adapter, and real failure feedback.",
-                ]
-            )
-        if case.case_id == "case04_pull_cube_panda_to_xarm6_abstract_hint":
-            lines.extend(
-                [
-                    "",
-                    "# Case04 abstract diagnostic hint",
-                    "- Abstract strategy hint: make contact from the cube side opposite the desired motion, descend to contact height, maintain slight downward pressure, and drag toward the negative-x goal direction.",
-                    "- Do not use a provided oracle action tuple sequence; choose your own bounded actions/waypoints and step counts.",
-                    "- Success must still come from real env.step execution and the ManiSkill success signal.",
-                ]
-            )
-        return lines
     return common
 
 

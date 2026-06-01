@@ -1,31 +1,22 @@
-"""xarm6_robotiq oracle adapter for PullCube migration.
+"""Neutral xarm6_robotiq seed adapter for direct LLM module generation.
 
-The diagnostic script found a simple successful contact sequence for seed 0:
-
-1. move the TCP toward the cube's positive-x side;
-2. descend to table/cube height;
-3. drag along negative x while maintaining slight downward pressure.
-
-This module turns that measured sequence into the target-side implementation of
-``robot.pull(cube, goal)``. It still uses only real ``env.step(action)`` control
-and the ManiSkill task success signal.
+This module uses a conservative waypoint contact pull. It intentionally avoids
+encoding the human-written oracle trajectory. The generation runner overwrites
+this file with the LLM's complete target adapter module and evaluates it in the
+real ManiSkill environment.
 """
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Tuple
+from typing import Any
 
 import numpy as np
 
 from maniskill_backend.skill_adapter import ManiSkillPullCubeRobot
 
 
-ArmCommand = Tuple[float, float, float]
-Phase = Tuple[str, ArmCommand, int]
-
-
 class GeneratedXArm6PullCubeRobot(ManiSkillPullCubeRobot):
-    """Fixed-base xarm6 adapter using a measured contact-pulling primitive."""
+    """Non-oracle xarm6 seed adapter for failure-driven module generation."""
 
     def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
         super().__init__(
@@ -52,10 +43,10 @@ class GeneratedXArm6PullCubeRobot(ManiSkillPullCubeRobot):
         space = getattr(self.env, "action_space", None)
         shape = getattr(space, "shape", None)
         if not shape:
-            raise RuntimeError("xarm6 PullCube adapter requires a Box-like action_space.")
+            raise RuntimeError("xarm6 seed adapter requires a Box-like action_space.")
         if shape[-1] < 4 or shape[-1] > 16:
             raise RuntimeError(
-                "xarm6 PullCube adapter expects a compact fixed-arm action space "
+                "xarm6 seed adapter expects a compact fixed-arm action space "
                 f"with at least xyz+gripper dims, got shape {tuple(shape)!r}."
             )
 
@@ -63,7 +54,7 @@ class GeneratedXArm6PullCubeRobot(ManiSkillPullCubeRobot):
         space = self.env.action_space
         shape = getattr(space, "shape", None)
         if not shape:
-            raise RuntimeError("xarm6 PullCube adapter requires a Box-like action_space.")
+            raise RuntimeError("xarm6 seed adapter requires a Box-like action_space.")
         action = np.zeros(shape, dtype=getattr(space, "dtype", np.float32))
         flat = action.reshape(-1)
         flat[:3] = np.asarray(delta_xyz, dtype=np.float32).reshape(-1)[:3]
@@ -75,53 +66,51 @@ class GeneratedXArm6PullCubeRobot(ManiSkillPullCubeRobot):
             action = np.clip(action, low, high)
         return action
 
+    def _move_towards(self, target_pos: np.ndarray, *, gripper: float, steps: int) -> None:
+        for _ in range(max(1, steps)):
+            if self._early_stop():
+                return
+            tcp = self._tcp_pos()
+            delta = np.asarray(target_pos, dtype=np.float32) - tcp
+            if np.linalg.norm(delta) < 0.008:
+                break
+            command = np.clip(delta / self.max_delta_m, -0.8, 0.8)
+            self._step(self._make_action(command, gripper=gripper))
+
     def pull(self, obj, target, *, contact_x_offset=None, contact_z_offset=None, drag_extra=0.025, stages=5) -> bool:
         if obj.name != "cube":
             return self._fail("pull", {"obj": obj.name, "target": target.name}, "PullCube adapter only supports cube.")
         if target.name not in {"goal", "goal_region"}:
             return self._fail("pull", {"obj": obj.name, "target": target.name}, "PullCube target must be goal.")
 
-        # Measured successful seed-0 sequence from scripts/xarm6_pull_diagnostics.py.
-        primary = (
-            ("approach_positive_x_side", (0.8, 0.0, 0.0), 100),
-            ("descend_to_contact_height", (0.0, 0.0, -0.8), 80),
-            ("drag_toward_goal_negative_x", (-0.8, 0.0, -0.05), 160),
-        )
-        if self._run_phases(primary):
-            return self._log("pull", {"obj": obj.name, "target": target.name, "oracle": True}, True, True, "")
-
-        # Conservative fallback: repeat only the useful contact/drag portion.
-        fallback = (
-            ("reclose_contact", (0.25, 0.0, -0.3), 30),
-            ("drag_toward_goal_negative_x_retry", (-0.75, 0.0, -0.05), 120),
-        )
-        if self._run_phases(fallback):
-            return self._log(
-                "pull",
-                {"obj": obj.name, "target": target.name, "oracle": True, "retry": True},
-                True,
-                True,
-                "",
-            )
-
+        x_offset = self.contact_x_offset_m if contact_x_offset is None else float(contact_x_offset)
+        z_offset = self.contact_z_offset_m if contact_z_offset is None else float(contact_z_offset)
+        cube_pos = self._actor_pos("cube")
         goal_pos = self._region_pos(target.name)
+        contact = cube_pos + np.array([x_offset, 0.0, z_offset], dtype=np.float32)
+        pre_contact = contact + np.array([0.0, 0.0, 0.075], dtype=np.float32)
+        drag_end = np.array([goal_pos[0] - float(drag_extra), cube_pos[1], contact[2]], dtype=np.float32)
+
+        self._move_towards(pre_contact, gripper=self.gripper_close, steps=self.move_steps)
+        self._move_towards(contact, gripper=self.gripper_close, steps=self.move_steps)
+        self._repeat_action(np.zeros(3, dtype=np.float32), gripper=self.gripper_close, steps=self.contact_steps)
+
+        stages = int(np.clip(stages, 1, 8))
+        for stage in range(1, stages + 1):
+            waypoint = contact * (1.0 - stage / stages) + drag_end * (stage / stages)
+            self._move_towards(waypoint, gripper=self.gripper_close, steps=max(1, self.drag_steps // stages))
+            if self._pull_cube_success():
+                return self._log("pull", {"obj": obj.name, "target": target.name, "seed": True}, True, True, "")
+
+        self._repeat_action(np.zeros(3, dtype=np.float32), gripper=self.gripper_close, steps=self.settle_steps)
+        ok = self._pull_cube_success()
         return self._log(
             "pull",
-            {"obj": obj.name, "target": target.name, "oracle": True},
-            False,
-            False,
-            f"cube was not pulled to target; {self._pull_diagnostics(goal_pos)}",
+            {"obj": obj.name, "target": target.name, "seed": True},
+            ok,
+            ok,
+            "" if ok else f"cube was not pulled to target; {self._pull_diagnostics(goal_pos)}",
         )
-
-    def _run_phases(self, phases: Iterable[Phase]) -> bool:
-        for _, command, steps in phases:
-            self._repeat_action(np.asarray(command, dtype=np.float32), gripper=self.gripper_close, steps=steps)
-            if self._pull_cube_success():
-                return True
-            if self._early_stop():
-                break
-        self._repeat_action(np.zeros(3, dtype=np.float32), gripper=self.gripper_close, steps=self.settle_steps)
-        return self._pull_cube_success()
 
 
 def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedXArm6PullCubeRobot:
