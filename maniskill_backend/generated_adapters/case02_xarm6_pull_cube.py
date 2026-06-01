@@ -44,11 +44,8 @@ class GeneratedXArm6PullCubeRobot(ManiSkillPullCubeRobot):
         shape = getattr(space, "shape", None)
         if not shape:
             raise RuntimeError("xarm6 seed adapter requires a Box-like action_space.")
-        if shape[-1] < 4 or shape[-1] > 16:
-            raise RuntimeError(
-                "xarm6 seed adapter expects a compact fixed-arm action space "
-                f"with at least xyz+gripper dims, got shape {tuple(shape)!r}."
-            )
+        if shape[-1] != 4:
+            raise RuntimeError(f"xarm6 seed adapter expects observed 4D action space, got shape {tuple(shape)!r}.")
 
     def _make_action(self, delta_xyz: np.ndarray, *, gripper: float) -> Any:
         space = self.env.action_space
@@ -58,8 +55,7 @@ class GeneratedXArm6PullCubeRobot(ManiSkillPullCubeRobot):
         action = np.zeros(shape, dtype=getattr(space, "dtype", np.float32))
         flat = action.reshape(-1)
         flat[:3] = np.asarray(delta_xyz, dtype=np.float32).reshape(-1)[:3]
-        if flat.size > 3:
-            flat[3:] = float(gripper)
+        flat[3] = float(gripper)
         low = getattr(space, "low", None)
         high = getattr(space, "high", None)
         if low is not None and high is not None:

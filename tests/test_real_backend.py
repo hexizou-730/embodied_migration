@@ -207,26 +207,6 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIsInstance(xarm_robot, ManiSkillPullCubeRobot)
         self.assertEqual(xarm_robot.robot_uid, "xarm6_robotiq")
 
-        class XArmSpace:
-            shape = (9,)
-            dtype = np.float32
-            low = -np.ones(9, dtype=np.float32)
-            high = np.ones(9, dtype=np.float32)
-
-        class XArmEnv:
-            action_space = XArmSpace()
-
-        xarm_wide = _build_robot_adapter_from_module(
-            "maniskill_backend.generated_adapters.case02_xarm6_pull_cube",
-            XArmEnv(),
-            "pd_ee_delta_pos",
-            "xarm6_robotiq",
-        )
-        action = xarm_wide._make_action(np.array([0.2, -0.1, 0.05]), gripper=-1.0)
-        self.assertEqual(action.shape, (9,))
-        self.assertTrue(np.allclose(action[:3], np.array([0.2, -0.1, 0.05])))
-        self.assertTrue(np.allclose(action[3:], -np.ones(6)))
-
     def test_pull_cube_robot_action_shape(self):
         class Space:
             shape = (4,)

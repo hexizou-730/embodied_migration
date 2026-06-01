@@ -144,7 +144,9 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             *common,
             "# Mandatory xarm6_robotiq migration constraints for this case",
             "- xarm6_robotiq is a fixed-base single-arm target. Do not invent mobile-base actions, navigation APIs, or Fetch-style base/body control.",
-            "- Real xarm6_robotiq diagnostic for this case: action_space.shape == (4,), with arm[0:3] and gripper_active[3].",
+            "- Real xarm6_robotiq diagnostic for this case: action_space.shape is EXACTLY (4,), with arm[0:3] and gripper_active[3].",
+            "- Do not describe or implement xarm6_robotiq as a 9D controller. Do not write gripper commands to action[3:]. The only gripper command is action[3].",
+            "- The generated adapter must validate the exact 4D action space and construct action[0:3] for xyz plus action[3] for the single active mimic-gripper command.",
             "- Compared with Panda, xarm6 has less kinematic redundancy. Prefer conservative staged moves, smaller max_delta_m, and a few contact-offset candidates rather than aggressive one-shot motion.",
             "- The high-level program remains robot.pull(cube, goal). Focus migration on the target adapter: action validation, contact side, contact height, staged drag, and settle behavior.",
             "- Start from compact pd_ee_delta_pos assumptions: arm delta xyz plus gripper. Map xyz to action[0:3] and gripper to action[3] for the observed 4D controller.",
@@ -456,10 +458,30 @@ def write_module_generation_outputs(
     md_path: Path,
 ) -> None:
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_dir = jsonl_path.parent / "generated_modules" / _safe_path_component(str(result.get("case_id") or "unknown_case"))
+    saved_snapshots: List[str] = []
+    for attempt in result.get("attempts") or []:
+        if not attempt.get("module_applied"):
+            continue
+        module_text = extract_python_module(str(attempt.get("llm_raw_text") or ""))
+        if not module_text:
+            continue
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot_path = snapshot_dir / f"round_{int(attempt.get('round') or 0):02d}.py"
+        snapshot_path.write_text(module_text.rstrip() + "\n", encoding="utf-8")
+        attempt["saved_module_path"] = str(snapshot_path)
+        saved_snapshots.append(str(snapshot_path))
+    result["saved_module_snapshots"] = saved_snapshots
     with jsonl_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(result, ensure_ascii=False, default=repr) + "\n")
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(module_generation_result_to_md(result) + "\n", encoding="utf-8")
+
+
+def _safe_path_component(value: str) -> str:
+    """Keep generated-module snapshot directories local to the results tree."""
+
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._") or "unknown_case"
 
 
 def module_generation_result_to_md(result: Dict[str, Any]) -> str:
