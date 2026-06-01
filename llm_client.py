@@ -7,6 +7,16 @@ from openai import OpenAI
 
 
 DEFAULT_MODEL = os.environ.get("EM_MODEL", "anthropic/claude-sonnet-4.5")
+DEFAULT_MAX_TOKENS = 8192
+
+
+def completion_token_limit() -> int:
+    """Return a bounded output limit so providers do not reserve huge outputs."""
+
+    value = int(os.environ.get("EM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
+    if value <= 0:
+        raise ValueError("EM_MAX_TOKENS must be a positive integer.")
+    return value
 
 
 def make_client() -> OpenAI:
@@ -35,5 +45,6 @@ def chat(
             {"role": "user", "content": user},
         ],
         temperature=temperature,
+        max_tokens=completion_token_limit(),
     )
     return resp.choices[0].message.content or ""
