@@ -742,13 +742,13 @@ DeepSeek V4-Pro 生成的新代码改成：
 成功 adapter 中最重要的代码片段是：
 
 ```python
-x_offsets = [0.14, 0.12, 0.10, 0.08]
-z_offsets = [0.018, 0.015, 0.012, 0.008]
+x_offsets = [0.14, 0.12, 0.10, 0.08]       # 尝试多个水平方向接触距离，单位为米
+z_offsets = [0.018, 0.015, 0.012, 0.008]   # 尝试多个接触高度，单位为米
 
 if tcp[0] <= cube_pos[0] + 0.03:
-    continue
+    continue  # TCP 没有到达方块右侧，放弃当前方案，尝试下一个接触点
 
-drag_dir = np.array([-1.0, 0.0, -0.15], dtype=np.float32)
+drag_dir = np.array([-1.0, 0.0, -0.15], dtype=np.float32)  # 向左拖，同时轻微向下压
 ```
 
 它表达的逻辑非常直接：
@@ -757,6 +757,153 @@ drag_dir = np.array([-1.0, 0.0, -0.15], dtype=np.float32)
 先找到能真正碰到方块的位置
 → 再确认自己站在正确一侧
 → 最后向正确方向拖动
+```
+
+#### 4.12.3 逐段代码解释
+
+下面只摘录成功 adapter 中最重要的逻辑，并在每行后增加中文注释。这里的注释用于解释报告，不修改真实实验代码。
+
+第一段：搜索不同的接触点。
+
+```python
+x_offsets = [0.14, 0.12, 0.10, 0.08]      # 方块右侧的水平距离候选值，单位为米
+z_offsets = [0.018, 0.015, 0.012, 0.008]  # TCP 接触高度候选值，单位为米
+
+for x_off in x_offsets:                    # 依次尝试不同的水平距离
+    for z_off in z_offsets:                # 对每个水平距离，再尝试不同高度
+        contact = cube_pos + np.array(     # 计算本次要尝试的接触位置
+            [x_off, 0.0, z_off],           # x 为方块右侧距离，y 不变，z 为接触高度
+            dtype=np.float32,
+        )
+```
+
+直白解释：
+
+```text
+Panda 原来只尝试一个固定位置。
+xarm6 新代码最多尝试 4 × 4 = 16 个位置，
+直到找到一个适合自己手臂和夹爪的位置。
+```
+
+第二段：先从上方靠近，再下降。
+
+```python
+pre_contact = contact + np.array(          # 在真正接触点的正上方设置一个预接触点
+    [0.0, 0.0, 0.08],                      # 比接触点高 8 cm
+    dtype=np.float32,
+)
+
+self._move_towards(                        # 先移动到方块右侧上方
+    pre_contact,
+    gripper=self.gripper_close,            # 夹爪保持闭合
+    steps=self.move_steps,                 # 最多执行预设数量的控制步
+)
+self._move_towards(                        # 再从上方向下移动到接触位置
+    contact,
+    gripper=self.gripper_close,
+    steps=self.move_steps,
+)
+```
+
+直白解释：
+
+```text
+机械臂不是贴着桌面横冲过去。
+它先到方块右上方，再下降，减少碰撞和错位。
+```
+
+第三段：确认 TCP 确实到达正确一侧。
+
+```python
+tcp = self._tcp_pos()                      # 读取当前 TCP，也就是夹爪末端的位置
+
+if tcp[0] <= cube_pos[0] + 0.03:          # 如果 TCP 没有比方块更靠右至少 3 cm
+    continue                               # 当前接触点无效，换下一组位置继续尝试
+```
+
+直白解释：
+
+```text
+代码不再假设“发出了移动命令就一定到位”。
+它会检查夹爪是否真的绕到了方块右侧。
+```
+
+第四段：使用短脉冲向目标方向拖动。
+
+```python
+drag_dir = np.array(                       # 设置拖动方向
+    [-1.0, 0.0, -0.15],                    # x 为负：向左拖；z 略小于 0：轻微向下压
+    dtype=np.float32,
+)
+
+self._drag_pulse(                          # 执行一次短距离拖动
+    drag_dir,
+    magnitude=0.6,                         # 使用 0.6 的归一化动作幅度
+    steps=6,                               # 连续执行 6 个环境步
+    gripper=self.gripper_close,            # 拖动期间保持夹爪闭合
+)
+```
+
+直白解释：
+
+```text
+不再一次性拖很远。
+每次只拖 6 步，然后观察方块是否真的向目标移动。
+```
+
+第五段：检查方向是否正确，必要时换方案。
+
+```python
+cube_pos = self._actor_pos("cube")         # 重新读取拖动后的方块位置
+cube_goal_xy = float(                      # 计算方块和目标之间的水平距离
+    np.linalg.norm(goal_pos[:2] - cube_pos[:2])
+)
+
+if cube_pos[0] > prev_cube_x + 0.005:      # 如果方块反而向右移动超过 5 mm
+    break                                  # 立即停止当前接触方案
+
+if cube_goal_xy > prev_cube_goal_xy + 0.005:  # 如果方块离目标更远超过 5 mm
+    break                                     # 立即停止，换下一个接触点
+```
+
+直白解释：
+
+```text
+拖错方向时，不继续浪费动作步数。
+它会停下来，换一个接触位置重试。
+```
+
+第六段：如果方向正确但拖不动，则增强动作。
+
+```python
+if pulse_idx > 3 and abs(cube_pos[0] - prev_cube_x) < 0.002:
+    drag_dir = np.array(                   # 拖动多次后方块仍几乎不动
+        [-1.0, 0.0, -0.25],                # 增加向下分量，尝试维持接触
+        dtype=np.float32,
+    )
+    self._drag_pulse(
+        drag_dir,
+        magnitude=0.8,                     # 将动作幅度从 0.6 提升到 0.8
+        steps=6,
+        gripper=self.gripper_close,
+    )
+```
+
+直白解释：
+
+```text
+如果轻轻拖不动，就稍微加大力度，并向下多压一点。
+```
+
+整段代码可以概括为：
+
+```text
+多试几个位置
+→ 从上方靠近
+→ 确认真的站到方块右侧
+→ 向左下方短距离拖动
+→ 每次拖动后检查效果
+→ 拖错了就换位置，拖不动就稍微加力
 ```
 
 该案例应表述为：
