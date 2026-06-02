@@ -105,6 +105,8 @@ Then edit `.env`:
 EM_LLM_PROVIDER=deepseek
 DEEPSEEK_API_KEY=your_deepseek_api_key_here
 EM_MODEL=deepseek-v4-pro
+EM_MAX_TOKENS=8192
+EM_DEEPSEEK_THINKING=disabled
 ```
 
 Quick check:
@@ -119,6 +121,9 @@ from llm_client import current_provider, default_model
 print("provider =", current_provider())
 print("model =", default_model())
 print("has_llm_key =", has_llm_key())
+from llm_client import completion_token_limit, deepseek_thinking_mode
+print("max_tokens =", completion_token_limit())
+print("thinking =", deepseek_thinking_mode())
 PY
 ```
 
@@ -128,6 +133,8 @@ Expected output:
 provider = deepseek
 model = deepseek-v4-pro
 has_llm_key = True
+max_tokens = 8192
+thinking = disabled
 ```
 
 ## Run The Main Migration Case

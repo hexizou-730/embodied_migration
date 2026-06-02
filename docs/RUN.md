@@ -81,6 +81,8 @@ cp .env.example .env
 EM_LLM_PROVIDER=deepseek
 DEEPSEEK_API_KEY=你的_deepseek_key
 EM_MODEL=deepseek-v4-pro
+EM_MAX_TOKENS=8192
+EM_DEEPSEEK_THINKING=disabled
 ```
 
 检查 key 是否被项目识别：
@@ -95,6 +97,9 @@ from llm_client import current_provider, default_model
 print("provider =", current_provider())
 print("model =", default_model())
 print("has_llm_key =", has_llm_key())
+from llm_client import completion_token_limit, deepseek_thinking_mode
+print("max_tokens =", completion_token_limit())
+print("thinking =", deepseek_thinking_mode())
 PY
 ```
 
@@ -104,6 +109,8 @@ PY
 provider = deepseek
 model = deepseek-v4-pro
 has_llm_key = True
+max_tokens = 8192
+thinking = disabled
 ```
 
 ## 5. 跑 Panda 源端

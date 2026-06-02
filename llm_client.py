@@ -43,6 +43,7 @@ def default_model(provider: str | None = None) -> str:
 
 DEFAULT_MODEL = default_model()
 DEFAULT_MAX_TOKENS = 8192
+DEEPSEEK_THINKING_MODES = {"enabled", "disabled"}
 
 
 def completion_token_limit() -> int:
@@ -51,6 +52,16 @@ def completion_token_limit() -> int:
     value = int(os.environ.get("EM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
     if value <= 0:
         raise ValueError("EM_MAX_TOKENS must be a positive integer.")
+    return value
+
+
+def deepseek_thinking_mode() -> str:
+    """Use non-thinking output by default so code modules are not truncated."""
+
+    value = os.environ.get("EM_DEEPSEEK_THINKING", "disabled").strip().lower()
+    if value not in DEEPSEEK_THINKING_MODES:
+        allowed = ", ".join(sorted(DEEPSEEK_THINKING_MODES))
+        raise ValueError(f"Unknown EM_DEEPSEEK_THINKING={value!r}. Allowed: {allowed}")
     return value
 
 
@@ -84,7 +95,8 @@ def chat(
     model: str | None = None,
     temperature: float = 0.0,
 ) -> str:
-    resp = client.chat.completions.create(
+    provider = current_provider()
+    request = dict(
         model=model or default_model(),
         messages=[
             {"role": "system", "content": system},
@@ -93,4 +105,7 @@ def chat(
         temperature=temperature,
         max_tokens=completion_token_limit(),
     )
+    if provider == PROVIDER_DEEPSEEK:
+        request["extra_body"] = {"thinking": {"type": deepseek_thinking_mode()}}
+    resp = client.chat.completions.create(**request)
     return resp.choices[0].message.content or ""
