@@ -1,7 +1,7 @@
 # 实验进度报告：LLM 机器人程序迁移
 
 更新时间：2026-06-02
-当前阶段：`PullCube-v1` 首个 LLM 自动迁移成功案例已验证，`PickCube-v1` 抓取式迁移已完成首轮远程失败诊断
+当前阶段：`PullCube-v1` 首个 LLM 自动迁移成功案例已验证，`PickCube-v1` 已实现真实抓取和部分抬升，待完成搬运
 报告用途：作为后续实验记录的基础版本，之后所有实验进展、失败案例、统计结果和论文分析都在此文件上继续更新。
 
 ## 1. 项目目标
@@ -1227,6 +1227,49 @@ LLM 生成的目标 adapter 已经做了多候选 `(dx, dy, dz)` 搜索，但它
 
 这不是向 LLM 提供人工成功轨迹，而是加入 failure-driven adaptation 所需的真实失败证据。
 
+### 9.8 PickCube 第二轮远程结果：真实抓取已经出现
+
+加入状态感知重试约束后，DeepSeek V4-Pro 生成了新的 xarm6 adapter。远程结果：
+
+| Round | 代码校验 | 真实执行 | 关键结果 |
+|---|---|---|---|
+| 1 | 通过 | 失败 | 候选 2 把方块横向推动 `0.2960 m`，位移保护主动终止 |
+| 2 | 通过 | 失败 | 候选 2 把方块横向推动 `0.2781 m`，位移保护主动终止 |
+| 3 | 通过 | 失败 | `is_grasping=True`，`tcp_cube_xyz=0.0102`，方块已被抬升到 `z=0.1861 m` |
+
+Round 3 是重要进展：xarm6 已经真实夹住方块并完成部分抬升。最终距离三维目标仍为：
+
+```text
+cube_goal_xyz=0.1237 m
+```
+
+但生成代码错误地返回：
+
+```text
+all grasp candidates failed
+```
+
+这与 `is_grasping=True` 矛盾。当前问题已经从“无法抓取”缩小为：
+
+```text
+抓取后分支处理错误
+候选搜索占用过多 episode 步数
+未把剩余预算留给 place(cube, goal)
+```
+
+下一轮 prompt 增加：
+
+```text
+抓取、闭爪、抬升和搬运后检查 episode 是否 terminated/truncated
+抬升后 is_grasping=True 时立即记录 held_object 并返回 grasp success
+禁止继续松爪或搜索候选
+返回所有候选失败前再次检查 is_grasping
+如果抓住后 episode 已截断，明确报告预算在搬运前耗尽
+优先尝试 1 至 2 个安全候选，把剩余预算留给 place
+```
+
+这仍然是 failure-driven prompt adaptation：LLM 得到的是失败证据和正确的状态机约束，没有得到人工编写的成功动作序列。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，而 `PickCube-v1` 首轮抓取迁移暴露出真实物理状态变化下的破坏性重试问题；下一步将验证加入状态感知重试约束后，LLM 能否自动生成可靠的 xarm6 抓取 adapter。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成了能够真实夹住并部分抬升方块的 adapter；下一步将修正抓取后状态机和 episode 预算分配，完成三维搬运。
