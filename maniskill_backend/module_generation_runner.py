@@ -47,6 +47,10 @@ FORBIDDEN_TEXT = (
     "shutil",
     "pathlib",
 )
+FORBIDDEN_TEXT_PATTERNS = tuple(
+    (snippet, re.compile(rf"(?<![A-Za-z0-9_]){re.escape(snippet)}"))
+    for snippet in FORBIDDEN_TEXT
+)
 
 
 def extract_python_module(text: str) -> str:
@@ -66,8 +70,8 @@ def validate_generated_adapter_module(code: str) -> None:
 
     if not code.strip():
         raise ValueError("Generated adapter module is empty.")
-    for snippet in FORBIDDEN_TEXT:
-        if snippet in code:
+    for snippet, pattern in FORBIDDEN_TEXT_PATTERNS:
+        if pattern.search(code):
             raise ValueError(f"Generated adapter module contains forbidden text: {snippet}")
 
     try:

@@ -100,6 +100,15 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         with self.assertRaises(ValueError):
             validate_generated_adapter_module(unsafe)
 
+    def test_module_generation_allows_position_variable_methods(self):
+        safe = """import numpy as np
+
+def build_robot(env, *, control_mode: str, robot_uid: str):
+    goal_pos = np.zeros(3)
+    return goal_pos.copy()
+"""
+        validate_generated_adapter_module(safe)
+
     def test_module_generation_prompt_requests_pull_cube_adapter(self):
         case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
         prompt = build_module_generation_prompt(
