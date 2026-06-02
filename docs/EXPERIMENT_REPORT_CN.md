@@ -1,7 +1,7 @@
 # 实验进度报告：LLM 机器人程序迁移
 
-更新时间：2026-05-29
-当前阶段：ManiSkill `PullCube-v1` 迁移案例分析中
+更新时间：2026-06-02
+当前阶段：ManiSkill `PullCube-v1` 首个 LLM 自动迁移成功案例已验证
 报告用途：作为后续实验记录的基础版本，之后所有实验进展、失败案例、统计结果和论文分析都在此文件上继续更新。
 
 ## 1. 项目目标
@@ -87,18 +87,26 @@ RuntimeError('Create window failed: Renderer does not support display.')
 
 ### 2.3 LLM 调用设置
 
-当前 LLM 调用通过 OpenRouter 完成。
+当前主实验通过 DeepSeek 官方 API 调用 LLM。
 
 主要使用模型：
 
 ```text
-anthropic/claude-opus-4.6
+deepseek-v4-pro
 ```
 
 报告中简称为：
 
 ```text
-Opus 4.6
+DeepSeek V4-Pro
+```
+
+早期实验曾通过 OpenRouter 使用 `anthropic/claude-opus-4.6`。在 OpenRouter key 限额不足后，主实验切换为 DeepSeek 官方 API，并设置：
+
+```text
+provider = deepseek
+model = deepseek-v4-pro
+thinking = disabled
 ```
 
 用途：
@@ -114,12 +122,13 @@ Opus 4.6
 
 ### 2.4 当前机器人
 
-当前只保留两个机器人作为主要对比：
+当前保留一个源机器人和两个目标机器人：
 
 | 角色 | 机器人 | 说明 |
 |---|---|---|
 | Source | Panda | 源机器人，固定机械臂，当前任务可成功 |
-| Target | Fetch | 目标机器人，移动底盘 + 机械臂，迁移后当前失败 |
+| Target success case | xarm6_robotiq | 固定机械臂，DeepSeek 已自动生成成功迁移 adapter |
+| Target failure case | Fetch | 移动底盘 + 机械臂，迁移后当前失败 |
 
 ### 2.5 当前任务
 
@@ -653,6 +662,54 @@ cube position unchanged
 1. 使用更远的正 x 侧 sweep start，再下降并沿负 x 扫过接触区域；
 2. 每轮 retry 必须做实质性策略修改；若生成模块与当前失败模块完全相同，runner 直接拒绝该轮。
 
+### 4.12 DeepSeek V4-Pro 自动生成实验：xarm6 首次成功
+
+增加 far-side sweep、接触前检查和 retry 多样性约束后，重新运行：
+
+```bash
+python -m maniskill_backend.module_generation_runner \
+  --case case02_pull_cube_panda_to_xarm6 \
+  --max-attempts 3 \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+DeepSeek V4-Pro 在第一轮生成新的 xarm6 目标 adapter，并通过真实 ManiSkill 执行验证：
+
+```text
+overall_success = True
+message = target success reached
+
+ROUND 1
+module_valid = True
+verification_ok = True
+target_success = True
+target_message = ret_val=True
+final_info = {'elapsed_steps': [460], 'success': [True]}
+```
+
+生成模块快照：
+
+```text
+results/generated_modules/case02_pull_cube_panda_to_xarm6/round_01.py
+```
+
+本轮的关键意义：
+
+- LMP 程序保持不变：`robot.pull(cube, goal)`；
+- 成功代码不是手写 oracle，而是 DeepSeek V4-Pro 生成的完整目标 adapter；
+- 目标 adapter 针对 xarm6 调整了动作空间验证、控制步数、接触搜索、接触验证、脉冲拖拽和在线进展守卫；
+- 最终成功由真实 `env.step(action)` 与 ManiSkill `evaluate()` 判定，而不是由 LLM 文本声明；
+- oracle adapter 仍仅作为物理可行性对照，不作为生成答案输入。
+
+该案例应表述为：
+
+```text
+failure-driven target-adapter generation success
+```
+
+即：基于 embodiment 信息、抽象控制约束和历史失败诊断，由 LLM 自动生成可执行的目标机器人 adapter。
+
 ## 5. 最新诊断：Fetch 接触侧不可达
 
 为了判断 Fetch 是不是只是 Z 轴高度不够，我们做了 Z 轴下降测试。
@@ -754,18 +811,18 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | ManiSkill 环境 | 已可运行 | 远程 headless 可跑 |
 | Panda PullCube | 成功 | 源端任务成立 |
 | Fetch source-copy | 失败 | 动作空间 9D 不兼容 |
-| LLM adapter generation | 已跑 | 能修改 adapter，但未成功 |
+| Fetch LLM adapter generation | 已跑 | 能修改 adapter，但未成功 |
 | Fetch oracle adapter | 已跑 | 仍失败，说明不是单纯 LLM 质量问题 |
 | 接触侧诊断 | 已完成 | Fetch 无法到正确接触侧 |
-| xarm6 module generation | 已跑 | 3轮后仍失败，但方块已向目标方向移动约 5 cm |
+| xarm6 module generation | 成功 | DeepSeek V4-Pro 第一轮生成成功目标 adapter，`elapsed_steps=460` |
 | xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
 | xarm6 oracle adapter | 成功 | 内部可行性证据：`success=true`, `elapsed_steps=191` |
-| xarm6 LLM 自动生成主线 | 已跑，待继续优化 | DeepSeek 已能生成可执行模块；最新三轮重复同一 far-side 失败策略，runner 将拒绝完全相同的重试 |
+| xarm6 LLM 自动生成主线 | 成功 | `overall_success=true`, `target_success=true`, `ret_val=True` |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
 
-### 9.0 新增成功候选：Panda → xarm6_robotiq
+### 9.0 已验证成功案例：Panda → xarm6_robotiq
 
 在 Fetch 被记录为失败案例后，下一个目标机器人选择：
 
@@ -785,13 +842,13 @@ case02_pull_cube_panda_to_xarm6
 - 不需要处理 Fetch 那样的移动底盘动作空间；
 - 仍然和 Panda 有差异，例如 DoF、工作空间、TCP、夹爪和接触参数；
 - 成功概率高于 Fetch，但仍能体现 embodiment 迁移；
-- 适合作为论文中的成功迁移案例候选。
+- 已成为论文中的首个自动迁移成功案例。
 
 当前实验设计变为：
 
 | 用途 | Source | Target | 预期作用 |
 |---|---|---|---|
-| 成功候选 | Panda | xarm6_robotiq | 证明 adapter/contact/controller 可迁移 |
+| 成功案例 | Panda | xarm6_robotiq | 证明 adapter/contact/controller 可迁移 |
 | 失败案例 | Panda | Fetch | 证明系统需要识别不可行迁移 |
 
 后续默认主实验将优先跑：
@@ -806,12 +863,12 @@ python -m maniskill_backend.module_generation_runner \
 
 ### 9.1 xarm6 下一步主实验
 
-xarm6 已通过独立 oracle 证明可行。下一步只跑一个主实验：
+xarm6 已通过独立 oracle 和 DeepSeek 自动生成 adapter 分别证明物理可行性与自动迁移可行性。下一步：
 
-1. 用非 oracle seed adapter 运行 `case02_pull_cube_panda_to_xarm6`；
-2. 让 Opus 4.6 根据 embodiment 约束、抽象接触策略和真实失败反馈生成完整目标 adapter；
-3. 用真实 ManiSkill `env.step(action)` 和 success signal 验证生成结果；
-4. 成功后再做 ablation 和统计重复实验；
+1. 保存本次成功 adapter 和完整日志；
+2. 使用多个 seed 重复运行，统计成功率、平均环境步数和失败类型；
+3. 做 ablation：移除 far-side sweep、接触前检查、retry 多样性约束和失败反馈；
+4. 比较 source-copy、oracle 和 LLM-generated adapter；
 5. 记录 xarm6 成功案例与 Fetch 不可行案例的差异。
 
 ### 9.2 固定当前失败案例
@@ -824,9 +881,9 @@ target embodiment infeasible under current scene geometry
 
 并在代码/日志中把这类失败从普通 execution failure 中区分出来。
 
-### 9.3 选择新的目标机器人或新任务设置
+### 9.3 扩展目标机器人或新任务设置
 
-为了让论文不仅有失败案例，还需要至少一个成功迁移案例。
+在已有一个成功案例和一个失败案例后，后续可扩展实验覆盖范围：
 
 后续可选路线：
 
@@ -835,7 +892,7 @@ target embodiment infeasible under current scene geometry
 - 选择另一个接触任务，但保证 source 与 target 都有可行解
 - 使用同一个任务，比较不同 target robot 的可迁移性
 
-### 9.3 完善实验表格
+### 9.4 完善实验表格
 
 后续需要补充：
 
@@ -845,8 +902,9 @@ target embodiment infeasible under current scene geometry
 | PullCube | Panda | Fetch | source-copy | No | controller interface | action dim 9 mismatch |
 | PullCube | Panda | Fetch | LLM adapter | No | skill/contact | no effective contact |
 | PullCube | Panda | Fetch | oracle adapter | No | reachability/contact side | cannot reach `+x` side |
+| PullCube | Panda | xarm6_robotiq | LLM adapter | Yes | success | `ret_val=True`, `elapsed_steps=460` |
 
-### 9.4 后续报告更新规则
+### 9.5 后续报告更新规则
 
 之后每次实验更新时，建议追加以下内容：
 
@@ -859,4 +917,4 @@ target embodiment infeasible under current scene geometry
 
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：Panda 可以完成 `PullCube-v1`，但 Fetch 因动作空间、移动底盘和接触侧可达性差异导致迁移失败，该失败案例证明了机器人程序迁移需要跨 program、adapter、controller 和 contact geometry 的系统性诊断。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，而 Fetch 因动作空间、移动底盘和接触侧可达性差异迁移失败；两个案例共同说明机器人程序迁移需要跨 program、adapter、controller 和 contact geometry 的系统性诊断。
