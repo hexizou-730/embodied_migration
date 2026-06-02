@@ -585,6 +585,44 @@ python -m maniskill_backend.module_generation_runner \
 - 当前主要问题是 contact primitive 的方向语义：`+x` 只能用于接触前绕到 cube 右侧，建立接触后必须沿 `-x` 拖拽；
 - Prompt 将增加反向进展守卫：若 cube x 或 `cube_goal_xy` 增加，应立即停止当前接触尝试。
 
+### 4.10 DeepSeek V4-Pro 自动生成实验：接触脉冲过弱
+
+在 OpenRouter key 限额不足后，主实验切换到 DeepSeek 官方 API：
+
+```text
+provider = deepseek
+model = deepseek-v4-pro
+thinking = disabled
+```
+
+关闭 thinking mode 是为了让输出预算优先用于完整 Python adapter，而不是被思考内容消耗。
+
+三轮生成模块均通过安全校验、单元测试和真实 ManiSkill 执行：
+
+| Round | `cube_goal_xy` | `tcp_cube_xy` | cube 是否移动 |
+|---|---:|---:|---|
+| R1 | `0.2000m` | `0.0295m` | 否 |
+| R2 | `0.2000m` | `0.0295m` | 否 |
+| R3 | `0.2000m` | `0.0299m` | 否 |
+
+分析 Round 3 代码后发现：
+
+- TCP 已接近 cube，方向守卫有效，未再把 cube 推向 `+x`；
+- `_drag_pulse()` 将米制位移直接传给归一化动作空间，最大脉冲约为 `0.021`；
+- 接触下压力直接使用 `-0.004`；
+- xarm6 的 `pd_ee_delta_pos` 控制器动作范围是 `[-1, 1]`，因此这些脉冲太弱，无法形成有效接触力。
+
+下一轮 Prompt 增加控制语义约束：
+
+```text
+metric TCP error
+→ divide by max_delta_m
+→ clip to [-1, 1]
+→ env.step(normalized_action)
+```
+
+持续接触脉冲应使用安全但足够明显的归一化动作，并在短脉冲后检查 cube 是否真正向 goal 移动。
+
 ## 5. 最新诊断：Fetch 接触侧不可达
 
 为了判断 Fetch 是不是只是 Z 轴高度不够，我们做了 Z 轴下降测试。
@@ -692,7 +730,7 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | xarm6 module generation | 已跑 | 3轮后仍失败，但方块已向目标方向移动约 5 cm |
 | xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
 | xarm6 oracle adapter | 成功 | 内部可行性证据：`success=true`, `elapsed_steps=191` |
-| xarm6 LLM 自动生成主线 | 已跑，待继续优化 | 生成模块可执行，但最新三轮将 cube 反向推至 `+x`，Prompt 已加入方向守卫 |
+| xarm6 LLM 自动生成主线 | 已跑，待继续优化 | 方向守卫已生效；DeepSeek 最新三轮 TCP 已接近 cube，但归一化接触脉冲过弱 |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
