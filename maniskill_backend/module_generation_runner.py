@@ -166,6 +166,9 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- When converting a metric TCP waypoint error to an action, divide by a chosen max_delta_m before clipping. Do not send raw meter-scale values such as 0.004 or 0.021 directly as sustained contact actions.",
             "- For sustained post-contact pulses, use normalized command magnitudes large enough to transmit force while remaining bounded and safe. Start conservatively in the 0.1-0.8 range, use negative x plus a slight negative-z bias, and check progress after short pulses.",
             "- If tcp_cube_xy is small but cube position is unchanged after a pulse, adjust normalized pulse strength or contact height before repeating. Do not repeat the same ineffective tiny pulse.",
+            "- Latest DeepSeek retry failure: a fixed +0.065m contact offset followed by negative-x pulses left the cube unchanged and ended with tcp_cube_xy about 0.30m. The TCP swept away without establishing contact.",
+            "- Treat a single near-side contact point as insufficient. Use a farther positive-x pre-contact sweep start, for example a small candidate range around 0.10-0.18m from cube x, then descend and sweep toward negative x through the contact region.",
+            "- Before starting sustained drag, explicitly verify that the TCP reached the positive-x far side of the cube with a clear margin. If it did not, revise the approach candidate instead of dragging through empty space.",
             "- If waypoint tracking loses contact, you may implement bounded staged raw arm actions through env.step(action). Choose your own values and step counts.",
             "- Do not assume access to a successful human oracle trajectory. Do not copy an exact action tuple sequence or measured step counts.",
             "- Success must come only from real env.step execution and the ManiSkill task success signal.",
@@ -249,7 +252,24 @@ def build_module_generation_prompt(
         "```",
     ]
     if attempts:
-        lines.extend(["", "# Previous generated-module attempts"])
+        retry_number = len(attempts) + 1
+        retry_strategies = (
+            "Replace a single fixed contact point with a farther positive-x sweep start and an explicit far-side check before drag.",
+            "Try a small set of farther positive-x sweep-start candidates and change the contact-establishment motion; do not repeat the previous geometry.",
+            "Change the fallback contact primitive substantially: verify far-side reachability, descend, sweep through contact, and stop early on no progress.",
+        )
+        strategy = retry_strategies[min(len(attempts) - 1, len(retry_strategies) - 1)]
+        lines.extend(
+            [
+                "",
+                "# Mandatory retry adaptation",
+                f"- This is generation retry {retry_number}. Do not return a module identical to the current failed module.",
+                f"- Required substantive strategy change: {strategy}",
+                "- If the latest failure metrics are unchanged, do not merely rename variables, edit comments, or repeat the same constants.",
+                "",
+                "# Previous generated-module attempts",
+            ]
+        )
         for attempt in attempts[-3:]:
             lines.extend(
                 [
@@ -419,6 +439,8 @@ def run_module_generation_migration(
         }
         snapshot = current_module
         try:
+            if module_code.strip() == current_module.strip():
+                raise ValueError("Generated adapter module is unchanged from the current failed module.")
             validate_generated_adapter_module(module_code)
             attempt["module_valid"] = True
             module_path.write_text(module_code.rstrip() + "\n", encoding="utf-8")

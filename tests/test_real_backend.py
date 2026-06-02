@@ -136,6 +136,29 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("Migration design space", prompt)
         self.assertIn("infeasible:", prompt)
 
+    def test_module_generation_retry_prompt_requires_strategy_change(self):
+        case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
+        failure = {
+            "success": False,
+            "failure_layer": "skill_adapter",
+            "message": "cube_goal_xy=0.2000, tcp_cube_xy=0.3006",
+        }
+        prompt = build_module_generation_prompt(
+            case=case,
+            target_result=failure,
+            attempts=[
+                {
+                    "round": 1,
+                    "module_valid": True,
+                    "module_kept": True,
+                    "verification_ok": True,
+                    "target_result": failure,
+                }
+            ],
+        )
+        self.assertIn("Do not return a module identical", prompt)
+        self.assertIn("farther positive-x sweep start", prompt)
+
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(
             task_id="pull_cube",

@@ -623,6 +623,36 @@ metric TCP error
 
 持续接触脉冲应使用安全但足够明显的归一化动作，并在短脉冲后检查 cube 是否真正向 goal 移动。
 
+### 4.11 DeepSeek V4-Pro 自动生成实验：重复 far-side 接触失败
+
+在补充归一化动作语义后，DeepSeek 三轮生成的模块哈希完全相同：
+
+```text
+b96e049... round_01.py
+b96e049... round_02.py
+b96e049... round_03.py
+```
+
+真实执行结果也完全一致：
+
+```text
+cube_goal_xy = 0.2000m
+tcp_cube_xy = 0.3006m
+cube position unchanged
+```
+
+代码分析显示：
+
+- 模型使用固定 `contact_x_offset_m=0.065`；
+- TCP 到达该接触点后直接执行负 x 拖拽；
+- 实际没有形成有效接触，TCP 从 cube 旁边扫走，最终距离扩大到约 `0.30m`；
+- `temperature=0` 下，失败反馈没有促使模型改变策略，三轮生成完全相同。
+
+下一轮增加两类约束：
+
+1. 使用更远的正 x 侧 sweep start，再下降并沿负 x 扫过接触区域；
+2. 每轮 retry 必须做实质性策略修改；若生成模块与当前失败模块完全相同，runner 直接拒绝该轮。
+
 ## 5. 最新诊断：Fetch 接触侧不可达
 
 为了判断 Fetch 是不是只是 Z 轴高度不够，我们做了 Z 轴下降测试。
@@ -730,7 +760,7 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | xarm6 module generation | 已跑 | 3轮后仍失败，但方块已向目标方向移动约 5 cm |
 | xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
 | xarm6 oracle adapter | 成功 | 内部可行性证据：`success=true`, `elapsed_steps=191` |
-| xarm6 LLM 自动生成主线 | 已跑，待继续优化 | 方向守卫已生效；DeepSeek 最新三轮 TCP 已接近 cube，但归一化接触脉冲过弱 |
+| xarm6 LLM 自动生成主线 | 已跑，待继续优化 | DeepSeek 已能生成可执行模块；最新三轮重复同一 far-side 失败策略，runner 将拒绝完全相同的重试 |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
