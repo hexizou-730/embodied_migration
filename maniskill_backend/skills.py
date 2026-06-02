@@ -1,4 +1,4 @@
-"""High-level PullCube skill API surface exposed to LMP programs."""
+"""High-level ManiSkill surface exposed to LMP programs."""
 
 from __future__ import annotations
 
@@ -26,6 +26,12 @@ class SceneLike(Protocol):
 
 class RobotSkillAPI(Protocol):
     def pull(self, obj: Any, target: Any) -> bool:
+        ...
+
+    def grasp(self, obj: Any) -> bool:
+        ...
+
+    def place(self, obj: Any, target: Any) -> bool:
         ...
 
 

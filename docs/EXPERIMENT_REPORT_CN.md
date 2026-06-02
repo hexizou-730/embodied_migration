@@ -1,7 +1,7 @@
 # 实验进度报告：LLM 机器人程序迁移
 
 更新时间：2026-06-02
-当前阶段：ManiSkill `PullCube-v1` 首个 LLM 自动迁移成功案例已验证
+当前阶段：`PullCube-v1` 首个 LLM 自动迁移成功案例已验证，`PickCube-v1` 抓取式迁移已接入
 报告用途：作为后续实验记录的基础版本，之后所有实验进展、失败案例、统计结果和论文分析都在此文件上继续更新。
 
 ## 1. 项目目标
@@ -1022,6 +1022,7 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
 | xarm6 oracle adapter | 成功 | 内部可行性证据：`success=true`, `elapsed_steps=191` |
 | xarm6 LLM 自动生成主线 | 成功 | `overall_success=true`, `target_success=true`, `ret_val=True` |
+| xarm6 PickCube 抓取迁移 | 已接入，待远程运行 | 新增 `case03_pick_cube_panda_to_xarm6` |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
@@ -1119,6 +1120,80 @@ target embodiment infeasible under current scene geometry
 5. 与上一轮相比 LLM 或 adapter 修改了什么
 6. 对论文论点有什么帮助
 
+### 9.6 新增抓取式迁移主线：Panda → xarm6_robotiq
+
+在 `PullCube-v1` 接触式推移迁移成功后，下一步新增真正需要夹爪抓取的任务：
+
+```text
+case03_pick_cube_panda_to_xarm6
+```
+
+任务环境：
+
+```text
+PickCube-v1
+```
+
+固定高层程序：
+
+```python
+cube = scene.get_object("cube")
+goal = scene.get_region("goal")
+
+grasp_ok = robot.grasp(cube)
+ret_val = robot.place(cube, goal) if grasp_ok else False
+```
+
+与 `PullCube-v1` 的区别：
+
+| 任务 | 物理动作 | 是否必须验证抓取 |
+|---|---|---|
+| `PullCube-v1` | 闭合夹爪接触方块并推移 | 否 |
+| `PickCube-v1` | 夹住方块、抬升、搬运到三维目标点 | 是 |
+
+新增 `ManiSkillPickCubeRobot` adapter。它会：
+
+```text
+张开夹爪
+→ 从方块上方靠近
+→ 下降到抓取位置
+→ 闭合夹爪
+→ 调用 ManiSkill agent.is_grasping(cube) 验证真实抓取
+→ 抬升方块
+→ 再次检查是否滑落
+→ 搬运到三维目标位置
+→ 使用 ManiSkill evaluate() 判断最终成功
+```
+
+底层控制器仍然冻结：
+
+```text
+control_mode = pd_ee_delta_pos
+low-level controller = PDEEPosController
+```
+
+LLM 只允许生成 target-side adapter，调整内容包括：
+
+```text
+抓取点偏移
+接近高度
+抬升高度
+夹爪开合等待时间
+归一化动作幅度
+抓取失败后的重试策略
+搬运 waypoint
+```
+
+远程主实验命令：
+
+```bash
+python -m maniskill_backend.module_generation_runner \
+  --case case03_pick_cube_panda_to_xarm6 \
+  --max-attempts 3 \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，而 Fetch 因动作空间、移动底盘和接触侧可达性差异迁移失败；两个案例共同说明机器人程序迁移需要跨 program、adapter、controller 和 contact geometry 的系统性诊断。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，而 Fetch 因动作空间、移动底盘和接触侧可达性差异迁移失败；下一步新增 `PickCube-v1` 抓取式迁移，用于验证 LLM 能否进一步适配抓取点、夹爪时序、抬升和三维搬运策略。

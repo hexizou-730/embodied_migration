@@ -1,4 +1,4 @@
-"""Robot capability profiles for the current PullCube migration study."""
+"""Robot capability profiles for the active ManiSkill migration studies."""
 
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
     "panda": RobotProfile(
         name="panda",
         role="source robot / fixed single arm",
-        notes="Baseline source embodiment for PullCube-v1.",
+        notes="Baseline source embodiment for PullCube-v1 and PickCube-v1.",
         card=_card(
             reach_m=0.85,
             payload_kg=3.0,
@@ -87,6 +87,8 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
                 "pull",
                 "move_to_contact",
                 "drag_contact",
+                "grasp",
+                "place",
             ],
         ),
     ),
@@ -118,7 +120,7 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
         name="xarm6_robotiq",
         role="target robot / fixed single arm",
         notes=(
-            "High-probability target embodiment for PullCube-v1 migration. "
+            "High-probability target embodiment for PullCube-v1 and PickCube-v1 migration. "
             "Unlike Fetch, this target keeps a fixed-base single-arm structure, "
             "so the migration should focus on reach, TCP/contact geometry, and "
             "controller response rather than mobile-base coordination."
@@ -137,6 +139,8 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
                 "pull",
                 "move_to_contact",
                 "drag_contact",
+                "grasp",
+                "place",
             ],
             migration_notes=[
                 "Fixed-base target: do not use mobile-base actions.",

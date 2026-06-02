@@ -17,16 +17,18 @@ from .migration import MigrationRequest, build_migration_prompt, get_source_copy
 from .reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
 from .sim_check import diagnose_graphics_stack
 from .skill_adapter import (
+    ManiSkillPickCubeRobot,
     ManiSkillPullCubeRobot,
     ManiSkillSceneAdapter,
 )
 from .tasks import get_task_spec
 
 
-SUPPORTED_REAL_TASKS = ("pull_cube",)
+SUPPORTED_REAL_TASKS = ("pull_cube", "pick_cube")
 
 DEFAULT_CONTROL_MODE: Dict[str, str] = {
     "pull_cube": "pd_ee_delta_pos",
+    "pick_cube": "pd_ee_delta_pos",
 }
 
 
@@ -40,6 +42,13 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
             return ManiSkillPullCubeRobot(env, robot_uid=robot_uid, control_mode=control_mode)
         raise ValueError(
             "PullCube real runner currently supports panda/fetch/xarm6_robotiq with "
+            f"pd_ee_delta_* control, got robot={robot_uid!r}, control_mode={control_mode!r}."
+        )
+    if task_id == "pick_cube":
+        if robot_uid in {"panda", "xarm6_robotiq"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
+            return ManiSkillPickCubeRobot(env, robot_uid=robot_uid, control_mode=control_mode)
+        raise ValueError(
+            "PickCube real runner currently supports panda/xarm6_robotiq with "
             f"pd_ee_delta_* control, got robot={robot_uid!r}, control_mode={control_mode!r}."
         )
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")

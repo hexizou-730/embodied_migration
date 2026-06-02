@@ -48,6 +48,14 @@ goal = scene.get_region("goal")
 ret_val = robot.pull(cube, goal)
 """
 
+PICK_CUBE_SOURCE = """
+cube = scene.get_object("cube")
+goal = scene.get_region("goal")
+
+grasp_ok = robot.grasp(cube)
+ret_val = robot.place(cube, goal) if grasp_ok else False
+"""
+
 
 TASK_SPECS: Dict[str, TaskSpec] = {
     "pull_cube": TaskSpec(
@@ -72,6 +80,27 @@ TASK_SPECS: Dict[str, TaskSpec] = {
             "and xarm6_robotiq."
         ),
     ),
+    "pick_cube": TaskSpec(
+        task_id="pick_cube",
+        display_name="Pick cube and move it to goal",
+        name_cn="抓取方块并移动到目标位置",
+        maniskill_env_id="PickCube-v1",
+        instruction="Grasp the cube, lift it, and move it to the 3D goal position.",
+        instruction_cn="夹住方块，将其抬起并移动到三维目标位置。",
+        source_robot="panda",
+        target_robots=("panda", "xarm6_robotiq"),
+        source_program=PICK_CUBE_SOURCE,
+        expected_failure_modes=(
+            "gripper/force failure",
+            "reachability failure",
+            "controller primitive failure",
+            "task outcome failure",
+        ),
+        notes=(
+            "Second migration task. PickCube-v1 requires a real two-finger "
+            "grasp followed by lift and transport to a 3D goal."
+        ),
+    ),
 }
 
 
@@ -80,6 +109,10 @@ TASK_ALIASES: Dict[str, str] = {
     "pull-cube": "pull_cube",
     "pullcube": "pull_cube",
     "pull": "pull_cube",
+    "PickCube-v1": "pick_cube",
+    "pick-cube": "pick_cube",
+    "pickcube": "pick_cube",
+    "pick": "pick_cube",
 }
 
 

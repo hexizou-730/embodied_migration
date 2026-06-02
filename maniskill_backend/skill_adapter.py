@@ -1,8 +1,8 @@
 """Embodiment skill adapters backed by ManiSkill actions.
 
-The active project scope is PullCube-v1 migration from Panda to Fetch. LMP code
-calls a compact skill API, while each target embodiment still needs an adapter
-that turns ``robot.pull(cube, goal)`` into real ``env.step(action)`` execution.
+LMP code calls a compact skill API, while each target embodiment still needs an
+adapter that turns skills such as ``robot.pull(cube, goal)`` or
+``robot.grasp(cube)`` into real ``env.step(action)`` execution.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class ManiSkillSceneAdapter:
 
 
 class ManiSkillDeltaEERobot:
-    """Shared delta end-effector action utilities for PullCube adapters."""
+    """Shared delta end-effector action utilities for ManiSkill adapters."""
 
     def __init__(
         self,
@@ -131,6 +131,21 @@ class ManiSkillDeltaEERobot:
             actor = getattr(base, candidate, None)
             if actor is not None:
                 return _to_numpy(actor.pose.p)
+        available = ", ".join(k for k in aliases.get(name, (name,)))
+        raise AttributeError(f"{base.__class__.__name__} has none of the actor attributes: {available}")
+
+    def _actor(self, name: str) -> Any:
+        base = self._base_env()
+        aliases = {
+            "cube": ("cube", "obj"),
+            "goal": ("goal", "goal_region", "goal_site"),
+            "goal_region": ("goal_region", "goal_site", "goal"),
+            "goal_site": ("goal_site", "goal_region", "goal"),
+        }
+        for candidate in aliases.get(name, (name,)):
+            actor = getattr(base, candidate, None)
+            if actor is not None:
+                return actor
         available = ", ".join(k for k in aliases.get(name, (name,)))
         raise AttributeError(f"{base.__class__.__name__} has none of the actor attributes: {available}")
 
@@ -348,6 +363,155 @@ class ManiSkillPullCubeRobot(ManiSkillDeltaEERobot):
             )
         except Exception:
             return "pull diagnostics unavailable"
+
+
+class ManiSkillPickCubeRobot(ManiSkillDeltaEERobot):
+    """PickCube-v1 wrapper using real grasp, lift, and transport actions."""
+
+    def __init__(
+        self,
+        env: Any,
+        *,
+        robot_uid: str,
+        control_mode: Optional[str] = None,
+        move_steps: int = 24,
+        grasp_steps: int = 12,
+        settle_steps: int = 16,
+        max_delta_m: float = 0.05,
+        approach_height_m: float = 0.10,
+        lift_height_m: float = 0.10,
+        grasp_z_offset_m: float = 0.0,
+        gripper_open: float = 1.0,
+        gripper_close: float = -1.0,
+    ) -> None:
+        self.robot_uid = robot_uid
+        self.grasp_steps = grasp_steps
+        self.approach_height_m = approach_height_m
+        self.lift_height_m = lift_height_m
+        self.grasp_z_offset_m = grasp_z_offset_m
+        self.held_object: Optional[str] = None
+        super().__init__(
+            env,
+            move_steps=move_steps,
+            settle_steps=settle_steps,
+            max_delta_m=max_delta_m,
+            gripper_open=gripper_open,
+            gripper_close=gripper_close,
+            control_mode=control_mode,
+        )
+
+    def grasp(
+        self,
+        obj: SkillTarget,
+        *,
+        grasp_z_offset: Optional[float] = None,
+        lift_height: Optional[float] = None,
+    ) -> bool:
+        if obj.name != "cube":
+            return self._fail("grasp", {"obj": obj.name}, "PickCube adapter only supports cube.")
+
+        z_offset = self.grasp_z_offset_m if grasp_z_offset is None else float(grasp_z_offset)
+        lift = self.lift_height_m if lift_height is None else float(lift_height)
+        cube_pos = self._actor_pos("cube")
+        grasp_pos = cube_pos + np.array([0.0, 0.0, z_offset], dtype=np.float32)
+        pre_grasp = grasp_pos + np.array([0.0, 0.0, self.approach_height_m], dtype=np.float32)
+
+        self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=self.grasp_steps)
+        self._move_towards(pre_grasp, gripper=self.gripper_open, steps=self.move_steps)
+        self._move_towards(grasp_pos, gripper=self.gripper_open, steps=self.move_steps)
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.grasp_steps)
+        if not self._is_grasping("cube"):
+            return self._fail(
+                "grasp",
+                {"obj": obj.name, "grasp_z_offset": round(z_offset, 4)},
+                f"cube was not grasped; {self._pick_cube_diagnostics()}",
+            )
+
+        self._move_towards(
+            self._tcp_pos() + np.array([0.0, 0.0, lift], dtype=np.float32),
+            gripper=self.gripper_close,
+            steps=self.move_steps,
+        )
+        if not self._is_grasping("cube"):
+            return self._fail(
+                "grasp",
+                {"obj": obj.name, "grasp_z_offset": round(z_offset, 4), "lift_height": round(lift, 4)},
+                f"cube slipped during lift; {self._pick_cube_diagnostics()}",
+            )
+
+        self.held_object = obj.name
+        return self._log(
+            "grasp",
+            {"obj": obj.name, "grasp_z_offset": round(z_offset, 4), "lift_height": round(lift, 4)},
+            True,
+            True,
+            "",
+        )
+
+    def place(self, obj: SkillTarget, target: SkillTarget) -> bool:
+        if obj.name != "cube":
+            return self._fail("place", {"obj": obj.name, "target": target.name}, "PickCube adapter only supports cube.")
+        if target.name not in {"goal", "goal_region", "goal_site"}:
+            return self._fail("place", {"obj": obj.name, "target": target.name}, "PickCube target must be goal.")
+        if self.held_object != obj.name or not self._is_grasping("cube"):
+            return self._fail(
+                "place",
+                {"obj": obj.name, "target": target.name},
+                f"cube must be grasped before place; {self._pick_cube_diagnostics()}",
+            )
+
+        cube_pos = self._actor_pos("cube")
+        goal_pos = self._region_pos(target.name)
+        tcp_target = self._tcp_pos() + (goal_pos - cube_pos)
+        self._move_towards(tcp_target, gripper=self.gripper_close, steps=self.move_steps * 2)
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.settle_steps)
+        ok = self._pick_cube_success()
+        return self._log(
+            "place",
+            {"obj": obj.name, "target": target.name},
+            ok,
+            ok,
+            "" if ok else f"cube was not moved to goal; {self._pick_cube_diagnostics(goal_pos)}",
+        )
+
+    def _region_pos(self, name: str) -> np.ndarray:
+        if name in {"goal", "goal_region"}:
+            name = "goal_site"
+        return self._actor_pos(name)
+
+    def _is_grasping(self, name: str) -> bool:
+        try:
+            return _scalar_bool(self._base_env().agent.is_grasping(self._actor(name)))
+        except Exception:
+            return False
+
+    def _pick_cube_success(self) -> bool:
+        if self._info_bool("success"):
+            return True
+        try:
+            result = self._base_env().evaluate()
+            self.last_info = dict(result or {})
+            return _dict_bool(result, "success")
+        except Exception:
+            return False
+
+    def _pick_cube_diagnostics(self, goal_pos: Optional[np.ndarray] = None) -> str:
+        try:
+            cube_pos = self._actor_pos("cube")
+            tcp_pos = self._tcp_pos()
+            if goal_pos is None:
+                goal_pos = self._region_pos("goal")
+            cube_goal_xyz = float(np.linalg.norm(goal_pos - cube_pos))
+            tcp_cube_xyz = float(np.linalg.norm(tcp_pos - cube_pos))
+            return (
+                f"is_grasping={self._is_grasping('cube')}, "
+                f"cube_goal_xyz={cube_goal_xyz:.4f}, "
+                f"tcp_cube_xyz={tcp_cube_xyz:.4f}, "
+                f"cube_pos={np.round(cube_pos, 4).tolist()}, "
+                f"goal_pos={np.round(goal_pos, 4).tolist()}"
+            )
+        except Exception:
+            return "pick diagnostics unavailable"
 
 
 def _to_numpy(value: Any) -> np.ndarray:

@@ -48,6 +48,8 @@ def build_iterative_prompt(
         "- scene.get_object(name)",
         "- scene.get_region(name)",
         "- robot.pull(obj, target)",
+        "- robot.grasp(obj)",
+        "- robot.place(obj, target)",
         "",
         "# Safety constraints",
         "- Output only executable Python code. Do not include Markdown.",
@@ -76,6 +78,17 @@ def build_iterative_prompt(
                 "- You may tune contact_x_offset, contact_z_offset, drag_extra, and stages.",
                 "- Do not invent grasp/place/tool APIs for PullCube-v1; this is a contact-pulling task.",
                 "- If simulator feedback shows the failure is in target contact/controller reachability, you may return `infeasible: target adapter/controller migration required`.",
+            ]
+        )
+    if task.task_id == "pick_cube":
+        lines.extend(
+            [
+                "",
+                "# Extra API for this task",
+                "- robot.grasp(cube)",
+                "- robot.place(cube, goal)",
+                "- PickCube-v1 requires real gripper grasp validation before lift and transport.",
+                "- Do not replace grasping with pushing or directly modify simulator state.",
             ]
         )
 

@@ -25,7 +25,7 @@ from .tasks import get_task_spec
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ADAPTER_CONTEXT_PATH = "maniskill_backend/skill_adapter.py"
-ADAPTER_CONTEXT_WINDOWS = ((1, 380),)
+ADAPTER_CONTEXT_WINDOWS = ((1, 580),)
 MODULE_FENCE = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 ALLOWED_IMPORT_PREFIXES = (
     "__future__",
@@ -102,17 +102,40 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
 
     common = [
         "# Mandatory target adapter constraints",
-        "- Do not return an empty pass-through subclass. A module that only inherits ManiSkillPullCubeRobot without overriding behavior is a failed migration.",
+        "- Do not return an empty pass-through subclass. A module that only inherits the source adapter without overriding behavior is a failed migration.",
         "- Preserve action clipping against env.action_space.low/high.",
         "- Do not import os, pathlib, subprocess, requests, urllib, socket, or shutil. Do not read environment variables.",
-        "- Diagnostic pattern: cube_goal_xy remains about 0.20m, tcp_cube_xy remains large, or cube position is nearly unchanged. This means the TCP did not make effective contact.",
-        "- You may increase move/contact/drag/settle steps, but step-count changes alone are not sufficient if tcp_cube_xy stays large.",
         "- Keep using the real ManiSkill success evaluation; do not infer success from distances you compute yourself.",
         "",
     ]
-    if case.target_robot == "fetch":
+    if case.task_id == "pick_cube" and case.target_robot == "xarm6_robotiq":
         return [
             *common,
+            "# Mandatory PickCube-v1 grasp migration constraints",
+            "- PickCube-v1 is a REAL GRASPING task. Do not replace grasping with pushing, contact dragging, or direct cube-state modification.",
+            "- Keep the high-level program unchanged: robot.grasp(cube) followed by robot.place(cube, goal).",
+            "- Subclass ManiSkillPickCubeRobot and preserve real env.step(action) execution.",
+            "- A successful grasp must be validated with self._is_grasping('cube') after closing the gripper and again after lifting.",
+            "- A successful task outcome must come from self._pick_cube_success(), which delegates to the real ManiSkill evaluate() signal.",
+            "- xarm6_robotiq is a fixed-base single-arm target. Do not invent mobile-base actions, navigation APIs, or Fetch-style body/base control.",
+            "- Official PickCube-v1 supports xarm6_robotiq. In pd_ee_delta_pos mode, the observed xarm6 action_space shape is exactly (4,): action[0:3] is normalized TCP delta xyz and action[3] is the active mimic-gripper command.",
+            "- Validate the exact 4D action space. Construct clipped actions with xyz in action[0:3] and the single gripper command in action[3].",
+            "- Keep the low-level ManiSkill PDEEPosController frozen. Migrate only the target-side adapter behavior.",
+            "- Prefer a conservative top-down grasp: open gripper, approach above cube, descend near cube center, close gripper, wait for contact, verify grasp, lift, verify the cube did not slip, transport to the 3D goal, then settle.",
+            "- Compared with Panda, xarm6 has 6 DoF and a different Robotiq gripper geometry. You may search a small set of bounded xyz grasp offsets and tune approach height, lift height, motion steps, gripper settle steps, and normalized action magnitude.",
+            "- If a grasp candidate fails, reopen the gripper, retreat upward, and try a different bounded candidate. Do not continue transport without a verified grasp.",
+            "- Diagnostic pattern: is_grasping=False after close means grasp geometry or gripper timing failed. is_grasping=True after close but False after lift means the cube slipped. A large cube_goal_xyz after transport means placement or waypoint execution failed.",
+            "- Do not copy a human oracle trajectory or use hidden simulator state changes. Choose your own bounded candidate offsets and step counts.",
+            "- If all bounded grasp candidates fail, return a real failure with diagnostic evidence rather than faking success.",
+        ]
+    pull_common = [
+        *common,
+        "- Diagnostic pattern: cube_goal_xy remains about 0.20m, tcp_cube_xy remains large, or cube position is nearly unchanged. This means the TCP did not make effective contact.",
+        "- You may increase move/contact/drag/settle steps, but step-count changes alone are not sufficient if tcp_cube_xy stays large.",
+    ]
+    if case.target_robot == "fetch":
+        return [
+            *pull_common,
             "# Mandatory Fetch action-space migration for this case",
             "- The latest failure shows Fetch uses action_space.shape == (9,), while the Panda source adapter assumes 4D or 7D actions.",
             "- The generated Fetch adapter must override _validate_action_space and _make_action.",
@@ -145,7 +168,7 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
         ]
     if case.target_robot == "xarm6_robotiq":
         return [
-            *common,
+            *pull_common,
             "# Mandatory xarm6_robotiq migration constraints for this case",
             "- xarm6_robotiq is a fixed-base single-arm target. Do not invent mobile-base actions, navigation APIs, or Fetch-style base/body control.",
             "- Real xarm6_robotiq diagnostic for this case: action_space.shape is EXACTLY (4,), with arm[0:3] and gripper_active[3].",
@@ -174,7 +197,38 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Success must come only from real env.step execution and the ManiSkill task success signal.",
             "- If target execution fails, report whether the failure is reachability, action-space mapping, contact establishment, or task outcome.",
         ]
-    return common
+    return pull_common
+
+
+def _task_design_lines(case: FullMigrationCase) -> List[str]:
+    """Describe the generated adapter design space for the active task."""
+
+    if case.task_id == "pick_cube":
+        return [
+            "- You may subclass ManiSkillPickCubeRobot and override methods such as grasp, place, _move_towards, _is_grasping, _pick_cube_success, or _pick_cube_diagnostics.",
+            "- You may change bounded grasp offsets, approach height, lift height, intermediate waypoints, gripper open/close timing, settle behavior, and adapter-level fallback logic.",
+            "- Keep the fixed high-level API: robot.grasp(cube), then robot.place(cube, goal).",
+        ]
+    return [
+        "- You may subclass ManiSkillPullCubeRobot and override methods such as pull, _move_towards, _pull_cube_success, or _pull_diagnostics.",
+        "- You may change contact side, contact height, intermediate waypoints, drag distance, staged motion, gripper state during contact, and controller-level fallback logic.",
+    ]
+
+
+def _retry_strategies(case: FullMigrationCase) -> tuple[str, ...]:
+    """Require a meaningful strategy change after each failed module."""
+
+    if case.task_id == "pick_cube":
+        return (
+            "Change the bounded grasp-offset search or gripper timing based on whether the latest failure happened before grasp, during lift, or during transport.",
+            "Change the top-down approach, retreat, and retry strategy. Verify grasp after close and after lift; do not repeat an ineffective geometry.",
+            "Change the fallback grasp primitive substantially: revise bounded xyz offsets, settle steps, and transport waypoints while preserving real grasp validation.",
+        )
+    return (
+        "Replace a single fixed contact point with a farther positive-x sweep start and an explicit far-side check before drag.",
+        "Try a small set of farther positive-x sweep-start candidates and change the contact-establishment motion; do not repeat the previous geometry.",
+        "Change the fallback contact primitive substantially: verify far-side reachability, descend, sweep through contact, and stop early on no progress.",
+    )
 
 
 def build_module_generation_prompt(
@@ -211,8 +265,7 @@ def build_module_generation_prompt(
         "# Migration design space",
         f"- Implement target-side execution behavior for {case.target_robot} in this generated module.",
         "- Keep the public high-level LMP API compatible with the fixed target program, but you may reinterpret skill defaults and optional parameters inside the adapter.",
-        "- You may subclass ManiSkillPullCubeRobot and override methods such as pull, _move_towards, _pull_cube_success, or _pull_diagnostics.",
-        "- You may change contact side, contact height, intermediate waypoints, drag distance, staged motion, gripper state during contact, and controller-level fallback logic.",
+        *_task_design_lines(case),
         "- You may import numpy, sapien, mani_skill motion-planning helpers, and maniskill_backend.skill_adapter symbols.",
         "",
         *_target_specific_generation_lines(case),
@@ -253,11 +306,7 @@ def build_module_generation_prompt(
     ]
     if attempts:
         retry_number = len(attempts) + 1
-        retry_strategies = (
-            "Replace a single fixed contact point with a farther positive-x sweep start and an explicit far-side check before drag.",
-            "Try a small set of farther positive-x sweep-start candidates and change the contact-establishment motion; do not repeat the previous geometry.",
-            "Change the fallback contact primitive substantially: verify far-side reachability, descend, sweep through contact, and stop early on no progress.",
-        )
+        retry_strategies = _retry_strategies(case)
         strategy = retry_strategies[min(len(attempts) - 1, len(retry_strategies) - 1)]
         lines.extend(
             [

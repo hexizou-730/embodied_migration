@@ -1,4 +1,4 @@
-"""Reporting helpers for PullCube ManiSkill trials."""
+"""Reporting helpers for ManiSkill trials."""
 
 from __future__ import annotations
 
@@ -46,15 +46,46 @@ def build_real_failure_report(
         )
     )
 
+    if task.task_id == "pick_cube":
+        expected = {
+            "execution_result": "success",
+            "pick_cube": "robot.grasp(cube) and robot.place(cube, goal) return True",
+            "target_state": "cube is grasped, lifted, and moved to the 3D goal position",
+        }
+        diagnosis = [
+            f"Execution log failed at {failed_step}.",
+            message,
+            "PickCube-v1 requires a real gripper grasp before lift and transport.",
+        ]
+        suggestions = [
+            "Call robot.grasp(cube) before robot.place(cube, goal).",
+            "Tune bounded grasp offsets, approach height, lift height, and gripper settle timing.",
+            "Do not replace grasping with pushing or directly modify cube state.",
+            "Use only the allowed high-level skill API.",
+        ]
+    else:
+        expected = {
+            "execution_result": "success",
+            "pull_cube": "robot.pull(cube, goal) returns True",
+            "target_state": "cube is pulled onto the goal region",
+        }
+        diagnosis = [
+            f"Execution log failed at {failed_step}.",
+            message,
+            "PullCube-v1 is a contact task, so failure is contact/controller migration evidence.",
+        ]
+        suggestions = [
+            "Use robot.pull(cube, goal) and tune only exposed contact parameters.",
+            "Do not add robot.grasp(cube); PullCube-v1 is solved by contact pulling.",
+            "If contact parameters cannot solve the failure, report `infeasible: target contact/controller migration required`.",
+            "Use only the allowed high-level skill API.",
+        ]
+
     return FailureReport(
         task_name=task.task_id,
         instruction=task.instruction,
         robot_name=target_profile.name,
-        expected={
-            "execution_result": "success",
-            "pull_cube": "robot.pull(cube, goal) returns True",
-            "target_state": "cube is pulled onto the goal region",
-        },
+        expected=expected,
         actual={
             "execution_result": "failure",
             "failure_type": failed_record.failure_type,
@@ -62,17 +93,8 @@ def build_real_failure_report(
             "message": message,
             "failed_skill_call": failed_step,
         },
-        diagnosis=[
-            f"Execution log failed at {failed_step}.",
-            message,
-            "PullCube-v1 is a contact task, so failure is contact/controller migration evidence.",
-        ],
-        suggestions=[
-            "Use robot.pull(cube, goal) and tune only exposed contact parameters.",
-            "Do not add robot.grasp(cube); PullCube-v1 is solved by contact pulling.",
-            "If contact parameters cannot solve the failure, report `infeasible: target contact/controller migration required`.",
-            "Use only the allowed high-level skill API.",
-        ],
+        diagnosis=diagnosis,
+        suggestions=suggestions,
     )
 
 

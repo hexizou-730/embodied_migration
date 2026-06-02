@@ -29,40 +29,52 @@ from maniskill_backend.real_runner import (
 )
 from maniskill_backend.reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
 from maniskill_backend.results import append_jsonl, summarize_records
-from maniskill_backend.skill_adapter import ManiSkillPullCubeRobot, ManiSkillSceneAdapter
+from maniskill_backend.skill_adapter import ManiSkillPickCubeRobot, ManiSkillPullCubeRobot, ManiSkillSceneAdapter
 from maniskill_backend.tasks import get_task_spec, iter_task_specs
 from maniskill_backend.view import records_to_md
 from llm_client import api_key_env, current_provider, deepseek_thinking_mode, default_model
 
 
 class RealBackendTest(unittest.TestCase):
-    def test_current_scope_is_pull_cube_panda_to_fetch_and_xarm6(self):
+    def test_current_scope_includes_pull_and_pick_cube(self):
         self.assertEqual([profile.name for profile in iter_robot_profiles()], ["panda", "fetch", "xarm6_robotiq"])
-        self.assertEqual([task.task_id for task in iter_task_specs()], ["pull_cube"])
+        self.assertEqual([task.task_id for task in iter_task_specs()], ["pull_cube", "pick_cube"])
         task = get_task_spec("PullCube-v1")
         self.assertEqual(task.task_id, "pull_cube")
         self.assertEqual(task.maniskill_env_id, "PullCube-v1")
         self.assertEqual(task.source_robot, "panda")
         self.assertEqual(task.target_robots, ("panda", "fetch", "xarm6_robotiq"))
         self.assertIn("robot.pull", task.source_program)
+        pick = get_task_spec("PickCube-v1")
+        self.assertEqual(pick.task_id, "pick_cube")
+        self.assertEqual(pick.maniskill_env_id, "PickCube-v1")
+        self.assertEqual(pick.target_robots, ("panda", "xarm6_robotiq"))
+        self.assertIn("robot.grasp", pick.source_program)
+        self.assertIn("robot.place", pick.source_program)
 
-    def test_primary_case_is_xarm6_success_candidate(self):
+    def test_primary_case_is_xarm6_pick_cube(self):
         case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
         self.assertIs(case, PRIMARY_FULL_MIGRATION_CASE)
-        self.assertEqual(case.case_id, "case02_pull_cube_panda_to_xarm6")
-        self.assertEqual(case.task_id, "pull_cube")
+        self.assertEqual(case.case_id, "case03_pick_cube_panda_to_xarm6")
+        self.assertEqual(case.task_id, "pick_cube")
         self.assertEqual(case.source_robot, "panda")
         self.assertEqual(case.target_robot, "xarm6_robotiq")
         self.assertEqual(case.target_control_mode, "pd_ee_delta_pos")
-        self.assertEqual(case.target_program_path, "maniskill_backend/case_programs/case01_pull_cube.py")
-        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case02_xarm6_pull_cube")
-        self.assertEqual(case.target_adapter_path, "maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py")
-        self.assertIn("contact_primitive", case.migration_layers)
+        self.assertEqual(case.target_program_path, "maniskill_backend/case_programs/case03_pick_cube.py")
+        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case03_xarm6_pick_cube")
+        self.assertEqual(case.target_adapter_path, "maniskill_backend/generated_adapters/case03_xarm6_pick_cube.py")
+        self.assertIn("grasp_geometry", case.migration_layers)
 
     def test_case01_remains_fetch_failure_case(self):
         case = get_full_migration_case("case01_pull_cube_panda_to_fetch")
         self.assertEqual(case.target_robot, "fetch")
         self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case01_fetch_pull_cube")
+
+    def test_case02_remains_xarm6_pull_success_case(self):
+        case = get_full_migration_case("case02_pull_cube_panda_to_xarm6")
+        self.assertEqual(case.task_id, "pull_cube")
+        self.assertEqual(case.target_robot, "xarm6_robotiq")
+        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case02_xarm6_pull_cube")
 
     def test_profiles_are_promptable(self):
         panda = get_robot_profile("panda").to_prompt_section()
@@ -85,7 +97,7 @@ class RealBackendTest(unittest.TestCase):
             self.assertEqual(deepseek_thinking_mode(), "disabled")
 
     def test_removed_task_specs_are_not_current_scope(self):
-        for old_task in ("pick_cube", "stack_cube", "peg_insertion", "pull_cube_tool"):
+        for old_task in ("stack_cube", "peg_insertion", "pull_cube_tool"):
             with self.assertRaises(KeyError):
                 get_task_spec(old_task)
 
@@ -120,7 +132,7 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         validate_generated_adapter_module(safe)
 
     def test_module_generation_prompt_requests_pull_cube_adapter(self):
-        case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
+        case = get_full_migration_case("case02_pull_cube_panda_to_xarm6")
         prompt = build_module_generation_prompt(
             case=case,
             target_result={
@@ -137,7 +149,7 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("infeasible:", prompt)
 
     def test_module_generation_retry_prompt_requires_strategy_change(self):
-        case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
+        case = get_full_migration_case("case02_pull_cube_panda_to_xarm6")
         failure = {
             "success": False,
             "failure_layer": "skill_adapter",
@@ -158,6 +170,46 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         )
         self.assertIn("Do not return a module identical", prompt)
         self.assertIn("farther positive-x sweep start", prompt)
+
+    def test_module_generation_prompt_requests_pick_cube_grasp_adapter(self):
+        case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
+        prompt = build_module_generation_prompt(
+            case=case,
+            target_result={
+                "success": False,
+                "failure_layer": "skill_adapter",
+                "message": "cube was not grasped",
+            },
+            attempts=[],
+        )
+        self.assertIn("ManiSkillPickCubeRobot", prompt)
+        self.assertIn("REAL GRASPING", prompt)
+        self.assertIn("robot.grasp(cube) followed by robot.place(cube, goal)", prompt)
+        self.assertIn("self._is_grasping('cube')", prompt)
+        self.assertNotIn("farther positive-x sweep start", prompt)
+
+    def test_module_generation_pick_retry_changes_grasp_strategy(self):
+        case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
+        failure = {
+            "success": False,
+            "failure_layer": "skill_adapter",
+            "message": "cube was not grasped",
+        }
+        prompt = build_module_generation_prompt(
+            case=case,
+            target_result=failure,
+            attempts=[
+                {
+                    "round": 1,
+                    "module_valid": True,
+                    "module_kept": True,
+                    "verification_ok": True,
+                    "target_result": failure,
+                }
+            ],
+        )
+        self.assertIn("Do not return a module identical", prompt)
+        self.assertIn("bounded grasp-offset search", prompt)
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(
@@ -221,6 +273,9 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         xarm_robot = _build_robot_adapter("pull_cube", Env(), "pd_ee_delta_pos", "xarm6_robotiq")
         self.assertIsInstance(xarm_robot, ManiSkillPullCubeRobot)
         self.assertEqual(xarm_robot.robot_uid, "xarm6_robotiq")
+        pick_robot = _build_robot_adapter("pick_cube", Env(), "pd_ee_delta_pos", "panda")
+        self.assertIsInstance(pick_robot, ManiSkillPickCubeRobot)
+        self.assertEqual(pick_robot.robot_uid, "panda")
 
     def test_generated_target_adapter_module_loads(self):
         class Space:
@@ -248,6 +303,14 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         )
         self.assertIsInstance(xarm_robot, ManiSkillPullCubeRobot)
         self.assertEqual(xarm_robot.robot_uid, "xarm6_robotiq")
+        pick_robot = _build_robot_adapter_from_module(
+            "maniskill_backend.generated_adapters.case03_xarm6_pick_cube",
+            Env(),
+            "pd_ee_delta_pos",
+            "xarm6_robotiq",
+        )
+        self.assertIsInstance(pick_robot, ManiSkillPickCubeRobot)
+        self.assertEqual(pick_robot.robot_uid, "xarm6_robotiq")
 
     def test_pull_cube_robot_action_shape(self):
         class Space:
@@ -276,6 +339,21 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertTrue(ok, message)
         self.assertTrue(locals_dict["ret_val"])
 
+    def test_lmp_executor_supports_pick_program(self):
+        class Robot:
+            def grasp(self, obj):
+                return obj.name == "cube"
+
+            def place(self, obj, target):
+                return obj.name == "cube" and target.name == "goal"
+
+        ok, message, locals_dict = execute_lmp(
+            get_task_spec("pick_cube").source_program,
+            {"scene": ManiSkillSceneAdapter(), "robot": Robot()},
+        )
+        self.assertTrue(ok, message)
+        self.assertTrue(locals_dict["ret_val"])
+
     def test_oracle_code_is_source_program(self):
         task = get_task_spec("pull_cube")
         self.assertEqual(build_oracle_code(task), task.source_program.strip())
@@ -295,6 +373,14 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertEqual(
             classify_failure(success=False, message="infeasible: contact pose outside workspace"),
             "impossible-task refusal failure",
+        )
+        self.assertEqual(
+            classify_failure(success=False, message="cube slipped during lift"),
+            "gripper/force failure",
+        )
+        self.assertEqual(
+            classify_failure(success=False, message="cube was not moved to goal"),
+            "execution failure",
         )
 
     def test_failure_layer_classifier(self):
@@ -342,6 +428,38 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         text = report.to_prompt_section()
         self.assertIn("robot.pull(cube, goal)", text)
         self.assertIn("Do not add robot.grasp(cube)", text)
+
+    def test_pick_cube_failure_report(self):
+        task = get_task_spec("pick_cube")
+        profile = get_robot_profile("xarm6_robotiq")
+        record = TrialRecord(
+            task_id="pick_cube",
+            source_robot="panda",
+            target_robot="xarm6_robotiq",
+            method="source-copy",
+            seed=0,
+            generated_code=task.source_program,
+            success=False,
+            failure_type="gripper/force failure",
+            failure_layer="skill_adapter",
+            message="cube was not grasped",
+            info={
+                "execution_log": [
+                    {
+                        "step": 1,
+                        "api": "grasp",
+                        "args": {"obj": "cube"},
+                        "ok": False,
+                        "message": "cube was not grasped",
+                    }
+                ]
+            },
+        )
+        report = build_real_failure_report(task=task, target_profile=profile, failed_record=record)
+        text = report.to_prompt_section()
+        self.assertIn("robot.grasp(cube)", text)
+        self.assertIn("real gripper grasp", text)
+        self.assertIn("Do not replace grasping with pushing", text)
 
     def test_results_summary_and_markdown(self):
         records = [

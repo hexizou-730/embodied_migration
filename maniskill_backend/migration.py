@@ -65,6 +65,8 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         "- scene.get_object(name)",
         "- scene.get_region(name)",
         "- robot.pull(obj, target)",
+        "- robot.grasp(obj)",
+        "- robot.place(obj, target)",
         "",
         "# Safety constraints",
         "- Do not fake success, bypass task outcomes, or directly modify simulator state.",
@@ -94,6 +96,17 @@ def build_migration_prompt(request: MigrationRequest) -> str:
                 "- robot.pull(cube, goal, contact_x_offset=0.07, contact_z_offset=0.02, stages=4) can tune the contact primitive.",
         "- Do not invent grasp/place/tool APIs for PullCube-v1; this is a contact-pulling task.",
                 "- If all exposed contact parameter choices are infeasible for the target, set ret_val to `infeasible: ...` rather than adding unsupported low-level object access.",
+            ]
+        )
+    if request.task.task_id == "pick_cube":
+        lines.extend(
+            [
+                "",
+                "# Task-specific API note",
+                "- For PickCube-v1, call robot.grasp(cube) before robot.place(cube, goal).",
+                "- PickCube-v1 requires a real gripper grasp, lift, and transport to a 3D goal.",
+                "- Do not replace grasping with contact pushing or directly modify cube state.",
+                "- If the target cannot establish a stable grasp, set ret_val to `infeasible: ...` rather than faking success.",
             ]
         )
 
