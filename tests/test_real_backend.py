@@ -190,6 +190,8 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("cube_pos.z=-0.8996", prompt)
         self.assertIn("preserve the grasp and return success", prompt)
         self.assertIn("tcp_cube_xyz=0.0102", prompt)
+        self.assertIn("pushed the cube laterally by 0.1513m", prompt)
+        self.assertIn("slow near-vertical descent", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
@@ -216,6 +218,7 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("bounded grasp-offset search", prompt)
         self.assertIn("cube-displacement guard", prompt)
         self.assertIn("Preserve enough episode budget for transport", prompt)
+        self.assertIn("finish xy alignment while safely above the cube", prompt)
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(

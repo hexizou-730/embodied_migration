@@ -1270,6 +1270,43 @@ all grasp candidates failed
 
 这仍然是 failure-driven prompt adaptation：LLM 得到的是失败证据和正确的状态机约束，没有得到人工编写的成功动作序列。
 
+### 9.9 PickCube 第三轮远程结果：首次接近轨迹仍需修正
+
+加入抓取后状态保留与 transport 预算约束后，新一轮运行结果：
+
+| Round | 代码校验 | 真实执行 | 关键结果 |
+|---|---|---|---|
+| 1 | 通过 | 失败 | 第一次尝试仍把方块横向推动 `0.1513 m` |
+| 2 | 未通过 | 未执行 | LLM 返回与当前失败模块相同的代码 |
+| 3 | 未通过 | 未执行 | LLM 再次返回相同代码 |
+
+这次不是 token 截断。Round 2 和 Round 3 的明确错误为：
+
+```text
+ValueError('Generated adapter module is unchanged from the current failed module.')
+```
+
+失败范围进一步收窄：
+
+```text
+第一次接近和下降轨迹存在横向冲击
+多候选数量不是当前关键问题
+DeepSeek 未根据反馈实质修改下降阶段
+```
+
+下一轮 prompt 强制要求：
+
+```text
+在方块上方安全高度先完成 xy 对齐
+接近物体后只做近似垂直的 z 方向下降
+最终下降阶段更严格限制水平动作分量
+闭爪前检查 TCP 水平误差
+若水平对齐失败，在触碰方块前报告 approach failure
+减少候选数量，禁止用更大的候选网格掩盖下降轨迹问题
+```
+
+这依旧只提供真实失败证据和适配原则，不包含人工成功动作序列。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成了能够真实夹住并部分抬升方块的 adapter；下一步将修正抓取后状态机和 episode 预算分配，完成三维搬运。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前正在通过 failure-driven prompt adaptation 修正首次下降阶段的横向冲击，随后完成三维搬运。

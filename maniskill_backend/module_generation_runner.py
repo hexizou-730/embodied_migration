@@ -128,6 +128,11 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Do not chase a displaced cube across the table with many sequential candidates. Prefer a small number of minimally destructive attempts and let the outer generation round reset the environment before trying a substantially different strategy.",
             "- If a safe grasp candidate fails, reopen the gripper, retreat upward, and try a different bounded candidate. Do not continue transport without a verified grasp.",
             "- Preserve enough episode budget for transport. Do not spend most of the episode on grasp-candidate search, long retreats, or repeated settle loops. Prefer one or two safe candidates before returning a real failure for the outer generation round.",
+            "- Latest real xarm6 PickCube failure after the transport-budget prompt: the first candidate still pushed the cube laterally by 0.1513m before candidate 2. This is an approach/descent failure, not a reason to add more candidates.",
+            "- When the first grasp attempt causes large lateral cube displacement, change the FIRST approach trajectory substantially. Use a high pre-grasp waypoint directly above the chosen grasp point, finish xy alignment while safely above the cube, then perform a slow near-vertical descent with little or no xy command.",
+            "- During the final descent near the cube, clamp horizontal normalized commands more tightly than vertical commands, or split xy alignment and z descent into separate phases. Do not send diagonal descent commands that can sweep the gripper sideways through the cube.",
+            "- Before closing the gripper, verify that the TCP is close to the intended grasp point and that horizontal tracking error is small. If the far-above alignment failed, return a real reachability or approach failure before touching the cube.",
+            "- Do not answer a repeated approach failure by adding a larger candidate grid. Reduce to one or two safe candidates and change descent speed, xy/z phase separation, settle timing, or approach waypoint geometry.",
             "- Check self._early_stop() after approach, close, lift, and transport phases. If the episode terminated or truncated, return a phase-specific real failure message instead of trying another candidate.",
             "- If self._is_grasping('cube') is True after lifting, immediately set self.held_object and return grasp success so the unchanged high-level program can call place(cube, goal). Do not reopen the gripper or continue searching candidates.",
             "- Before reporting that all grasp candidates failed, check self._is_grasping('cube') one last time. If it is True and the episode is still active, preserve the grasp and return success. If it is True but the episode already truncated, report that the budget was exhausted after grasp and before transport.",
@@ -231,8 +236,8 @@ def _retry_strategies(case: FullMigrationCase) -> tuple[str, ...]:
     if case.task_id == "pick_cube":
         return (
             "Change the bounded grasp-offset search or gripper timing based on whether the latest failure happened before grasp, during lift, or during transport. Add a cube-displacement guard before trying another candidate.",
-            "Change the top-down approach, retreat, and retry strategy. Verify grasp after close and after lift; do not chase a cube that was already pushed away or knocked off the table.",
-            "Change the fallback grasp primitive substantially: preserve a verified grasp, reserve episode budget for place(cube, goal), and revise bounded xyz offsets, settle steps, and transport waypoints while keeping minimally destructive retries.",
+            "Change the FIRST top-down approach substantially: finish xy alignment above the cube, then descend nearly vertically with tightly clamped horizontal commands. Reduce the candidate count; do not chase a cube that was already pushed away.",
+            "Change the fallback grasp primitive substantially: use one or two minimally destructive candidates, separate xy alignment from z descent, preserve a verified grasp, and reserve episode budget for place(cube, goal).",
         )
     return (
         "Replace a single fixed contact point with a farther positive-x sweep start and an explicit far-side check before drag.",
