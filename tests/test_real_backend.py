@@ -195,6 +195,9 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("Close the gripper only when the measured xy and z residuals", prompt)
         self.assertIn("final tcp_cube_xyz after retreat is not enough", prompt)
         self.assertIn("does NOT prove the close-time TCP was 0.1573m away", prompt)
+        self.assertIn("reduced cube displacement after close to 0.0015m", prompt)
+        self.assertIn("cube_half_size=0.02m", prompt)
+        self.assertIn("Z-focused offset set", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):

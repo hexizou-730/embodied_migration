@@ -1359,6 +1359,55 @@ is_grasping_after_close
 
 这一步的目的不是人工指定成功轨迹，而是让 LLM 获得足够精确的真实失败反馈。
 
+### 9.11 PickCube 第五轮远程结果：转向夹爪包络高度
+
+加入 readiness guard 后，DeepSeek V4-Pro 在 Round 2 生成了更保守的单候选 adapter：
+
+```text
+安全高度接近
+→ xy 单独对齐
+→ z 单独下降
+→ 检查闭爪前残差
+→ 闭爪
+```
+
+关键结果：
+
+```text
+is_grasping=False
+displacement=0.0015m
+cube_pos=[0.0007, 0.0533, 0.02]
+```
+
+这表明水平冲击问题基本解决：方块只移动约 `1.5 mm`，没有掉落，也没有被明显推离原位。但夹爪仍未形成真实抓取。
+
+ManiSkill 官方 `PickCube-v1` 配置中，`xarm6_robotiq` 使用：
+
+```text
+cube_half_size=0.02m
+```
+
+当前 LLM 代码允许：
+
+```text
+tcp_grasp_xy <= 0.025m
+tcp_grasp_z <= 0.025m
+```
+
+该容差比方块半边长还大。由此推断，即使 readiness guard 通过，TCP 也可能仍未进入有效夹持包络。
+
+下一轮 prompt 要求：
+
+```text
+使用更严格的闭爪前 xy/z 残差阈值
+在固定 xy 下尝试少量有边界的 z 偏移
+调整闭爪等待时间和 settle 时间
+每个闭爪失败消息必须保留 tcp_grasp_xy 和 tcp_grasp_z
+禁止重新扩大水平候选搜索
+```
+
+这依旧不包含人工成功轨迹。提示仅加入官方物体尺寸和真实失败证据。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前正在加入闭爪前阶段诊断和 readiness guard，以区分下降未到位、抓取几何不匹配和夹爪时序问题。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前已经基本消除首次下降的水平冲击，下一步针对夹爪包络高度、闭爪残差和闭爪时序完成抓取迁移。
