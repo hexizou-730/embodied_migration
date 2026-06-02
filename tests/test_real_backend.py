@@ -192,6 +192,9 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("tcp_cube_xyz=0.0102", prompt)
         self.assertIn("pushed the cube laterally by 0.1513m", prompt)
         self.assertIn("slow near-vertical descent", prompt)
+        self.assertIn("Close the gripper only when the measured xy and z residuals", prompt)
+        self.assertIn("final tcp_cube_xyz after retreat is not enough", prompt)
+        self.assertIn("does NOT prove the close-time TCP was 0.1573m away", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
@@ -219,6 +222,7 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("cube-displacement guard", prompt)
         self.assertIn("Preserve enough episode budget for transport", prompt)
         self.assertIn("finish xy alignment while safely above the cube", prompt)
+        self.assertIn("Add phase-specific diagnostics before close and after close", prompt)
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(

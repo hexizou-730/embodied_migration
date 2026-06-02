@@ -1307,6 +1307,58 @@ DeepSeek 未根据反馈实质修改下降阶段
 
 这依旧只提供真实失败证据和适配原则，不包含人工成功动作序列。
 
+### 9.10 PickCube 第四轮远程结果：需要闭爪前阶段诊断
+
+加入 `xy/z` 分离下降约束后，DeepSeek V4-Pro 生成了新的 `_approach_and_close()`：
+
+```text
+安全高度完成 xy 对齐
+→ 近似垂直下降
+→ 水平动作限幅 ±0.3
+→ 垂直动作限幅 ±0.8
+→ 闭合夹爪
+```
+
+运行结果：
+
+```text
+is_grasping=False
+cube_goal_xyz=0.2793
+tcp_cube_xyz=0.1573
+```
+
+方块仍在桌面附近：
+
+```text
+cube_pos=[-0.0108, 0.0634, 0.02]
+```
+
+Round 2 和 Round 3 再次返回相同模块，没有进入仿真。此时不能直接根据 `tcp_cube_xyz=0.1573` 断定下降停得太高，因为这项指标是在候选失败、开爪和撤退后记录的最终距离。
+
+当前缺失的是闭爪时刻的阶段证据：
+
+```text
+tcp_pos
+intended_grasp_pos
+tcp_grasp_xy
+tcp_grasp_z
+cube_pos
+cube_displacement
+is_grasping_after_close
+```
+
+下一轮 prompt 强制要求：
+
+```text
+固定步数下降后重新测量 TCP 到抓取点的残差
+只有 xy 和 z 残差足够小时才允许闭爪
+若尚未到位，执行有上限的垂直精调或报告 approach-alignment failure
+闭爪前后记录阶段级诊断
+不要用撤退后的最终 TCP 距离判断闭爪阶段根因
+```
+
+这一步的目的不是人工指定成功轨迹，而是让 LLM 获得足够精确的真实失败反馈。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前正在通过 failure-driven prompt adaptation 修正首次下降阶段的横向冲击，随后完成三维搬运。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前正在加入闭爪前阶段诊断和 readiness guard，以区分下降未到位、抓取几何不匹配和夹爪时序问题。
