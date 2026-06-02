@@ -566,6 +566,25 @@ python -m maniskill_backend.module_generation_runner \
   --render-backend gpu
 ```
 
+### 4.9 最新 Opus 4.6 自动生成实验：反向推动失败
+
+在修复安全校验误报、限制 LLM 输出 token 并启用模块快照后，Opus 4.6 生成的三轮 adapter 均通过单元测试并进入真实 ManiSkill 仿真。
+
+结果：
+
+| Round | `cube_goal_xy` | cube 最终 x | 结论 |
+|---|---:|---:|---|
+| R1 | `0.3124m` | `+0.1096m` | 方块被推向错误的 `+x` 方向 |
+| R2 | `0.5107m` | `+0.3057m` | 在错误方向上继续累积 |
+| R3 | `0.5806m` | `+0.3724m` | TCP 与 cube 脱离，任务进一步恶化 |
+
+本轮说明：
+
+- LLM 已经能够生成可执行、可测试、可进入真实仿真的目标 adapter；
+- 失败不再来自代码格式、安全校验或动作空间误判；
+- 当前主要问题是 contact primitive 的方向语义：`+x` 只能用于接触前绕到 cube 右侧，建立接触后必须沿 `-x` 拖拽；
+- Prompt 将增加反向进展守卫：若 cube x 或 `cube_goal_xy` 增加，应立即停止当前接触尝试。
+
 ## 5. 最新诊断：Fetch 接触侧不可达
 
 为了判断 Fetch 是不是只是 Z 轴高度不够，我们做了 Z 轴下降测试。
@@ -673,7 +692,7 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | xarm6 module generation | 已跑 | 3轮后仍失败，但方块已向目标方向移动约 5 cm |
 | xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
 | xarm6 oracle adapter | 成功 | 内部可行性证据：`success=true`, `elapsed_steps=191` |
-| xarm6 LLM 自动生成主线 | 待重跑 | `case02` 已恢复为非 oracle seed，等待 Opus 4.6 自动生成 |
+| xarm6 LLM 自动生成主线 | 已跑，待继续优化 | 生成模块可执行，但最新三轮将 cube 反向推至 `+x`，Prompt 已加入方向守卫 |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
