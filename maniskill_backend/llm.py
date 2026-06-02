@@ -9,7 +9,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-from llm_client import DEFAULT_MODEL, chat, make_client
+from llm_client import api_key_env, chat, current_provider, default_model, has_api_key, make_client
 from lmp.extractor import extract_code_or_text
 
 
@@ -33,7 +33,7 @@ class LLMTextResult:
 
 def has_llm_key() -> bool:
     load_dotenv(Path.cwd() / ".env")
-    return bool(os.environ.get("OPENROUTER_API_KEY"))
+    return has_api_key()
 
 
 def gen_code(
@@ -46,7 +46,8 @@ def gen_code(
     """Generate adapted code, falling back to deterministic code without a key."""
 
     load_dotenv(Path.cwd() / ".env")
-    chosen_model = model or os.environ.get("EM_MODEL") or DEFAULT_MODEL
+    provider = current_provider()
+    chosen_model = model or default_model(provider)
     if dry_run:
         return LLMResult(
             code=fallback_code,
@@ -55,12 +56,12 @@ def gen_code(
             reason="dry_run",
         )
 
-    if not os.environ.get("OPENROUTER_API_KEY"):
+    if not has_api_key(provider):
         return LLMResult(
             code=fallback_code,
             used_llm=False,
             model=chosen_model,
-            reason="missing_openrouter_api_key",
+            reason=f"missing_{api_key_env(provider).lower()}",
         )
 
     system = (
@@ -68,7 +69,7 @@ def gen_code(
         "Return only executable Python code. Do not include Markdown."
     )
     raw_text = chat(
-        client=make_client(),
+        client=make_client(provider),
         system=system,
         user=prompt,
         model=chosen_model,
@@ -93,7 +94,8 @@ def gen_text(
     """Generate free-form text for bounded repo-level repair workflows."""
 
     load_dotenv(Path.cwd() / ".env")
-    chosen_model = model or os.environ.get("EM_MODEL") or DEFAULT_MODEL
+    provider = current_provider()
+    chosen_model = model or default_model(provider)
     if dry_run:
         return LLMTextResult(
             text=fallback_text,
@@ -101,16 +103,16 @@ def gen_text(
             model=chosen_model,
             reason="dry_run",
         )
-    if not os.environ.get("OPENROUTER_API_KEY"):
+    if not has_api_key(provider):
         return LLMTextResult(
             text=fallback_text,
             used_llm=False,
             model=chosen_model,
-            reason="missing_openrouter_api_key",
+            reason=f"missing_{api_key_env(provider).lower()}",
         )
 
     raw_text = chat(
-        client=make_client(),
+        client=make_client(provider),
         system=system,
         user=prompt,
         model=chosen_model,

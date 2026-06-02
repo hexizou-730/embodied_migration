@@ -63,11 +63,50 @@ OK
 这些测试会确认：
 
 - 当前只接受 `pull_cube`；
-- 当前只接受 `panda` 和 `fetch`；
+- 当前使用 `panda`、`fetch` 和 `xarm6_robotiq`；
 - 旧的 `pull_cube_tool`、`stack_cube`、`peg_insertion` 等任务已不在主线；
 - 生成 adapter 的接口仍然可用。
 
-## 4. 跑 Panda 源端
+## 4. 配置 DeepSeek API
+
+如果你要让 LLM 参与生成 xarm6 adapter，先创建 `.env`：
+
+```bash
+cp .env.example .env
+```
+
+然后编辑 `.env`，填入：
+
+```text
+EM_LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=你的_deepseek_key
+EM_MODEL=deepseek-v4-pro
+```
+
+检查 key 是否被项目识别：
+
+```bash
+python - <<'PY'
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path.cwd() / ".env")
+from maniskill_backend.llm import has_llm_key
+from llm_client import current_provider, default_model
+print("provider =", current_provider())
+print("model =", default_model())
+print("has_llm_key =", has_llm_key())
+PY
+```
+
+预期输出：
+
+```text
+provider = deepseek
+model = deepseek-v4-pro
+has_llm_key = True
+```
+
+## 5. 跑 Panda 源端
 
 ```bash
 python -m maniskill_backend.real_runner \
@@ -92,18 +131,18 @@ python -m maniskill_backend.real_runner \
 
 如果 Panda 源端失败，说明源任务还没有建立好，不能进入迁移对比。
 
-## 5. 跑 Fetch 目标端 source-copy
+## 6. 跑 xarm6 目标端 source-copy
 
 ```bash
 python -m maniskill_backend.real_runner \
   --task pull_cube \
-  --robot fetch \
+  --robot xarm6_robotiq \
   --method source-copy \
   --seed 0 \
   --control-mode pd_ee_delta_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 100
+  --max-episode-steps 500
 ```
 
 可能输出两种结果。
@@ -111,7 +150,7 @@ python -m maniskill_backend.real_runner \
 成功时：
 
 ```text
-"robot_uid": "fetch"
+"robot_uid": "xarm6_robotiq"
 "success": true
 ```
 
@@ -125,11 +164,11 @@ python -m maniskill_backend.real_runner \
 
 这一步的作用是得到目标机器人真实失败日志。
 
-## 6. 跑主实验：LLM 生成 Fetch adapter
+## 7. 跑主实验：LLM 生成 xarm6 adapter
 
 ```bash
 python -m maniskill_backend.module_generation_runner \
-  --case case01_pull_cube_panda_to_fetch \
+  --case case02_pull_cube_panda_to_xarm6 \
   --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
@@ -139,12 +178,12 @@ python -m maniskill_backend.module_generation_runner \
 
 ```text
 1. 检查 Panda 源端
-2. 检查 Fetch 目标端
-3. 如果 Fetch 失败，把 failure log 发给 LLM
+2. 检查 xarm6 目标端
+3. 如果 xarm6 失败，把 failure log 发给 LLM
 4. LLM 生成完整 Python adapter module
-5. 写入 maniskill_backend/generated_adapters/case01_fetch_pull_cube.py
+5. 写入 maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py
 6. 跑单元测试
-7. 用生成的 adapter 重新跑 Fetch
+7. 用生成的 adapter 重新跑 xarm6
 8. 写入结果文件
 ```
 
@@ -155,27 +194,27 @@ results/module_generation_trials.jsonl
 results/module_generation_trials.md
 ```
 
-## 7. 单独测试当前生成的 Fetch adapter
+## 8. 单独测试当前生成的 xarm6 adapter
 
 ```bash
 python -m maniskill_backend.real_runner \
   --task pull_cube \
-  --robot fetch \
+  --robot xarm6_robotiq \
   --method target-module-generation \
   --seed 0 \
   --control-mode pd_ee_delta_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 100 \
+  --max-episode-steps 500 \
   --code-file maniskill_backend/case_programs/case01_pull_cube.py \
-  --adapter-module maniskill_backend.generated_adapters.case01_fetch_pull_cube
+  --adapter-module maniskill_backend.generated_adapters.case02_xarm6_pull_cube
 ```
 
 预期输出：
 
 ```text
 "method": "target-module-generation"
-"robot_uid": "fetch"
+"robot_uid": "xarm6_robotiq"
 "success": true/false
 ```
 
@@ -191,19 +230,19 @@ python -m maniskill_backend.real_runner \
 
 这些字段就是后续写论文时的失败分析证据。
 
-## 8. 跑 program-only baseline
+## 9. 跑 program-only baseline
 
 ```bash
 python -m maniskill_backend.iterative_runner \
   --task pull_cube \
   --source-robot panda \
-  --target-robot fetch \
+  --target-robot xarm6_robotiq \
   --max-attempts 3 \
   --seed 0 \
   --target-control-mode pd_ee_delta_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 100
+  --max-episode-steps 500
 ```
 
 这个 baseline 只让 LLM 改高层 LMP 代码，不改 skill adapter。
@@ -215,11 +254,11 @@ program-only migration 不够；
 目标机器人还需要 skill/contact/controller 层迁移。
 ```
 
-## 9. 看结果
+## 10. 看结果
 
 ```bash
 tail -n 120 results/module_generation_trials.md
-git diff -- maniskill_backend/generated_adapters/case01_fetch_pull_cube.py
+git diff -- maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py
 git status --short
 ```
 
@@ -227,17 +266,17 @@ git status --short
 
 - 每轮是否调用了 LLM；
 - 每轮生成的 adapter 是否通过测试；
-- Fetch 最终是否成功；
+- xarm6 最终是否成功；
 - 生成 adapter 和默认 adapter 的代码差异。
 
-## 10. 推荐演示顺序
+## 11. 推荐演示顺序
 
 给老师演示时按这个顺序：
 
-1. 打开 `README.md`，说明当前只做 `Panda -> Fetch` 的 `PullCube-v1`。
+1. 打开 `README.md`，说明当前主实验是 `Panda -> xarm6_robotiq` 的 `PullCube-v1`。
 2. 展示源程序只有 `robot.pull(cube, goal)`。
 3. 跑 `python -m unittest discover -s tests -v`。
 4. 跑 Panda source-copy，证明源端可行。
-5. 跑 Fetch source-copy，展示目标端成功或失败日志。
+5. 跑 xarm6 source-copy，展示目标端成功或失败日志。
 6. 跑 `module_generation_runner`，展示 LLM 生成目标 adapter。
 7. 打开 `results/module_generation_trials.md`，解释迁移差异。

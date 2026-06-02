@@ -64,7 +64,7 @@ bash "$PROJECT_DIR/scripts/setup_ubuntu_maniskill.sh" "${SETUP_ARGS[@]}"
 
 if [[ ! -f "$PROJECT_DIR/.env" && -f "$PROJECT_DIR/.env.example" ]]; then
   cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
-  log "Created .env from .env.example. Add OPENROUTER_API_KEY before LLM runs."
+  log "Created .env from .env.example. Add OPENROUTER_API_KEY or DEEPSEEK_API_KEY before LLM runs."
 fi
 
 cat <<EOF

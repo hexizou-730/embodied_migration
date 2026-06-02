@@ -1,7 +1,9 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -30,6 +32,7 @@ from maniskill_backend.results import append_jsonl, summarize_records
 from maniskill_backend.skill_adapter import ManiSkillPullCubeRobot, ManiSkillSceneAdapter
 from maniskill_backend.tasks import get_task_spec, iter_task_specs
 from maniskill_backend.view import records_to_md
+from llm_client import api_key_env, current_provider, default_model
 
 
 class RealBackendTest(unittest.TestCase):
@@ -73,6 +76,12 @@ class RealBackendTest(unittest.TestCase):
 
     def test_method_set_is_real_only(self):
         self.assertEqual(METHODS, ("source-copy", "llm_card_report", "oracle"))
+
+    def test_deepseek_provider_config(self):
+        with patch.dict(os.environ, {"EM_LLM_PROVIDER": "deepseek"}, clear=True):
+            self.assertEqual(current_provider(), "deepseek")
+            self.assertEqual(default_model(), "deepseek-v4-pro")
+            self.assertEqual(api_key_env(), "DEEPSEEK_API_KEY")
 
     def test_removed_task_specs_are_not_current_scope(self):
         for old_task in ("pick_cube", "stack_cube", "peg_insertion", "pull_cube_tool"):

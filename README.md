@@ -3,8 +3,8 @@
 This project studies cross-embodiment migration for robot programs in real
 ManiSkill simulation.
 
-The current repository is intentionally narrow and clean: one task, two
-robots, and one migration question.
+The current repository is intentionally narrow and clean: one task, one source
+robot, two target embodiments, and one migration question.
 
 ## Current Scope
 
@@ -13,8 +13,9 @@ robots, and one migration question.
 | Simulator | ManiSkill |
 | Active task | `pull_cube` / `PullCube-v1` |
 | Source robot | `panda` |
-| Target robot | `fetch` |
-| Primary case | `case01_pull_cube_panda_to_fetch` |
+| Primary target robot | `xarm6_robotiq` |
+| Preserved failure target | `fetch` |
+| Primary case | `case02_pull_cube_panda_to_xarm6` |
 | Main migration object | generated target adapter module |
 
 Older exploratory demos, parked tasks, and patch-based repair experiments are
@@ -88,11 +89,52 @@ Expected output:
 OK
 ```
 
+## Configure LLM API
+
+The LLM calls use the OpenAI Python SDK with OpenAI-compatible endpoints.
+
+For DeepSeek direct API, create `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+```text
+EM_LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+EM_MODEL=deepseek-v4-pro
+```
+
+Quick check:
+
+```bash
+python - <<'PY'
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv(Path.cwd() / ".env")
+from maniskill_backend.llm import has_llm_key
+from llm_client import current_provider, default_model
+print("provider =", current_provider())
+print("model =", default_model())
+print("has_llm_key =", has_llm_key())
+PY
+```
+
+Expected output:
+
+```text
+provider = deepseek
+model = deepseek-v4-pro
+has_llm_key = True
+```
+
 ## Run The Main Migration Case
 
 ```bash
 python -m maniskill_backend.module_generation_runner \
-  --case case01_pull_cube_panda_to_fetch \
+  --case case02_pull_cube_panda_to_xarm6 \
   --max-attempts 3 \
   --sim-backend auto \
   --render-backend gpu
@@ -101,11 +143,11 @@ python -m maniskill_backend.module_generation_runner \
 Expected behavior:
 
 1. Panda source execution is checked.
-2. Fetch source-copy execution is checked.
+2. xarm6_robotiq target execution is checked.
 3. If target execution fails, the LLM receives the failure log.
 4. The LLM writes a complete target adapter module.
 5. Unit tests are run.
-6. Fetch simulation is rerun with the generated adapter.
+6. xarm6_robotiq simulation is rerun with the generated adapter.
 7. Results and migration analysis are saved.
 
 Outputs:
@@ -115,27 +157,27 @@ results/module_generation_trials.jsonl
 results/module_generation_trials.md
 ```
 
-## Run A Single Fetch Trial
+## Run A Single xarm6 Trial
 
 ```bash
 python -m maniskill_backend.real_runner \
   --task pull_cube \
-  --robot fetch \
+  --robot xarm6_robotiq \
   --method target-module-generation \
   --seed 0 \
   --control-mode pd_ee_delta_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 100 \
+  --max-episode-steps 500 \
   --code-file maniskill_backend/case_programs/case01_pull_cube.py \
-  --adapter-module maniskill_backend.generated_adapters.case01_fetch_pull_cube
+  --adapter-module maniskill_backend.generated_adapters.case02_xarm6_pull_cube
 ```
 
 Expected output contains a JSON-like result with fields such as:
 
 ```text
 "task_id": "pull_cube"
-"robot_uid": "fetch"
+"robot_uid": "xarm6_robotiq"
 "method": "target-module-generation"
 "success": true/false
 "failure_type": ...
@@ -148,13 +190,13 @@ Expected output contains a JSON-like result with fields such as:
 python -m maniskill_backend.iterative_runner \
   --task pull_cube \
   --source-robot panda \
-  --target-robot fetch \
+  --target-robot xarm6_robotiq \
   --max-attempts 3 \
   --seed 0 \
   --target-control-mode pd_ee_delta_pos \
   --sim-backend auto \
   --render-backend gpu \
-  --max-episode-steps 100
+  --max-episode-steps 500
 ```
 
 This baseline only rewrites the LMP program. It is weaker than target-module
@@ -165,11 +207,12 @@ generation because it cannot change the embodied execution layer.
 The repository is now prepared for a cleaner PullCube migration study:
 
 - active task list contains only `pull_cube`;
-- active robot profiles contain only `panda` and `fetch`;
-- Case 01 is fixed as `Panda -> Fetch` on `PullCube-v1`;
+- active robot profiles contain `panda`, `fetch`, and `xarm6_robotiq`;
+- Case 02 is the main `Panda -> xarm6_robotiq` success candidate on `PullCube-v1`;
+- Case 01 preserves `Panda -> Fetch` as a diagnosed failure case;
 - old exploratory and patch-loop files are removed from the active path;
 - tests check that removed tasks and robots are no longer accepted.
 
 Next research work should focus on collecting repeated real simulation results,
 comparing program-only adaptation against target-adapter generation, and
-analyzing what the generated Fetch adapter changes at the skill/contact layer.
+analyzing what the generated xarm6 adapter changes at the skill/contact layer.
