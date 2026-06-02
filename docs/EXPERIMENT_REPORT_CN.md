@@ -1,7 +1,7 @@
 # 实验进度报告：LLM 机器人程序迁移
 
 更新时间：2026-06-02
-当前阶段：`PullCube-v1` 首个 LLM 自动迁移成功案例已验证，`PickCube-v1` 抓取式迁移已接入
+当前阶段：`PullCube-v1` 首个 LLM 自动迁移成功案例已验证，`PickCube-v1` 抓取式迁移已完成首轮远程失败诊断
 报告用途：作为后续实验记录的基础版本，之后所有实验进展、失败案例、统计结果和论文分析都在此文件上继续更新。
 
 ## 1. 项目目标
@@ -1022,7 +1022,7 @@ Panda succeeds → Fetch direct migration fails → LLM adapter migration still 
 | xarm6 诊断脚本 | 已跑 | 找到成功 raw contact sequence |
 | xarm6 oracle adapter | 成功 | 内部可行性证据：`success=true`, `elapsed_steps=191` |
 | xarm6 LLM 自动生成主线 | 成功 | `overall_success=true`, `target_success=true`, `ret_val=True` |
-| xarm6 PickCube 抓取迁移 | 已接入，待远程运行 | 新增 `case03_pick_cube_panda_to_xarm6` |
+| xarm6 PickCube 抓取迁移 | 首轮远程失败已记录 | LLM adapter 未形成真实抓取，已定位破坏性候选重试问题 |
 | 当前案例结论 | 已形成 | Fetch 是 contact-side reachability failure |
 
 ## 9. 下一步计划
@@ -1194,6 +1194,39 @@ python -m maniskill_backend.module_generation_runner \
   --render-backend gpu
 ```
 
+### 9.7 PickCube 首轮远程结果与下一次修正
+
+远程平台由 `rotule.polytechnique.fr` 切换到 `allemagne.polytechnique.fr`。用户主目录位于学校 NFS，因此项目代码、Conda 环境和实验日志均保留。当前可用 GPU：
+
+```text
+NVIDIA RTX A4000
+显存：16376 MiB
+Driver Version：595.80
+CUDA Version：13.2
+```
+
+`case03_pick_cube_panda_to_xarm6` 首轮结果：
+
+| Round | 代码校验 | 真实执行 | 关键失败证据 |
+|---|---|---|---|
+| 1 | 通过 | 失败 | `is_grasping=False`，方块被撞落，`cube_pos.z=-0.8996` |
+| 2 | 通过 | 失败 | `is_grasping=False`，方块被推到 `[0.2234, -0.1416, 0.02]` |
+| 3 | 未通过 | 未执行 | 生成模块无有效更新 |
+
+LLM 生成的目标 adapter 已经做了多候选 `(dx, dy, dz)` 搜索，但它把 7 个候选放在同一个 episode 中连续尝试。一次失败会真实改变仿真状态；后续候选继续追逐已经偏移甚至掉落的方块，无法得到干净的抓取验证。
+
+因此，下一轮 prompt 增加以下约束：
+
+```text
+每个候选抓取前后检查方块位移
+仅当方块仍直立且 xy 位移较小时，才允许在同一 episode 尝试下一个候选
+方块掉落、明显偏移或离开可达空间时，立即返回真实失败
+禁止在同一 episode 中继续追逐已被撞偏的方块
+让外层 generation round 在环境 reset 后尝试新策略
+```
+
+这不是向 LLM 提供人工成功轨迹，而是加入 failure-driven adaptation 所需的真实失败证据。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，而 Fetch 因动作空间、移动底盘和接触侧可达性差异迁移失败；下一步新增 `PickCube-v1` 抓取式迁移，用于验证 LLM 能否进一步适配抓取点、夹爪时序、抬升和三维搬运策略。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，而 `PickCube-v1` 首轮抓取迁移暴露出真实物理状态变化下的破坏性重试问题；下一步将验证加入状态感知重试约束后，LLM 能否自动生成可靠的 xarm6 抓取 adapter。

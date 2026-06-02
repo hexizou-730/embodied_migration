@@ -186,6 +186,8 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("REAL GRASPING", prompt)
         self.assertIn("robot.grasp(cube) followed by robot.place(cube, goal)", prompt)
         self.assertIn("self._is_grasping('cube')", prompt)
+        self.assertIn("Do not chase a displaced cube", prompt)
+        self.assertIn("cube_pos.z=-0.8996", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
@@ -210,6 +212,7 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         )
         self.assertIn("Do not return a module identical", prompt)
         self.assertIn("bounded grasp-offset search", prompt)
+        self.assertIn("cube-displacement guard", prompt)
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(

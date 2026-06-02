@@ -123,8 +123,13 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Keep the low-level ManiSkill PDEEPosController frozen. Migrate only the target-side adapter behavior.",
             "- Prefer a conservative top-down grasp: open gripper, approach above cube, descend near cube center, close gripper, wait for contact, verify grasp, lift, verify the cube did not slip, transport to the 3D goal, then settle.",
             "- Compared with Panda, xarm6 has 6 DoF and a different Robotiq gripper geometry. You may search a small set of bounded xyz grasp offsets and tune approach height, lift height, motion steps, gripper settle steps, and normalized action magnitude.",
-            "- If a grasp candidate fails, reopen the gripper, retreat upward, and try a different bounded candidate. Do not continue transport without a verified grasp.",
+            "- A failed physical grasp attempt may move or knock over the cube. Capture the cube position before each candidate and measure its displacement after closing the gripper.",
+            "- Only try another bounded grasp candidate in the same episode if the cube is still upright on the tabletop and its xy displacement remains small. If the cube fell, moved substantially, or left the reachable workspace, return a real failure immediately so the next generated module is evaluated from a fresh environment reset.",
+            "- Do not chase a displaced cube across the table with many sequential candidates. Prefer a small number of minimally destructive attempts and let the outer generation round reset the environment before trying a substantially different strategy.",
+            "- If a safe grasp candidate fails, reopen the gripper, retreat upward, and try a different bounded candidate. Do not continue transport without a verified grasp.",
             "- Diagnostic pattern: is_grasping=False after close means grasp geometry or gripper timing failed. is_grasping=True after close but False after lift means the cube slipped. A large cube_goal_xyz after transport means placement or waypoint execution failed.",
+            "- Latest real xarm6 PickCube evidence: one generated adapter tried seven candidates in one episode. In one round the cube was knocked off the table (cube_pos.z=-0.8996); in another it was pushed across the table to cube_pos=[0.2234, -0.1416, 0.02] while is_grasping remained False. Treat this as destructive retry behavior, not as a reason to keep following the cube.",
+            "- Include phase-specific failure evidence in the returned skill failure message when possible: candidate index, cube displacement, cube position, TCP position, and whether the cube fell or merely failed to enter the gripper.",
             "- Do not copy a human oracle trajectory or use hidden simulator state changes. Choose your own bounded candidate offsets and step counts.",
             "- If all bounded grasp candidates fail, return a real failure with diagnostic evidence rather than faking success.",
         ]
@@ -220,9 +225,9 @@ def _retry_strategies(case: FullMigrationCase) -> tuple[str, ...]:
 
     if case.task_id == "pick_cube":
         return (
-            "Change the bounded grasp-offset search or gripper timing based on whether the latest failure happened before grasp, during lift, or during transport.",
-            "Change the top-down approach, retreat, and retry strategy. Verify grasp after close and after lift; do not repeat an ineffective geometry.",
-            "Change the fallback grasp primitive substantially: revise bounded xyz offsets, settle steps, and transport waypoints while preserving real grasp validation.",
+            "Change the bounded grasp-offset search or gripper timing based on whether the latest failure happened before grasp, during lift, or during transport. Add a cube-displacement guard before trying another candidate.",
+            "Change the top-down approach, retreat, and retry strategy. Verify grasp after close and after lift; do not chase a cube that was already pushed away or knocked off the table.",
+            "Change the fallback grasp primitive substantially: revise bounded xyz offsets, settle steps, and transport waypoints while preserving real grasp validation and minimally destructive retries.",
         )
     return (
         "Replace a single fixed contact point with a farther positive-x sweep start and an explicit far-side check before drag.",
