@@ -221,6 +221,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("z=0.016, close_steps=12, close_command=-0.6", prompt)
         self.assertIn("is_grasping=True", prompt)
         self.assertIn("Never return `all grasp candidates failed` while reporting is_grasping=True", prompt)
+        self.assertIn("tcp_grasp_xy=0.0009", prompt)
+        self.assertIn("cube_disp_xy=0.0297", prompt)
+        self.assertIn("fixed-XY close-envelope sweep is insufficient", prompt)
+        self.assertIn("bounded micro-offset along the gripper closing axis", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_prompt_includes_pick_probe_feedback(self):

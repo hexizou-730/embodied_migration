@@ -1879,6 +1879,73 @@ cube_disp_xy=0.0541
    - verified grasp preservation
 ```
 
+### 9.19 Probe 被使用后仍失败：固定 XY close sweep 不足
+
+最新一轮 LLM 已经读取了 probe feedback，并生成了以探针最佳参数为起点的 close-envelope sweep：
+
+```text
+候选参数从 probe best case 开始：
+  z_offset=0.016
+  close_steps=12
+  close_command=-0.6
+```
+
+但最终仍失败：
+
+```text
+target_message=all grasp candidates failed;
+               is_grasping=False,
+               tcp_grasp_xy=0.0009,
+               tcp_grasp_z=0.0015,
+               cube_disp_xy=0.0297
+```
+
+这组数据非常集中：
+
+```text
+TCP 对齐误差 < 1 mm；
+Z 误差约 1.5 mm；
+但 cube_disp_xy 接近 3 cm；
+仍然没有形成 grasp。
+```
+
+这说明 LLM 不是没有用 probe，而是 probe 暴露出一个更深的问题：
+
+```text
+固定 XY + 调 z_offset / close_steps / close_command
+不足以解决 xarm6 + Robotiq 的抓取接触包络。
+```
+
+因此下一步不能继续简单增加更多：
+
+```text
+z_offset candidates
+close_steps candidates
+close_command candidates
+```
+
+否则只是扩大同一个失败空间。更合理的方向是让 LLM 改更结构性的 grasp primitive：
+
+```text
+1. 一旦 self._is_grasping("cube") 为 True，立刻保留抓取并进入 lift/place；
+2. 如果 fixed-XY probe 全失败，允许非常小的 finger-envelope micro-offset；
+3. micro-offset 必须是诊断性的，不能追逐已移动方块；
+4. cube_disp_xy > 0.03m 立即中止；
+5. 如果所有真实 close attempt 仍不形成 grasp，报告 close-envelope/force infeasibility。
+```
+
+这一步把失败空间从：
+
+```text
+parameter tuning
+```
+
+推进到：
+
+```text
+gripper-envelope / force-closure primitive repair
+```
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 已加入自动抓取参数探针，首轮探针未找到成功 close 参数，但发现 LLM adapter 会在 `is_grasping=True` 时仍错误返回 grasp failure，下一步重点转向 verified grasp preservation 与更高层 grasp primitive repair。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 已加入自动抓取参数探针，首轮探针未找到成功 close 参数，且 LLM 使用 probe 后仍在固定 XY close sweep 中失败，下一步重点转向 verified grasp preservation、finger-envelope micro-offset 和更高层 grasp primitive repair。
