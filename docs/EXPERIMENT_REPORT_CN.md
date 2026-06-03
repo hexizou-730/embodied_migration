@@ -1789,6 +1789,96 @@ best_probe_case:
 
 这一步的研究意义是：当迁移任务从 PullCube 的接触拖拽进入 PickCube 的真实抓取时，单纯自然语言反馈不够，需要把失败空间转化为一个小规模约束搜索问题。LLM 负责生成结构化 adapter，探针负责给出物理可行性证据，两者组合形成更稳定的自动纠正装置。
 
+### 9.18 自动探针首轮结果：没有成功参数，但发现 adapter 逻辑错误
+
+自动探针首轮结果如下：
+
+```text
+total_probe_cases = 32
+grasping_cases = 0
+
+best_probe_case:
+  grasp_z_offset=0.016
+  close_steps=12
+  close_command=-0.6
+  settle_steps=8
+  tcp_grasp_xy=0.00239
+  tcp_grasp_z=0.00152
+  cube_disp_xy=0.00458
+  is_grasping_after_close=False
+  is_grasping_after_lift=False
+```
+
+这说明：自动探针没有找到“答案参数”。它只告诉我们，在当前固定 XY、正 Z close-height sweep 和简单 close command 范围内，最好的参数也只是 **低侧推、对齐好，但仍未形成 grasp**。
+
+因此这个 probe 不是把答案给 LLM，而是给出一个约束结论：
+
+```text
+简单调 grasp_z_offset / close_steps / close_command 仍不够；
+LLM 不应把 best_probe_case 当作成功轨迹；
+但它可以用 best_probe_case 作为低破坏性的起点。
+```
+
+随后 LLM 迁移轮次结果：
+
+```text
+ROUND 1
+target_message=all grasp candidates failed;
+               is_grasping=True,
+               cube_goal_xyz=0.2802,
+               tcp_cube_xyz=0.0358,
+               cube_pos=[0.0270, 0.0809, 0.0212]
+
+ROUND 2
+target_message=all grasp candidates failed;
+               is_grasping=False,
+               tcp_grasp_xy=0.0011,
+               tcp_grasp_z=0.0010,
+               cube_disp_xy=0.0541
+```
+
+Round 1 的核心不是物理失败，而是 **adapter 逻辑错误**：
+
+```text
+message 里已经写 is_grasping=True；
+但 adapter 仍返回 all grasp candidates failed。
+```
+
+这说明 LLM 生成的 adapter 在最终抓取检查处没有遵守规则：
+
+```text
+if self._is_grasping("cube"):
+    self.held_object = "cube"
+    return grasp success
+```
+
+因此本轮后新增硬约束：
+
+```text
+如果 grasp failure message 中出现 is_grasping=True，
+runner 会判定该 module 违反诊断契约；
+adapter 不允许在 is_grasping=True 时返回 grasp failure；
+必须保留抓取，继续 lift/place，或报告后续 lift/place 阶段失败。
+```
+
+Round 2 则继续说明：即使基于 probe，LLM 仍可能产生侧推策略：
+
+```text
+cube_disp_xy=0.0541
+```
+
+下一步重点从单纯 close 参数搜索转为：
+
+```text
+1. 保留任何出现的 is_grasping=True；
+2. 不把 best_probe_case 视为成功答案；
+3. 若 fixed-XY close probe 全失败，允许 LLM 改更高层 grasp primitive：
+   - finger envelope
+   - lift timing
+   - close-after-contact order
+   - verified grasp preservation
+```
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位但闭爪接触包络错误”，最新阶段开始加入自动抓取参数探针，用结构化仿真扫参结果指导下一轮 LLM adapter repair。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 已加入自动抓取参数探针，首轮探针未找到成功 close 参数，但发现 LLM adapter 会在 `is_grasping=True` 时仍错误返回 grasp failure，下一步重点转向 verified grasp preservation 与更高层 grasp primitive repair。

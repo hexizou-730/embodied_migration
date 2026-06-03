@@ -115,6 +115,13 @@ def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: D
     if first_api != "grasp" and "grasp" not in message:
         return None
 
+    if re.search(r"is_grasping\s*=\s*True", message):
+        return (
+            "failed xarm6 PickCube grasp modules must not report grasp failure while "
+            "is_grasping=True; set held_object, preserve the grasp, and continue to lift/place "
+            "or report the later phase-specific failure"
+        )
+
     required = ("tcp_grasp_xy", "tcp_grasp_z", "cube_disp_xy")
 
     def has_diagnostic(token: str) -> bool:
@@ -196,6 +203,9 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Latest real xarm6 PickCube retry with this constraint still failed the diagnostic contract wording and the physics: Round 2 used z_offset=0.0 and displaced the cube by 0.0359m during close with tcp_grasp_xy=0.0015, tcp_grasp_z=0.0020; Round 3 used z_offset=-0.005 and displaced the cube by 0.0503m with tcp_grasp_xy=0.0001, tcp_grasp_z=0.0002. These are both side-push failures despite excellent TCP alignment.",
             "- Always include the exact key `cube_disp_xy=...` in grasp failure messages. A sentence like `cube displaced by 0.0359m` is useful but less machine-readable for repair analysis.",
             "- Do not start with zero or negative Z close heights. The latest evidence shows z_offset=0.0 and z_offset=-0.005 both side-push the cube. Prefer a positive Z close-height sweep first, for example small fixed-xy candidates above the cube center, and use slower staged close commands at zero xyz.",
+            "- Latest structured xarm6 PickCube probe swept 32 fixed-xy close-envelope cases and found grasping_cases=0. The least destructive case was z=0.016, close_steps=12, close_command=-0.6, settle_steps=8, with cube_disp_xy=0.00458, tcp_grasp_xy=0.00239, tcp_grasp_z=0.00152, but is_grasping_after_close=False. Treat this as evidence that close-height scalar tuning alone is not enough; do not claim this probe case is a success.",
+            "- Latest LLM retry with probe feedback produced a grasp failure message with is_grasping=True and cube_pos still on the table. This is an adapter logic error: if self._is_grasping('cube') is True at any final grasp check, set self.held_object, return grasp success, and let the high-level program call place. Never return `all grasp candidates failed` while reporting is_grasping=True.",
+            "- If self._is_grasping('cube') becomes True before lift but the cube has not visibly lifted yet, do not reopen or retreat. Hold the gripper closed, perform a conservative vertical lift, then verify grasp again. Report lift slip only if is_grasping becomes False after the lift attempt.",
             "- Do not answer a repeated approach failure by adding a larger candidate grid. Reduce to one or two safe candidates and change descent speed, xy/z phase separation, settle timing, or approach waypoint geometry.",
             "- Check self._early_stop() after approach, close, lift, and transport phases. If the episode terminated or truncated, return a phase-specific real failure message instead of trying another candidate.",
             "- If self._is_grasping('cube') is True after lifting, immediately set self.held_object and return grasp success so the unchanged high-level program can call place(cube, goal). Do not reopen the gripper or continue searching candidates.",

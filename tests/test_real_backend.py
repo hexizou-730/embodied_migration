@@ -217,6 +217,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("z_offset=-0.005", prompt)
         self.assertIn("Always include the exact key `cube_disp_xy=...`", prompt)
         self.assertIn("positive Z close-height sweep", prompt)
+        self.assertIn("grasping_cases=0", prompt)
+        self.assertIn("z=0.016, close_steps=12, close_command=-0.6", prompt)
+        self.assertIn("is_grasping=True", prompt)
+        self.assertIn("Never return `all grasp candidates failed` while reporting is_grasping=True", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_prompt_includes_pick_probe_feedback(self):
@@ -308,6 +312,18 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
             "execution_log": [{"api": "grasp"}],
         }
         self.assertIsNone(pick_cube_runtime_diagnostic_error(case, diagnostic_alias_failure))
+
+        grasping_failure = {
+            "success": False,
+            "message": (
+                "all grasp candidates failed; is_grasping=True, tcp_grasp_xy=0.0010, "
+                "tcp_grasp_z=0.0010, cube_disp_xy=0.0020"
+            ),
+            "execution_log": [{"api": "grasp"}],
+        }
+        grasping_error = pick_cube_runtime_diagnostic_error(case, grasping_failure)
+        self.assertIsNotNone(grasping_error)
+        self.assertIn("must not report grasp failure while is_grasping=True", grasping_error or "")
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(
