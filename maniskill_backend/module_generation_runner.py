@@ -116,7 +116,21 @@ def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: D
         return None
 
     required = ("tcp_grasp_xy", "tcp_grasp_z", "cube_disp_xy")
-    missing = [token for token in required if token not in message]
+
+    def has_diagnostic(token: str) -> bool:
+        if token in message:
+            return True
+        if token == "cube_disp_xy":
+            return bool(
+                re.search(
+                    r"cube\s+(?:was\s+)?(?:displaced|moved)(?:\s+laterally)?\s+by\s+[0-9.]+\s*m",
+                    message,
+                    re.IGNORECASE,
+                )
+            )
+        return False
+
+    missing = [token for token in required if not has_diagnostic(token)]
     if not missing:
         return None
     return (
@@ -179,6 +193,9 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Latest real xarm6 PickCube close-envelope retry regressed: candidate 0 used grasp_z_offset=0.0 and returned tcp_grasp_xy=0.0037, tcp_grasp_z=0.0040, cube_disp_xy=0.0406, is_grasping=False. This is a side-push regression caused by repeating the zero-offset centered close as the first candidate.",
             "- Do not use grasp_z_offset=0.0 as the first xarm6 candidate anymore. Start with a nonzero fixed-xy Z candidate that changes the close envelope, such as a slightly higher close pose, then try a small bounded Z sweep. If a zero-offset candidate is retained at all, put it after safer nonzero Z candidates and never let it be the only attempted geometry.",
             "- A valid next adapter must make a substantive close-envelope change relative to the failed module: nonzero first Z offset, staged gripper close command, longer zero-xyz close settle, or a different pre-close height. A module that repeats centered z_offset=0.0 first is not a meaningful repair.",
+            "- Latest real xarm6 PickCube retry with this constraint still failed the diagnostic contract wording and the physics: Round 2 used z_offset=0.0 and displaced the cube by 0.0359m during close with tcp_grasp_xy=0.0015, tcp_grasp_z=0.0020; Round 3 used z_offset=-0.005 and displaced the cube by 0.0503m with tcp_grasp_xy=0.0001, tcp_grasp_z=0.0002. These are both side-push failures despite excellent TCP alignment.",
+            "- Always include the exact key `cube_disp_xy=...` in grasp failure messages. A sentence like `cube displaced by 0.0359m` is useful but less machine-readable for repair analysis.",
+            "- Do not start with zero or negative Z close heights. The latest evidence shows z_offset=0.0 and z_offset=-0.005 both side-push the cube. Prefer a positive Z close-height sweep first, for example small fixed-xy candidates above the cube center, and use slower staged close commands at zero xyz.",
             "- Do not answer a repeated approach failure by adding a larger candidate grid. Reduce to one or two safe candidates and change descent speed, xy/z phase separation, settle timing, or approach waypoint geometry.",
             "- Check self._early_stop() after approach, close, lift, and transport phases. If the episode terminated or truncated, return a phase-specific real failure message instead of trying another candidate.",
             "- If self._is_grasping('cube') is True after lifting, immediately set self.held_object and return grasp success so the unchanged high-level program can call place(cube, goal). Do not reopen the gripper or continue searching candidates.",

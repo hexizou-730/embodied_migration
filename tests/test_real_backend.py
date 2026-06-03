@@ -213,6 +213,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("Do not use grasp_z_offset=0.0 as the first", prompt)
         self.assertIn("side-push regression", prompt)
         self.assertIn("nonzero first Z offset", prompt)
+        self.assertIn("displaced the cube by 0.0359m", prompt)
+        self.assertIn("z_offset=-0.005", prompt)
+        self.assertIn("Always include the exact key `cube_disp_xy=...`", prompt)
+        self.assertIn("positive Z close-height sweep", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
@@ -261,6 +265,13 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
             "execution_log": [{"api": "grasp"}],
         }
         self.assertIsNone(pick_cube_runtime_diagnostic_error(case, diagnostic_failure))
+
+        diagnostic_alias_failure = {
+            "success": False,
+            "message": "cube displaced by 0.0359m during close; tcp_grasp_xy=0.0015, tcp_grasp_z=0.0020",
+            "execution_log": [{"api": "grasp"}],
+        }
+        self.assertIsNone(pick_cube_runtime_diagnostic_error(case, diagnostic_alias_failure))
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(

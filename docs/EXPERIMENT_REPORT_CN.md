@@ -1649,6 +1649,82 @@ cube_disp_xy = 4.06 cm
 
 直白理解：现在不是“LLM 不知道失败原因”，而是它知道方向后仍然选择了一个已经失败过的默认动作。下一步要把“不要重复 0 偏移第一候选”写成硬约束，让自动 repair 真正探索新的闭爪包络。
 
+### 9.16 PickCube 第十轮远程结果：非零 Z 约束仍不够，0/负 Z 均侧推
+
+进一步更新 prompt 后，新一轮远程结果仍未成功：
+
+```text
+ROUND 1
+module_error=missing tcp_grasp_xy, tcp_grasp_z, cube_disp_xy
+target_message=all grasp candidates failed; is_grasping=False,
+               tcp_cube_xyz=0.1042,
+               cube_pos=[-0.0234, 0.0636, 0.0200]
+
+ROUND 2
+module_error=missing cube_disp_xy
+target_message=cube displaced by 0.0359m during close;
+               tcp_grasp_xy=0.0015,
+               tcp_grasp_z=0.0020
+execution_log args: candidate=2, z_offset=0.0
+
+ROUND 3
+module_error=missing cube_disp_xy
+target_message=cube displaced by 0.0503m during close;
+               tcp_grasp_xy=0.0001,
+               tcp_grasp_z=0.0002
+execution_log args: candidate=1, z_offset=-0.005
+```
+
+这轮有两个结论。
+
+第一，物理上仍是侧推失败：
+
+```text
+z_offset = 0.0    → cube displacement = 3.59 cm
+z_offset = -0.005 → cube displacement = 5.03 cm
+```
+
+而且两轮的 TCP 残差都非常小：
+
+```text
+tcp_grasp_xy <= 1.5 mm
+tcp_grasp_z  <= 2.0 mm
+```
+
+这再次说明问题不是“手没有到位”，而是 **0 或负 Z 闭爪高度会把方块挤走**。
+
+第二，工程上出现了日志格式问题。LLM 写的是：
+
+```text
+cube displaced by 0.0359m during close
+```
+
+这个信息对人是有用的，但没有包含标准字段：
+
+```text
+cube_disp_xy=...
+```
+
+所以 runner 按诊断契约把它判为缺少 `cube_disp_xy`。本轮后更新为：
+
+```text
+runner 可以识别 "cube displaced by Xm" 作为 cube displacement alias；
+prompt 仍要求 LLM 输出标准字段 cube_disp_xy=...；
+下一轮明确禁止 0 或负 Z 作为首选 close height；
+优先尝试正 Z close-height sweep。
+```
+
+下一轮约束更新：
+
+```text
+不要从 z_offset=0.0 开始；
+不要从 z_offset<0 开始；
+优先尝试正 Z close-height sweep；
+闭爪时保持 xyz command = 0；
+使用更慢的 staged close；
+失败消息必须精确包含 cube_disp_xy=...
+```
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位且无明显侧推但夹爪未形成抓取”，但最新一轮发现 LLM 会回退到已失败的 `grasp_z_offset=0.0` 第一候选，因此下一步通过更硬的 nonzero-Z-first 约束驱动 close-envelope / gripper-timing repair。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位但闭爪接触包络错误”，最新证据显示 `z_offset=0.0` 和 `z_offset=-0.005` 均会侧推方块，因此下一步通过 positive-Z-first close-height sweep 与更机器可读的 `cube_disp_xy` 诊断继续 repair。
