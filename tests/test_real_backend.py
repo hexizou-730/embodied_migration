@@ -205,6 +205,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("tcp_grasp_xy=0.0076", prompt)
         self.assertIn("cube_pos=[-0.0509, -0.3862, 0.02]", prompt)
         self.assertIn("gripper-envelope side push", prompt)
+        self.assertIn("tcp_grasp_xy=0.0027", prompt)
+        self.assertIn("cube_disp_xy=0.0052", prompt)
+        self.assertIn("good-alignment/no-displacement/no-grasp", prompt)
+        self.assertIn("close-envelope/force failure", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):

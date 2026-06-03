@@ -1517,6 +1517,89 @@ gripper-envelope side-push failure
 
 这一步进一步体现了自动纠正装置的思想：系统不是只知道“失败了”，而是能把失败从“没到位”细分为“已到位但闭爪接触几何错误”，从而选择不同 repair 方向。
 
+### 9.14 PickCube 第八轮远程结果：到位且无明显侧推，但夹爪未形成抓取
+
+在加入 `cube_disp_xy` 诊断契约后，新的远程结果进一步细化了失败类型：
+
+```text
+ROUND 1
+module_error=failed xarm6 PickCube grasp modules must report close-time diagnostics
+missing tcp_grasp_xy, tcp_grasp_z, cube_disp_xy
+
+ROUND 2
+target_success=False
+target_message=grasp failed after close;
+               tcp_grasp_xy=0.0027,
+               tcp_grasp_z=0.0002,
+               cube_disp_xy=0.0052,
+               cube_pos=[-0.0059, 0.0562, 0.0200]
+
+ROUND 3
+module_valid=False
+module_error=Generated adapter module is unchanged from the current failed module.
+```
+
+这轮最关键的证据是：
+
+```text
+tcp_grasp_xy = 2.7 mm
+tcp_grasp_z  = 0.2 mm
+cube_disp_xy = 5.2 mm
+is_grasping  = False
+```
+
+这说明：
+
+```text
+TCP 已经非常接近目标抓取点；
+方块也没有被明显推飞；
+但是夹爪闭合后仍没有形成真实抓取。
+```
+
+因此失败模式再次细分，从上一轮的：
+
+```text
+gripper-envelope side-push failure
+```
+
+进一步变成：
+
+```text
+good-alignment / no-displacement / no-grasp
+```
+
+直白理解：机器人已经把手放到了正确位置，而且没有把方块撞走，但 Robotiq gripper 的闭合高度、闭合时序或接触包络仍不对，所以 `is_grasping=False`。
+
+下一轮约束更新：
+
+```text
+若满足：
+  tcp_grasp_xy <= 0.005m
+  tcp_grasp_z  <= 0.005m
+  cube_disp_xy <= 0.01m
+  is_grasping=False
+
+则不要继续调 approach；
+不要增加 horizontal candidates；
+不要重复 centered close；
+
+应改 close envelope：
+  - 固定 xy
+  - 小范围搜索 grasp_z_offset_m
+  - 尝试略高或略低的闭爪高度
+  - 闭爪时保持 xyz command = 0
+  - 增加 close/settle duration
+  - 闭爪后先检查 self._is_grasping('cube')，成功再 lift/transport
+```
+
+这一步的意义是：自动 repair 现在已经能把 PickCube 抓取失败分成至少三类：
+
+| 失败类型 | 证据 | 下一步 |
+|---|---|---|
+| approach/descent alignment failure | `tcp_grasp_xy/z` 大 | 改接近轨迹和下降方式 |
+| gripper-envelope side-push failure | `tcp_grasp_xy/z` 小，但 `cube_disp_xy` 大 | 改闭爪接触包络，避免侧推 |
+| good-alignment/no-displacement/no-grasp | `tcp_grasp_xy/z` 小，`cube_disp_xy` 小，但 `is_grasping=False` | 改抓取高度、闭爪时序、close settle |
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已从接近阶段问题进一步定位到闭爪包络导致的侧向挤出，下一步通过 `cube_disp_xy`、`tcp_grasp_xy/z` 等结构化诊断驱动 gripper-envelope repair。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位且无明显侧推但夹爪未形成抓取”，下一步通过 `tcp_grasp_xy/z`、`cube_disp_xy` 和 `is_grasping` 的组合诊断驱动 close-envelope / gripper-timing repair。
