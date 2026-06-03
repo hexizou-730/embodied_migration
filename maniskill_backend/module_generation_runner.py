@@ -279,6 +279,32 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
     return pull_common
 
 
+def _structured_probe_feedback_lines(case: FullMigrationCase) -> List[str]:
+    """Return optional local probe evidence generated outside the LLM loop."""
+
+    if case.task_id != "pick_cube" or case.target_robot != "xarm6_robotiq":
+        return []
+    feedback_path = REPO_ROOT / "results" / "xarm6_pick_grasp_probe_prompt.txt"
+    if not feedback_path.exists():
+        return []
+    try:
+        feedback = feedback_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return []
+    if not feedback:
+        return []
+    return [
+        "",
+        "# Structured xArm6 PickCube probe feedback",
+        "The following measurements came from `scripts/xarm6_pick_grasp_probe.py` using real ManiSkill env.step execution.",
+        "Use this structured probe evidence before inventing another grasp geometry.",
+        "```text",
+        _trim_text(feedback, 6000),
+        "```",
+        "",
+    ]
+
+
 def _task_design_lines(case: FullMigrationCase) -> List[str]:
     """Describe the generated adapter design space for the active task."""
 
@@ -348,6 +374,7 @@ def build_module_generation_prompt(
         "- You may import numpy, sapien, mani_skill motion-planning helpers, and maniskill_backend.skill_adapter symbols.",
         "",
         *_target_specific_generation_lines(case),
+        *_structured_probe_feedback_lines(case),
         "",
         "# Infeasibility policy",
         "- If the target embodiment cannot physically realize the task under the current scene geometry, return a real failure from the relevant skill with a message beginning `infeasible:` and include the reachability/planner evidence.",

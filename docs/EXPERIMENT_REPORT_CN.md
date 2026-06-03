@@ -1725,6 +1725,70 @@ prompt 仍要求 LLM 输出标准字段 cube_disp_xy=...；
 失败消息必须精确包含 cube_disp_xy=...
 ```
 
+### 9.17 下一步方法调整：加入自动抓取参数探针
+
+连续多轮 PickCube 失败说明：继续只靠 prompt 让 LLM 猜 `grasp_z_offset`、闭爪步数和闭爪命令，效率很低。因此项目从“纯 LLM repair”进一步扩展为：
+
+```text
+LLM adapter generation
+  + structured physical probing
+  + failure-guided prompt feedback
+```
+
+新增脚本：
+
+```bash
+python scripts/xarm6_pick_grasp_probe.py \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+该脚本做的事情是：
+
+```text
+固定 xy；
+只枚举少量 close-envelope 参数：
+  grasp_z_offset
+  close_steps
+  close_command
+  settle_steps
+
+每组参数都从 fresh reset 开始；
+真实执行 ManiSkill env.step(action)；
+记录：
+  is_grasping_after_close
+  is_grasping_after_lift
+  cube_disp_xy
+  tcp_grasp_xy
+  tcp_grasp_z
+  cube_lift_delta_z
+```
+
+输出文件：
+
+```text
+results/xarm6_pick_grasp_probe.json
+results/xarm6_pick_grasp_probe.md
+results/xarm6_pick_grasp_probe_prompt.txt
+```
+
+其中 `xarm6_pick_grasp_probe_prompt.txt` 会被 `module_generation_runner` 自动读取，并加入下一轮 LLM prompt：
+
+```text
+# Structured xArm6 PickCube probe feedback
+...
+best_probe_case:
+  grasp_z_offset=...
+  close_steps=...
+  close_command=...
+  cube_disp_xy=...
+  is_grasping_after_close=...
+```
+
+这样下一轮 LLM 不再凭日志猜，而是基于一组真实仿真扫参结果生成 adapter。
+
+这一步的研究意义是：当迁移任务从 PullCube 的接触拖拽进入 PickCube 的真实抓取时，单纯自然语言反馈不够，需要把失败空间转化为一个小规模约束搜索问题。LLM 负责生成结构化 adapter，探针负责给出物理可行性证据，两者组合形成更稳定的自动纠正装置。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位但闭爪接触包络错误”，最新证据显示 `z_offset=0.0` 和 `z_offset=-0.005` 均会侧推方块，因此下一步通过 positive-Z-first close-height sweep 与更机器可读的 `cube_disp_xy` 诊断继续 repair。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位但闭爪接触包络错误”，最新阶段开始加入自动抓取参数探针，用结构化仿真扫参结果指导下一轮 LLM adapter repair。

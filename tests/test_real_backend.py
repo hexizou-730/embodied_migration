@@ -219,6 +219,42 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("positive Z close-height sweep", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
+    def test_module_generation_prompt_includes_pick_probe_feedback(self):
+        feedback_path = Path("results/xarm6_pick_grasp_probe_prompt.txt")
+        previous = feedback_path.read_text(encoding="utf-8") if feedback_path.exists() else None
+        feedback_path.parent.mkdir(parents=True, exist_ok=True)
+        feedback_path.write_text(
+            "best_probe_case:\n"
+            "  grasp_z_offset=0.012, close_steps=24, close_command=-0.6, "
+            "cube_disp_xy=0.003, is_grasping_after_close=True\n",
+            encoding="utf-8",
+        )
+        try:
+            case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
+            prompt = build_module_generation_prompt(
+                case=case,
+                target_result={"success": False, "failure_layer": "skill_adapter", "message": "cube was not grasped"},
+                attempts=[],
+            )
+            self.assertIn("Structured xArm6 PickCube probe feedback", prompt)
+            self.assertIn("scripts/xarm6_pick_grasp_probe.py", prompt)
+            self.assertIn("grasp_z_offset=0.012", prompt)
+            self.assertIn("is_grasping_after_close=True", prompt)
+        finally:
+            if previous is None:
+                feedback_path.unlink(missing_ok=True)
+            else:
+                feedback_path.write_text(previous, encoding="utf-8")
+
+    def test_xarm6_pick_grasp_probe_script_documents_parameter_sweep(self):
+        script = Path("scripts/xarm6_pick_grasp_probe.py").read_text(encoding="utf-8")
+        self.assertIn("grasp_z_offsets", script)
+        self.assertIn("close_steps", script)
+        self.assertIn("close_commands", script)
+        self.assertIn("cube_disp_xy", script)
+        self.assertIn("is_grasping_after_close", script)
+        self.assertIn("xarm6_pick_grasp_probe_prompt.txt", script)
+
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
         case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
         failure = {
