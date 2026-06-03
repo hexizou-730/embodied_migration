@@ -1448,6 +1448,75 @@ failure message 必须包含：
 
 这一步将人工调试经验进一步转化为自动纠正装置的一部分：LLM 不仅要生成可执行 adapter，还要在失败时返回足够结构化的阶段证据，使下一轮 repair 能判断应该调整抓取高度、闭爪等待，还是接近轨迹。
 
+### 9.13 PickCube 第七轮远程结果：接近已到位，闭爪造成侧向挤出
+
+加入 close-time 诊断契约后，最新远程结果终于返回了闭爪阶段残差：
+
+```text
+ROUND 1 / ROUND 2
+target_success=False
+target_message=cube was not grasped;
+               is_grasping=False,
+               tcp_grasp_xy=0.0076,
+               tcp_grasp_z=0.0120,
+               cube_goal_xyz=0.4754,
+               tcp_cube_xyz≈0.446,
+               cube_pos=[-0.0509, -0.3862, 0.0200]
+
+ROUND 3
+module_valid=False
+module_error=Generated adapter module is unchanged from the current failed module.
+```
+
+这轮的关键信息是：
+
+```text
+tcp_grasp_xy = 7.6 mm
+tcp_grasp_z  = 12.0 mm
+```
+
+也就是说，闭爪前或闭爪时 TCP 已经很接近 intended grasp point，接近阶段不再是主要瓶颈。但闭爪后方块被挤到：
+
+```text
+cube_pos.y = -0.3862
+```
+
+这说明当前失败模式已经从：
+
+```text
+approach/descent alignment failure
+```
+
+转变为：
+
+```text
+gripper-envelope side-push failure
+```
+
+直白理解：机器人已经把末端放到比较接近的位置，但 Robotiq gripper 闭合时的包络、接触高度或闭爪时序不对，把方块侧向挤走了，而不是夹住。
+
+下一轮约束更新：
+
+```text
+如果 grasp 失败，failure message 必须包含：
+  tcp_grasp_xy
+  tcp_grasp_z
+  cube_disp_xy
+
+若 tcp_grasp_xy/z 已经较小，但 cube_disp_xy 很大：
+  不再继续调 approach；
+  不扩大 horizontal candidate search；
+  将失败归类为 gripper-envelope side push；
+  改 close-phase geometry：
+    - 固定 xy
+    - 尝试略高的抓取高度
+    - 闭爪时 xyz command 为 0
+    - 增加慢速/分阶段 close settle
+    - cube_disp_xy > 0.03m 立即中止本轮
+```
+
+这一步进一步体现了自动纠正装置的思想：系统不是只知道“失败了”，而是能把失败从“没到位”细分为“已到位但闭爪接触几何错误”，从而选择不同 repair 方向。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前已经基本消除首次下降的水平冲击，下一步通过强制闭爪时刻诊断，把抓取高度、闭爪残差和闭爪时序纳入自动 repair 循环。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已从接近阶段问题进一步定位到闭爪包络导致的侧向挤出，下一步通过 `cube_disp_xy`、`tcp_grasp_xy/z` 等结构化诊断驱动 gripper-envelope repair。

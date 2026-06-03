@@ -115,7 +115,7 @@ def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: D
     if first_api != "grasp" and "grasp" not in message:
         return None
 
-    required = ("tcp_grasp_xy", "tcp_grasp_z")
+    required = ("tcp_grasp_xy", "tcp_grasp_z", "cube_disp_xy")
     missing = [token for token in required if token not in message]
     if not missing:
         return None
@@ -167,9 +167,12 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Official PickCube-v1 configuration for xarm6_robotiq uses cube_half_size=0.02m. A pre-close residual threshold of 0.025m is too loose to guarantee that the TCP reached an effective grasp envelope. Use stricter measured pre-close xy and z thresholds appropriate for a 0.04m cube.",
             "- If pre-close alignment is good, the cube remains nearly stationary, and is_grasping is still False after close, treat this as a gripper-envelope or close-timing failure. Try a small bounded Z-focused offset set at fixed xy and tune close/settle steps. Do not reopen horizontal search.",
             "- Preserve the measured pre-close tcp_grasp_xy and tcp_grasp_z values and include them in every post-close failure message so the next generation round can adapt from the actual close-time geometry.",
-            "- Runtime diagnostic contract: if grasp fails, the returned failure message MUST include tcp_grasp_xy and tcp_grasp_z from the close-time/pre-close check. A generic message such as only `all grasp candidates failed` is invalid because the repair loop cannot infer whether the failure was xy alignment, z height, or gripper timing.",
+            "- Runtime diagnostic contract: if grasp fails, the returned failure message MUST include tcp_grasp_xy and tcp_grasp_z from the close-time/pre-close check, plus cube_disp_xy from before/after the close attempt. A generic message such as only `all grasp candidates failed` is invalid because the repair loop cannot infer whether the failure was xy alignment, z height, gripper timing, or side-push displacement.",
             "- Latest real xarm6 PickCube retry after the Z-focused prompt again returned the same failed module twice. The module reported is_grasping=False, cube_goal_xyz=0.2700, final tcp_cube_xyz=0.0911, and cube_pos=[0.0091, -0.0173, 0.02], but it omitted tcp_grasp_xy/tcp_grasp_z. Treat this as insufficient close-time evidence, not a reason to repeat the same adapter.",
             "- Since the cube stayed on the tabletop and was not severely displaced, do not enlarge horizontal search. The next meaningful change is to instrument close-time residuals and then adjust fixed-xy grasp height or gripper close/settle duration based on those residuals.",
+            "- Latest real xarm6 PickCube close-time diagnostic: tcp_grasp_xy=0.0076 and tcp_grasp_z=0.0120 before/at close, so approach alignment was already good. However, the cube ended at cube_pos=[-0.0509, -0.3862, 0.02] with cube_goal_xyz=0.4754 and is_grasping=False. This means the gripper close/contact envelope pushed the cube sideways, not that the TCP failed to reach the grasp point.",
+            "- For this side-push pattern, do not keep repeating the same centered close. Change the close-phase geometry: try a slightly higher fixed-xy grasp height, slower/longer close settle with zero xyz command, or a two-stage close at fixed TCP. Abort immediately if cube_disp_xy exceeds a small threshold such as 0.03m.",
+            "- When cube_disp_xy is large after close and is_grasping=False, treat the failure as gripper-envelope side push. Do not chase the displaced cube or try more horizontal candidates in the same episode.",
             "- Do not answer a repeated approach failure by adding a larger candidate grid. Reduce to one or two safe candidates and change descent speed, xy/z phase separation, settle timing, or approach waypoint geometry.",
             "- Check self._early_stop() after approach, close, lift, and transport phases. If the episode terminated or truncated, return a phase-specific real failure message instead of trying another candidate.",
             "- If self._is_grasping('cube') is True after lifting, immediately set self.held_object and return grasp success so the unchanged high-level program can call place(cube, goal). Do not reopen the gripper or continue searching candidates.",
@@ -275,7 +278,7 @@ def _retry_strategies(case: FullMigrationCase) -> tuple[str, ...]:
         return (
             "Change the bounded grasp-offset search or gripper timing based on whether the latest failure happened before grasp, during lift, or during transport. Add a cube-displacement guard before trying another candidate.",
             "Change the FIRST top-down approach substantially: finish xy alignment above the cube, then descend nearly vertically with tightly clamped horizontal commands. Add a measured pre-close readiness guard and close-time residual diagnostics. Reduce the candidate count; do not chase a cube that was already pushed away.",
-            "Change the fallback grasp primitive substantially: keep xy fixed, use a small bounded Z-focused offset set and stricter pre-close residual thresholds, tune close timing, preserve a verified grasp, and reserve episode budget for place(cube, goal).",
+            "Change the fallback grasp primitive substantially: keep xy fixed, use a small bounded Z-focused offset set and stricter pre-close residual thresholds, tune close timing, report cube_disp_xy, preserve a verified grasp, and reserve episode budget for place(cube, goal). If tcp_grasp_xy/z are good but cube_disp_xy is large, treat it as gripper-envelope side push and change the close-phase geometry rather than repeating approach alignment.",
         )
     return (
         "Replace a single fixed contact point with a farther positive-x sweep start and an explicit far-side check before drag.",

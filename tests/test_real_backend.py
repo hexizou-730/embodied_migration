@@ -201,6 +201,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("Z-focused offset set", prompt)
         self.assertIn("tcp_grasp_xy and tcp_grasp_z", prompt)
         self.assertIn("tcp_cube_xyz=0.0911", prompt)
+        self.assertIn("cube_disp_xy", prompt)
+        self.assertIn("tcp_grasp_xy=0.0076", prompt)
+        self.assertIn("cube_pos=[-0.0509, -0.3862, 0.02]", prompt)
+        self.assertIn("gripper-envelope side push", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
@@ -241,10 +245,11 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIsNotNone(error)
         self.assertIn("tcp_grasp_xy", error or "")
         self.assertIn("tcp_grasp_z", error or "")
+        self.assertIn("cube_disp_xy", error or "")
 
         diagnostic_failure = {
             "success": False,
-            "message": "grasp failed; tcp_grasp_xy=0.0040, tcp_grasp_z=0.0180, is_grasping=False",
+            "message": "grasp failed; tcp_grasp_xy=0.0040, tcp_grasp_z=0.0180, cube_disp_xy=0.0020, is_grasping=False",
             "execution_log": [{"api": "grasp"}],
         }
         self.assertIsNone(pick_cube_runtime_diagnostic_error(case, diagnostic_failure))
