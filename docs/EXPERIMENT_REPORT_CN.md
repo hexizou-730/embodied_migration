@@ -1600,6 +1600,55 @@ good-alignment / no-displacement / no-grasp
 | gripper-envelope side-push failure | `tcp_grasp_xy/z` 小，但 `cube_disp_xy` 大 | 改闭爪接触包络，避免侧推 |
 | good-alignment/no-displacement/no-grasp | `tcp_grasp_xy/z` 小，`cube_disp_xy` 小，但 `is_grasping=False` | 改抓取高度、闭爪时序、close settle |
 
+### 9.15 PickCube 第九轮远程结果：0 偏移闭爪导致侧推回归
+
+在加入 close-envelope repair 约束后，新的远程结果反而出现了退步：
+
+```text
+ROUND 1
+target_success=False
+target_message=cube displaced laterally during close (candidate 0);
+               tcp_grasp_xy=0.0037,
+               tcp_grasp_z=0.0040,
+               cube_disp_xy=0.0406,
+               is_grasping=False,
+               cube_pos=[-0.0089, 0.0152, 0.0200]
+
+ROUND 2 / ROUND 3
+module_valid=False
+module_error=Generated adapter module is unchanged from the current failed module.
+```
+
+这轮的关键问题是：
+
+```text
+candidate 0 使用 grasp_z_offset = 0.0
+cube_disp_xy = 4.06 cm
+```
+
+也就是说，LLM 虽然开始关注 close envelope，但它仍把 **0 偏移 centered close** 放在第一个候选。这个动作已经被实验验证会把方块侧向挤开，因此是一个 regression。
+
+这次失败和上一节不同：
+
+| 轮次 | 证据 | 解释 |
+|---|---|---|
+| 第八轮 | `tcp_grasp_xy=0.0027`, `tcp_grasp_z=0.0002`, `cube_disp_xy=0.0052` | 到位、没撞飞，但没夹住 |
+| 第九轮 | `tcp_grasp_xy=0.0037`, `tcp_grasp_z=0.0040`, `cube_disp_xy=0.0406` | 到位，但 0 偏移闭爪又造成侧推 |
+
+下一轮约束更新：
+
+```text
+不要再把 grasp_z_offset=0.0 作为第一个 xarm6 candidate；
+如果保留 0 偏移，也必须放在更安全的非零 Z 候选之后；
+第一候选必须体现实质 close-envelope 变化：
+  - 非零 Z offset
+  - 或分阶段 gripper close command
+  - 或更长 zero-xyz close settle
+  - 或不同 pre-close height
+```
+
+直白理解：现在不是“LLM 不知道失败原因”，而是它知道方向后仍然选择了一个已经失败过的默认动作。下一步要把“不要重复 0 偏移第一候选”写成硬约束，让自动 repair 真正探索新的闭爪包络。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位且无明显侧推但夹爪未形成抓取”，下一步通过 `tcp_grasp_xy/z`、`cube_disp_xy` 和 `is_grasping` 的组合诊断驱动 close-envelope / gripper-timing repair。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 失败已被进一步细分为“到位且无明显侧推但夹爪未形成抓取”，但最新一轮发现 LLM 会回退到已失败的 `grasp_z_offset=0.0` 第一候选，因此下一步通过更硬的 nonzero-Z-first 约束驱动 close-envelope / gripper-timing repair。

@@ -209,6 +209,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("cube_disp_xy=0.0052", prompt)
         self.assertIn("good-alignment/no-displacement/no-grasp", prompt)
         self.assertIn("close-envelope/force failure", prompt)
+        self.assertIn("cube_disp_xy=0.0406", prompt)
+        self.assertIn("Do not use grasp_z_offset=0.0 as the first", prompt)
+        self.assertIn("side-push regression", prompt)
+        self.assertIn("nonzero first Z offset", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
