@@ -126,15 +126,19 @@ def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: D
 
     def has_diagnostic(token: str) -> bool:
         if token in message:
-            return True
+            if re.search(rf"{re.escape(token)}\s*=\s*(?:unknown|none|null|nan)\b", message, re.IGNORECASE):
+                return False
+            if re.search(rf"{re.escape(token)}\s*=\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)", message):
+                return True
+            return False
         if token == "cube_disp_xy":
-            return bool(
-                re.search(
-                    r"cube\s+(?:was\s+)?(?:displaced|moved)(?:\s+laterally)?\s+by\s+[0-9.]+\s*m",
-                    message,
-                    re.IGNORECASE,
-                )
-            )
+            if re.search(
+                r"cube\s+(?:was\s+)?(?:displaced|moved)(?:\s+laterally)?\s+by\s+[0-9.]+\s*m",
+                message,
+                re.IGNORECASE,
+            ):
+                return True
+            return False
         return False
 
     missing = [token for token in required if not has_diagnostic(token)]
@@ -209,6 +213,9 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Latest LLM retry after preserving grasp detections used the structured probe but still failed: the generated adapter reported all grasp candidates failed with is_grasping=False, tcp_grasp_xy=0.0009, tcp_grasp_z=0.0015, cube_disp_xy=0.0297. This means the TCP alignment is excellent but the close-envelope candidate scan still pushes the cube almost to the 0.03m guard and does not form a grasp.",
             "- Treat this as evidence that repeating a small fixed-XY close-envelope sweep is insufficient. Do not respond by adding more z_offset/close_steps/close_command combinations at the same centered XY pose. Make a more structural grasp primitive change: preserve any transient is_grasping=True, change the finger-envelope interaction, introduce a bounded micro-offset along the gripper closing axis, or report close-envelope/force infeasibility if all real close attempts remain non-grasping.",
             "- If you introduce bounded XY micro-offsets after the fixed-XY probe failed, keep them small, explicitly diagnostic, and abort on cube_disp_xy > 0.03. This is a finger-envelope centering test, not a large horizontal search or a chase of a displaced cube.",
+            "- Latest LLM retry after the primitive-repair prompt regressed into a descent failure: it reported is_grasping=False, tcp_grasp_xy=0.0096, tcp_grasp_z=0.1328, cube_disp_xy=unknown, cube_pos=[0.0169, 0.0621, 0.02]. A tcp_grasp_z of 0.1328m means the TCP was still 13cm above the intended grasp point; this is not a gripper/force failure and not evidence about close envelope.",
+            "- If tcp_grasp_z is large, do not close the gripper and do not report all grasp candidates failed as a force failure. Continue bounded vertical descent/refinement if safe, or return a phase-specific approach/descent failure with numeric tcp_grasp_xy, tcp_grasp_z, and cube_disp_xy=0.0 if the cube was never touched.",
+            "- Diagnostic fields must be numeric. `cube_disp_xy=unknown` is invalid; if the cube displacement cannot be measured because close was skipped, report cube_disp_xy=0.0 and explain that no contact attempt occurred.",
             "- Do not answer a repeated approach failure by adding a larger candidate grid. Reduce to one or two safe candidates and change descent speed, xy/z phase separation, settle timing, or approach waypoint geometry.",
             "- Check self._early_stop() after approach, close, lift, and transport phases. If the episode terminated or truncated, return a phase-specific real failure message instead of trying another candidate.",
             "- If self._is_grasping('cube') is True after lifting, immediately set self.held_object and return grasp success so the unchanged high-level program can call place(cube, goal). Do not reopen the gripper or continue searching candidates.",

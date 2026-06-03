@@ -1946,6 +1946,67 @@ parameter tuning
 gripper-envelope / force-closure primitive repair
 ```
 
+### 9.20 最新回归：未下降到抓取高度就进入失败判断
+
+最新 LLM 迁移分析返回：
+
+```text
+target_message=all grasp candidates failed;
+               is_grasping=False,
+               tcp_grasp_xy=0.0096,
+               tcp_grasp_z=0.1328,
+               cube_disp_xy=unknown,
+               cube_pos=[0.0169, 0.0621, 0.0200]
+```
+
+这次失败和前几轮不同。关键不是 close envelope，而是：
+
+```text
+tcp_grasp_z = 0.1328m
+```
+
+也就是说，闭爪或失败判断时 TCP 仍然离 intended grasp point 约 13.3 cm。这个高度远远超过方块尺寸，说明机器人根本没有下降到可抓取高度。
+
+因此这轮不能解释为：
+
+```text
+gripper/force failure
+```
+
+而应该解释为：
+
+```text
+approach/descent failure
+```
+
+直白理解：手还在空中，没到方块附近，就开始说“夹爪没夹住”。这不是夹爪力的问题，而是下降/到位逻辑的问题。
+
+同时，诊断信息中出现：
+
+```text
+cube_disp_xy=unknown
+```
+
+这说明虽然字段名出现了，但值不可用。为了让自动 repair 更稳定，本轮后更新诊断契约：
+
+```text
+tcp_grasp_xy / tcp_grasp_z / cube_disp_xy 必须是数值；
+cube_disp_xy=unknown 不再算合格；
+如果因为没有接触而没有方块位移，应报告 cube_disp_xy=0.0；
+如果 tcp_grasp_z 很大，不应闭爪，应继续安全下降或报告 approach/descent failure。
+```
+
+下一步约束更新：
+
+```text
+若 tcp_grasp_z 很大：
+  不要 close gripper；
+  不要报告 force failure；
+  先做 bounded vertical refinement；
+  若仍不能下降，则报告 phase-specific approach/descent failure；
+  failure message 仍必须包含数值 tcp_grasp_xy、tcp_grasp_z、cube_disp_xy。
+```
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 已加入自动抓取参数探针，首轮探针未找到成功 close 参数，且 LLM 使用 probe 后仍在固定 XY close sweep 中失败，下一步重点转向 verified grasp preservation、finger-envelope micro-offset 和更高层 grasp primitive repair。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 已加入自动抓取参数探针，首轮探针未找到成功 close 参数，且最新回归显示 LLM 有时会在 TCP 仍高于抓取点 13cm 时报告抓取失败，因此下一步同时约束 approach/descent 到位检查与 gripper-envelope repair。

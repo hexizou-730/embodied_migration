@@ -225,6 +225,10 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("cube_disp_xy=0.0297", prompt)
         self.assertIn("fixed-XY close-envelope sweep is insufficient", prompt)
         self.assertIn("bounded micro-offset along the gripper closing axis", prompt)
+        self.assertIn("tcp_grasp_z=0.1328", prompt)
+        self.assertIn("cube_disp_xy=unknown", prompt)
+        self.assertIn("phase-specific approach/descent failure", prompt)
+        self.assertIn("Diagnostic fields must be numeric", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_prompt_includes_pick_probe_feedback(self):
@@ -328,6 +332,15 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         grasping_error = pick_cube_runtime_diagnostic_error(case, grasping_failure)
         self.assertIsNotNone(grasping_error)
         self.assertIn("must not report grasp failure while is_grasping=True", grasping_error or "")
+
+        unknown_diagnostic_failure = {
+            "success": False,
+            "message": "grasp failed; tcp_grasp_xy=0.0096, tcp_grasp_z=0.1328, cube_disp_xy=unknown",
+            "execution_log": [{"api": "grasp"}],
+        }
+        unknown_error = pick_cube_runtime_diagnostic_error(case, unknown_diagnostic_failure)
+        self.assertIsNotNone(unknown_error)
+        self.assertIn("cube_disp_xy", unknown_error or "")
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(
