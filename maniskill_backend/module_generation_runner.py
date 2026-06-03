@@ -97,6 +97,34 @@ def validate_generated_adapter_module(code: str) -> None:
                 raise ValueError(f"Generated adapter module calls forbidden function: {func.id}")
 
 
+def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: Dict[str, Any]) -> str | None:
+    """Require close-time grasp diagnostics for failed xarm6 PickCube modules."""
+
+    if case.task_id != "pick_cube" or case.target_robot != "xarm6_robotiq":
+        return None
+    if bool(target_result.get("success", False)):
+        return None
+
+    execution_log = target_result.get("execution_log") or []
+    first_api = ""
+    if execution_log and isinstance(execution_log[0], dict):
+        first_api = str(execution_log[0].get("api") or "")
+    message = str(target_result.get("message") or "")
+    if "infeasible:" in message:
+        return None
+    if first_api != "grasp" and "grasp" not in message:
+        return None
+
+    required = ("tcp_grasp_xy", "tcp_grasp_z")
+    missing = [token for token in required if token not in message]
+    if not missing:
+        return None
+    return (
+        "failed xarm6 PickCube grasp modules must report close-time diagnostics "
+        f"{', '.join(required)} in the failure message; missing {', '.join(missing)}"
+    )
+
+
 def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
     """Return prompt constraints that are specific to the target embodiment."""
 
@@ -139,6 +167,9 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Official PickCube-v1 configuration for xarm6_robotiq uses cube_half_size=0.02m. A pre-close residual threshold of 0.025m is too loose to guarantee that the TCP reached an effective grasp envelope. Use stricter measured pre-close xy and z thresholds appropriate for a 0.04m cube.",
             "- If pre-close alignment is good, the cube remains nearly stationary, and is_grasping is still False after close, treat this as a gripper-envelope or close-timing failure. Try a small bounded Z-focused offset set at fixed xy and tune close/settle steps. Do not reopen horizontal search.",
             "- Preserve the measured pre-close tcp_grasp_xy and tcp_grasp_z values and include them in every post-close failure message so the next generation round can adapt from the actual close-time geometry.",
+            "- Runtime diagnostic contract: if grasp fails, the returned failure message MUST include tcp_grasp_xy and tcp_grasp_z from the close-time/pre-close check. A generic message such as only `all grasp candidates failed` is invalid because the repair loop cannot infer whether the failure was xy alignment, z height, or gripper timing.",
+            "- Latest real xarm6 PickCube retry after the Z-focused prompt again returned the same failed module twice. The module reported is_grasping=False, cube_goal_xyz=0.2700, final tcp_cube_xyz=0.0911, and cube_pos=[0.0091, -0.0173, 0.02], but it omitted tcp_grasp_xy/tcp_grasp_z. Treat this as insufficient close-time evidence, not a reason to repeat the same adapter.",
+            "- Since the cube stayed on the tabletop and was not severely displaced, do not enlarge horizontal search. The next meaningful change is to instrument close-time residuals and then adjust fixed-xy grasp height or gripper close/settle duration based on those residuals.",
             "- Do not answer a repeated approach failure by adding a larger candidate grid. Reduce to one or two safe candidates and change descent speed, xy/z phase separation, settle timing, or approach waypoint geometry.",
             "- Check self._early_stop() after approach, close, lift, and transport phases. If the episode terminated or truncated, return a phase-specific real failure message instead of trying another candidate.",
             "- If self._is_grasping('cube') is True after lifting, immediately set self.held_object and return grasp success so the unchanged high-level program can call place(cube, goal). Do not reopen the gripper or continue searching candidates.",
@@ -527,7 +558,6 @@ def run_module_generation_migration(
                 attempts.append(attempt)
                 continue
 
-            attempt["module_kept"] = True
             target_result = _run_target_program_trial(
                 case=case,
                 obs_mode=obs_mode,
@@ -536,6 +566,15 @@ def run_module_generation_migration(
                 timeout_s=trial_timeout_s,
             )
             attempt["target_result"] = target_result
+            diagnostic_error = pick_cube_runtime_diagnostic_error(case, target_result)
+            attempt["diagnostic_contract_ok"] = diagnostic_error is None
+            if diagnostic_error is not None:
+                attempt["module_error"] = repr(ValueError(diagnostic_error))
+                module_path.write_text(snapshot, encoding="utf-8")
+                attempts.append(attempt)
+                continue
+
+            attempt["module_kept"] = True
             attempts.append(attempt)
             if bool(target_result.get("success", False)):
                 break
@@ -619,6 +658,7 @@ def module_generation_result_to_md(result: Dict[str, Any]) -> str:
                 f"- **module_applied**: `{attempt.get('module_applied')}`",
                 f"- **module_kept**: `{attempt.get('module_kept')}`",
                 f"- **verification_ok**: `{attempt.get('verification_ok')}`",
+                f"- **diagnostic_contract_ok**: `{attempt.get('diagnostic_contract_ok')}`",
                 f"- **module_error**: `{attempt.get('module_error', '')}`",
                 "",
                 "### Generated Module Preview",
@@ -874,6 +914,7 @@ def _attempt_digest(attempt: Dict[str, Any]) -> Dict[str, Any]:
         "module_applied",
         "module_kept",
         "verification_ok",
+        "diagnostic_contract_ok",
         "module_error",
         "target_result",
     )

@@ -19,6 +19,7 @@ from maniskill_backend.migration import METHODS, MigrationRequest, build_migrati
 from maniskill_backend.module_generation_runner import (
     build_module_generation_prompt,
     extract_python_module,
+    pick_cube_runtime_diagnostic_error,
     validate_generated_adapter_module,
 )
 from maniskill_backend.profiles import get_robot_profile, iter_robot_profiles
@@ -198,6 +199,8 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("reduced cube displacement after close to 0.0015m", prompt)
         self.assertIn("cube_half_size=0.02m", prompt)
         self.assertIn("Z-focused offset set", prompt)
+        self.assertIn("tcp_grasp_xy and tcp_grasp_z", prompt)
+        self.assertIn("tcp_cube_xyz=0.0911", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_pick_retry_changes_grasp_strategy(self):
@@ -226,6 +229,25 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("Preserve enough episode budget for transport", prompt)
         self.assertIn("finish xy alignment while safely above the cube", prompt)
         self.assertIn("Add phase-specific diagnostics before close and after close", prompt)
+
+    def test_pick_cube_runtime_requires_close_time_diagnostics(self):
+        case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
+        failure = {
+            "success": False,
+            "message": "all grasp candidates failed; is_grasping=False, tcp_cube_xyz=0.0911",
+            "execution_log": [{"api": "grasp"}],
+        }
+        error = pick_cube_runtime_diagnostic_error(case, failure)
+        self.assertIsNotNone(error)
+        self.assertIn("tcp_grasp_xy", error or "")
+        self.assertIn("tcp_grasp_z", error or "")
+
+        diagnostic_failure = {
+            "success": False,
+            "message": "grasp failed; tcp_grasp_xy=0.0040, tcp_grasp_z=0.0180, is_grasping=False",
+            "execution_log": [{"api": "grasp"}],
+        }
+        self.assertIsNone(pick_cube_runtime_diagnostic_error(case, diagnostic_failure))
 
     def test_migration_prompt_exposes_pull_api(self):
         request = MigrationRequest.from_ids(

@@ -1408,6 +1408,46 @@ tcp_grasp_z <= 0.025m
 
 这依旧不包含人工成功轨迹。提示仅加入官方物体尺寸和真实失败证据。
 
+### 9.12 PickCube 第六轮远程结果：失败诊断本身需要约束
+
+最新一轮远程实验结果为：
+
+```text
+ROUND 1
+target_success=False
+target_message=all grasp candidates failed; is_grasping=False,
+               cube_goal_xyz=0.2700,
+               tcp_cube_xyz=0.0911,
+               cube_pos=[0.0091, -0.0173, 0.0200]
+
+ROUND 2
+target_success=False
+target_message 与 Round 1 完全相同
+
+ROUND 3
+module_valid=False
+module_error=Generated adapter module is unchanged from the current failed module.
+```
+
+这轮结果有两个含义：
+
+1. 方块仍在桌面上，且没有出现早期那种大幅横向撞飞或掉落，说明下降阶段的破坏性已经明显降低。
+2. 失败信息仍只给出最终 `tcp_cube_xyz=0.0911`，没有给出闭爪时刻的 `tcp_grasp_xy` 和 `tcp_grasp_z`。该最终距离可能是在失败、开爪、撤退之后记录的，因此不能判断闭爪瞬间到底是 XY 没对准、Z 高度不对，还是 gripper close/settle 时序不合适。
+
+因此，本轮不是继续盲目增加候选点，而是把“失败也必须可解释”写入运行器约束：
+
+```text
+如果 xarm6 PickCube 的 grasp 失败，
+failure message 必须包含：
+  tcp_grasp_xy
+  tcp_grasp_z
+
+否则该生成模块虽然 Python 合法、unittest 通过，
+也会被视为 diagnostic_contract 不合格。
+```
+
+这一步将人工调试经验进一步转化为自动纠正装置的一部分：LLM 不仅要生成可执行 adapter，还要在失败时返回足够结构化的阶段证据，使下一轮 repair 能判断应该调整抓取高度、闭爪等待，还是接近轨迹。
+
 ## 10. 当前一句话总结
 
-当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前已经基本消除首次下降的水平冲击，下一步针对夹爪包络高度、闭爪残差和闭爪时序完成抓取迁移。
+当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前已经基本消除首次下降的水平冲击，下一步通过强制闭爪时刻诊断，把抓取高度、闭爪残差和闭爪时序纳入自动 repair 循环。
