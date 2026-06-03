@@ -1,8 +1,119 @@
 # 实验进度报告：LLM 机器人程序迁移
 
-更新时间：2026-06-02
-当前阶段：`PullCube-v1` 首个 LLM 自动迁移成功案例已验证，`PickCube-v1` 已实现真实抓取和部分抬升，待完成搬运
-报告用途：作为后续实验记录的基础版本，之后所有实验进展、失败案例、统计结果和论文分析都在此文件上继续更新。
+更新时间：2026-06-03
+当前阶段：`PullCube-v1` 已完成 Panda → xArm6 自动迁移成功案例；`PickCube-v1` 被定义为 hard case，用于分析真实抓取迁移的瓶颈。
+报告用途：组会汇报 + 后续 workshop 论文实验记录。
+
+## 0. 组会速览
+
+### 0.1 一句话进展
+
+本项目已经从简单高层代码迁移推进到真实 ManiSkill 控制迁移：DeepSeek V4-Pro 已能为 xArm6 自动生成 `PullCube-v1` 目标 adapter 并成功执行；但在 `PickCube-v1` 真实抓取任务中，LLM adapter generation 仍无法稳定形成 force-closure grasp，说明抓取迁移需要结构化物理探针和更深层接触/控制建模。
+
+### 0.2 当前实验结果对比
+
+| Case | 任务 | 迁移方向 | 结果 | 关键证据 | 结论 |
+|---|---|---|---|---|---|
+| Case 02 | `PullCube-v1` 接触拖拽 | Panda → xArm6 | 成功 | `target_success=True`, `ret_val=True`, `elapsed_steps=460` | LLM 可以生成可执行 xArm6 target adapter |
+| Case 03 | `PickCube-v1` 真实抓取 | Panda → xArm6 | 未成功，作为 hard case | probe 32 组参数均 `is_grasping=False`; 最近失败 `tcp_grasp_z=0.0820` | prompt-only adapter synthesis 对 force-closure grasp 不够 |
+| Case 01 | `PullCube-v1` | Panda → Fetch | 保留为诊断失败 | 9D action space、移动底盘、接触侧可达性问题 | embodiment 差异会造成非高层代码层面的失败 |
+
+### 0.3 PullCube 成功说明了什么
+
+`PullCube-v1` 的高层程序不变：
+
+```python
+cube = scene.get_object("cube")
+goal = scene.get_region("goal")
+ret_val = robot.pull(cube, goal)
+```
+
+LLM 生成的是目标端 adapter，不是改高层任务代码。成功说明：对于接触拖拽类任务，LLM 能根据失败日志和 embodiment 约束修改 target adapter 的动作空间映射、接触侧、拖拽策略和执行参数，并通过真实 ManiSkill `env.step(action)` 达到成功。
+
+### 0.4 PickCube 为什么定义为 hard case
+
+`PickCube-v1` 的高层程序同样保持不变：
+
+```python
+cube = scene.get_object("cube")
+goal = scene.get_region("goal")
+
+grasp_ok = robot.grasp(cube)
+ret_val = robot.place(cube, goal) if grasp_ok else False
+```
+
+但任务要求真实夹爪抓取、抬升、搬运到三维目标。当前失败已经从“代码格式错误”逐步定位到物理执行层：
+
+| 阶段 | 观察 | 含义 |
+|---|---|---|
+| 早期失败 | 方块被撞飞或掉落 | approach/descent 策略破坏性太强 |
+| 中期失败 | `tcp_grasp_xy/z` 很小但 `is_grasping=False` | 手到位但夹爪包络没有形成抓取 |
+| 侧推失败 | `cube_disp_xy` 接近或超过 3 cm | 闭爪时把方块横向挤走 |
+| 最新失败 | `tcp_grasp_z=0.0820` | adapter 没下降到有效抓取高度就进入失败判断 |
+
+因此 PickCube 不是简单“再调 prompt 就能好”的问题，而是 force-closure grasp 迁移瓶颈。
+
+### 0.5 自动探针结果
+
+为避免无限 prompt，已加入自动抓取参数探针：
+
+```bash
+python scripts/xarm6_pick_grasp_probe.py \
+  --sim-backend auto \
+  --render-backend gpu
+```
+
+探针固定 XY，枚举少量：
+
+```text
+grasp_z_offset / close_steps / close_command / settle_steps
+```
+
+结果：
+
+```text
+total_probe_cases = 32
+grasping_cases = 0
+best_probe_case:
+  grasp_z_offset=0.016
+  close_steps=12
+  close_command=-0.6
+  cube_disp_xy=0.00458
+  tcp_grasp_xy=0.00239
+  tcp_grasp_z=0.00152
+  is_grasping_after_close=False
+```
+
+结论：probe 没有给出成功答案，但证明简单 close-envelope 参数调节不足。后续 LLM 需要处理更结构性的 grasp primitive，而不是继续堆更多 z-offset/close 参数。
+
+### 0.6 当前可讲的研究结论
+
+```text
+LLM-generated adapter migration works for contact-based manipulation
+but exposes clear limits on real force-closure grasping.
+Structured physical probing helps diagnose the failure space,
+but robust grasp transfer likely needs constraint-aware repair and
+deeper controller/contact modeling.
+```
+
+中文表述：
+
+```text
+LLM 可以迁移接触拖拽类机器人程序；
+但在真实抓取任务中，仅靠 prompt 和 adapter 参数搜索不够。
+结构化探针能把失败分解为可解释约束，
+下一步应把 LLM 迁移和约束处理 / 学习引导优化结合起来。
+```
+
+### 0.7 下一阶段计划
+
+| 优先级 | 内容 | 目的 |
+|---|---|---|
+| 高 | 固定当前 prompt，不再无限手工追日志 | 收束实验，避免调参化 |
+| 高 | 跑 PullCube 多 seed，统计成功率 | 形成主实验正结果 |
+| 中 | 将 PickCube 作为 hard case，整理失败类型 | 形成负结果和研究动机 |
+| 中 | 扩展 probe 为 constraint-aware repair | 与 constraint handling / learning-guided optimization 方向对齐 |
+| 低 | 后续再考虑 Fetch 或其他机器人 | 不分散当前主线 |
 
 ## 1. 项目目标
 
