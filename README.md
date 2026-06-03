@@ -29,7 +29,7 @@ and real simulator verification.
 | Case | Task | Source -> Target | Result | Main evidence |
 |---|---|---|---|---|
 | Case 02 | `PullCube-v1` | Panda -> xarm6_robotiq | Success | LLM-generated adapter reached `ret_val=True`, `elapsed_steps=460` |
-| Case 03 | `PickCube-v1` | Panda -> xarm6_robotiq | Hard case / not solved | LLM reaches structured grasp logic, but force-closure grasp remains unstable |
+| Case 03 | `PickCube-v1` | Panda -> xarm6_robotiq | Source succeeds; target hard case | Panda baseline reached `ret_val=True`, `elapsed_steps=40`; xarm6 force-closure grasp remains unstable |
 | Case 01 | `PullCube-v1` | Panda -> Fetch | Diagnosed failure | Mobile-base/contact-side reachability and action-space mismatch |
 
 The strongest current result is:
@@ -42,10 +42,10 @@ target adapter, verified through real ManiSkill execution.
 The main negative result is:
 
 ```text
-PickCube-v1 exposes the limit of prompt-only adapter synthesis. The LLM can
-generate structured grasp adapters and use probe feedback, but robust
-force-closure grasping still fails due to descent, gripper-envelope, and
-contact-force issues.
+PickCube-v1 is validated on the Panda source stack, but exposes the limit of
+prompt-only target-adapter synthesis for xarm6_robotiq. The LLM can generate
+structured grasp adapters and use probe feedback, but robust force-closure
+grasping still fails due to descent, gripper-envelope, and contact-force issues.
 ```
 
 ## Why PullCube Succeeds And PickCube Fails
@@ -55,7 +55,7 @@ contact-force issues.
 | Required physical interaction | Contact drag/push | Real two-finger grasp |
 | Success requirement | Move cube to target region | Grasp, lift, and transport to 3D goal |
 | Main adapter change | Contact side, drag pulses, action scaling | Grasp height, close timing, gripper envelope, lift preservation |
-| Current outcome | Solved for xarm6 | Hard case |
+| Current outcome | Solved for xarm6 | Panda source succeeds; xarm6 target remains hard case |
 
 The PickCube failure is not a high-level program error. The program remains:
 

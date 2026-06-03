@@ -43,7 +43,7 @@ source LMP program
 | 任务 | 迁移方向 | 结果 | 说明 |
 |---|---|---|---|
 | `PullCube-v1` | Panda -> xArm6 | 成功 | LLM adapter 成功迁移接触拖拽任务 |
-| `PickCube-v1` | Panda -> xArm6 | hard case | 真实 force-closure grasp 仍失败 |
+| `PickCube-v1` | Panda -> xArm6 | source succeeds; target hard case | Panda baseline 成功，xArm6 真实 force-closure grasp 仍失败 |
 | `PullCube-v1` | Panda -> Fetch | diagnosed failure | 移动底盘与接触侧可达性问题 |
 
 ## 4. 正结果：PullCube
@@ -62,6 +62,7 @@ source LMP program
 
 当前发现：
 
+- Panda source-copy baseline 已成功：`ret_val=True`, `elapsed_steps=40`；
 - LLM 可以生成结构化 grasp adapter；
 - LLM 能利用 probe feedback；
 - 但稳定 grasp 仍失败；

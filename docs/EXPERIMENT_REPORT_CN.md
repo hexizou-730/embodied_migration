@@ -1,21 +1,21 @@
 # 实验进度报告：LLM 机器人程序迁移
 
 更新时间：2026-06-03
-当前阶段：`PullCube-v1` 已完成 Panda → xArm6 自动迁移成功案例；`PickCube-v1` 被定义为 hard case，用于分析真实抓取迁移的瓶颈。
+当前阶段：`PullCube-v1` 已完成 Panda → xArm6 自动迁移成功案例；`PickCube-v1` 已验证 Panda 源端 baseline 成功，但 Panda → xArm6 迁移仍是 hard case，用于分析真实抓取迁移的瓶颈。
 报告用途：组会汇报 + 后续 workshop 论文实验记录。
 
 ## 0. 组会速览
 
 ### 0.1 一句话进展
 
-本项目已经从简单高层代码迁移推进到真实 ManiSkill 控制迁移：DeepSeek V4-Pro 已能为 xArm6 自动生成 `PullCube-v1` 目标 adapter 并成功执行；但在 `PickCube-v1` 真实抓取任务中，LLM adapter generation 仍无法稳定形成 force-closure grasp，说明抓取迁移需要结构化物理探针和更深层接触/控制建模。
+本项目已经从简单高层代码迁移推进到真实 ManiSkill 控制迁移：DeepSeek V4-Pro 已能为 xArm6 自动生成 `PullCube-v1` 目标 adapter 并成功执行；`PickCube-v1` 的 Panda source baseline 也已验证成功，但迁移到 xArm6 后 LLM adapter generation 仍无法稳定形成 force-closure grasp，说明抓取迁移需要结构化物理探针和更深层接触/控制建模。
 
 ### 0.2 当前实验结果对比
 
 | Case | 任务 | 迁移方向 | 结果 | 关键证据 | 结论 |
 |---|---|---|---|---|---|
 | Case 02 | `PullCube-v1` 接触拖拽 | Panda → xArm6 | 成功 | `target_success=True`, `ret_val=True`, `elapsed_steps=460` | LLM 可以生成可执行 xArm6 target adapter |
-| Case 03 | `PickCube-v1` 真实抓取 | Panda → xArm6 | 未成功，作为 hard case | probe 32 组参数均 `is_grasping=False`; 最近失败 `tcp_grasp_z=0.0820` | prompt-only adapter synthesis 对 force-closure grasp 不够 |
+| Case 03 | `PickCube-v1` 真实抓取 | Panda → xArm6 | Panda 源端成功；xArm6 未成功，作为 hard case | Panda baseline `ret_val=True`, `elapsed_steps=40`; xArm6 probe 32 组参数均 `is_grasping=False`; 最近失败 `tcp_grasp_z=0.0820` | 源程序有效，但 prompt-only target adapter synthesis 对 force-closure grasp 不够 |
 | Case 01 | `PullCube-v1` | Panda → Fetch | 保留为诊断失败 | 9D action space、移动底盘、接触侧可达性问题 | embodiment 差异会造成非高层代码层面的失败 |
 
 ### 0.3 PullCube 成功说明了什么
@@ -42,7 +42,19 @@ grasp_ok = robot.grasp(cube)
 ret_val = robot.place(cube, goal) if grasp_ok else False
 ```
 
-但任务要求真实夹爪抓取、抬升、搬运到三维目标。当前失败已经从“代码格式错误”逐步定位到物理执行层：
+Panda baseline 已验证成功：
+
+```text
+robot_uid = panda
+method = source-copy
+success = true
+message = ret_val=True
+elapsed_steps = 40
+is_grasped = true
+is_obj_placed = true
+```
+
+因此 PickCube 的问题不是源端程序错误，而是目标机器人迁移后的真实抓取执行问题。当前失败已经从“代码格式错误”逐步定位到物理执行层：
 
 | 阶段 | 观察 | 含义 |
 |---|---|---|
