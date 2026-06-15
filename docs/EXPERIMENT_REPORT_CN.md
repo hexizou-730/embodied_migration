@@ -30,6 +30,24 @@ ret_val = robot.pull(cube, goal)
 
 LLM 生成的是目标端 adapter，不是改高层任务代码。成功说明：对于接触拖拽类任务，LLM 能根据失败日志和 embodiment 约束修改 target adapter 的动作空间映射、接触侧、拖拽策略和执行参数，并通过真实 ManiSkill `env.step(action)` 达到成功。
 
+### 0.3.1 Adapter 是什么
+
+通俗说，adapter 是“翻译器 + 执行方案”。高层程序只说“我要做什么”，例如：
+
+```python
+ret_val = robot.pull(cube, goal)
+```
+
+但它没有说明机械臂先往哪走、夹爪开还是关、每一步 action 怎么填、接触点选哪里、失败后怎么重试。这些由 adapter 负责。
+
+```text
+高层程序 = 我要做什么
+adapter = 这个机器人具体怎么做
+controller = 底层怎么把 action 变成关节运动
+```
+
+因此本项目的迁移重点不是改 `robot.pull(cube, goal)` 这一句，而是让 LLM 为不同目标机器人生成新的 adapter。例如 Panda 的 `pull` 可以用固定接触点直接拖拽；xArm6 的 adapter 则需要重新设定动作格式、接触侧、下降速度、拖拽脉冲和失败诊断。
+
 ### 0.4 PickCube 为什么定义为 hard case
 
 `PickCube-v1` 的高层程序同样保持不变：

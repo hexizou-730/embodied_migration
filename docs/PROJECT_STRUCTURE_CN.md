@@ -10,6 +10,36 @@
 高层程序 -> target adapter -> real ManiSkill env.step(action) -> success / failure
 ```
 
+## Adapter 是什么
+
+通俗说，adapter 是“翻译器 + 执行方案”。
+
+高层程序只表达任务意图：
+
+```python
+ret_val = robot.pull(cube, goal)
+```
+
+这句话只说明“我要把方块拉到目标区域”，但没有说明：
+
+```text
+机械臂先往哪走？
+夹爪开还是关？
+每一步 action 怎么填？
+接触点选哪里？
+失败后怎么处理？
+```
+
+这些都由 adapter 决定。
+
+```text
+高层程序 = 我要做什么
+adapter = 这个机器人具体怎么做
+controller = 底层怎么把 action 变成关节运动
+```
+
+本项目主要让 LLM 生成的是 adapter，而不是直接修改 ManiSkill 底层 controller。这样可以保持高层任务代码稳定，同时比较不同机器人在同一任务下需要怎样的执行策略。
+
 ## 当前主线
 
 | 内容 | 当前选择 |
@@ -136,4 +166,3 @@ results/xarm6_pick_grasp_probe.md
 
 1. 把 Fetch 相关内容标记为 `diagnosed secondary case`，不要作为主线展示。
 2. 把 PickCube 标记为 `hard case`，不要和 PullCube 正结果混在一起讲。
-
