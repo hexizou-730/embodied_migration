@@ -89,6 +89,8 @@ def result_digest(result: Dict[str, Any]) -> Dict[str, Any]:
         "failure_layer": result.get("failure_layer"),
         "message": result.get("message"),
         "final_info": final_info,
+        "initial_runtime_diagnostics": result.get("initial_runtime_diagnostics") or {},
+        "runtime_diagnostics": result.get("runtime_diagnostics") or {},
     }
 
 
@@ -234,7 +236,43 @@ def summary_to_markdown(summary: Dict[str, Any]) -> str:
             f"{row.get('failure_layer')} | {steps} | {message} |"
         )
     lines.append("")
+    failure_rows = [row for row in summary["rows"] if not row.get("success")]
+    if failure_rows:
+        lines.extend(
+            [
+                "## Failure Diagnostics",
+                "",
+                "| seed | stage | cube_pos | tcp_pos | stage_target_pos | tcp_stage_error_norm | tcp_stage_error_xyz | cube_goal_xy | tcp_cube_xy |",
+                "|---:|---|---|---|---|---:|---|---:|---:|",
+            ]
+        )
+        for row in failure_rows:
+            diag = row.get("runtime_diagnostics") or {}
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        str(row["seed"]),
+                        str(diag.get("stage", "")),
+                        _md_vec(diag.get("cube_pos")),
+                        _md_vec(diag.get("tcp_pos")),
+                        _md_vec(diag.get("stage_target_pos")),
+                        str(diag.get("tcp_stage_error_norm", "")),
+                        _md_vec(diag.get("tcp_stage_error_xyz")),
+                        str(diag.get("cube_goal_xy", "")),
+                        str(diag.get("tcp_cube_xy", "")),
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
     return "\n".join(lines)
+
+
+def _md_vec(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    return "[" + ", ".join(str(item) for item in value) + "]"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

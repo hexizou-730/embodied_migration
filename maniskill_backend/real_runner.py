@@ -256,6 +256,7 @@ def run_real_code_trial(
             robot = _build_robot_adapter_from_module(adapter_module, env, control_mode, robot_uid)
         else:
             robot = _build_robot_adapter(task_id, env, control_mode, robot_uid)
+        initial_runtime_diagnostics = _runtime_diagnostics(task_id, robot, stage="initial")
         scene = ManiSkillSceneAdapter()
         code_ok, message, locals_dict = execute_lmp(
             code,
@@ -283,6 +284,11 @@ def run_real_code_trial(
                 "ret_val": ret_val,
             },
         )
+        runtime_diagnostics = _runtime_diagnostics(
+            task_id,
+            robot,
+            stage=_stage_from_message(failure_message),
+        )
         result.update(
             success=success,
             failure_type=failure_type,
@@ -293,6 +299,8 @@ def run_real_code_trial(
             reset_info_keys=sorted(str(k) for k in getattr(reset_info, "keys", lambda: [])()),
             execution_log=execution_log,
             final_info=final_info,
+            initial_runtime_diagnostics=initial_runtime_diagnostics,
+            runtime_diagnostics=runtime_diagnostics,
         )
         if extra_result:
             result.update(extra_result)
@@ -313,6 +321,102 @@ def run_real_code_trial(
             robot.close()
         adapter.close()
     return result
+
+
+def _runtime_diagnostics(task_id: str, robot: Any, *, stage: str) -> Dict[str, Any]:
+    if task_id == "pull_cube":
+        return _pull_cube_runtime_diagnostics(robot, stage=stage)
+    return {}
+
+
+def _stage_from_message(message: str) -> str:
+    lower = str(message or "").lower()
+    for stage in ("approach", "descent", "contact", "drag", "settle"):
+        if stage in lower:
+            return stage
+    return "final"
+
+
+def _pull_cube_runtime_diagnostics(robot: Any, *, stage: str) -> Dict[str, Any]:
+    try:
+        cube = _vector3(robot._actor_pos("cube"))
+        goal = _vector3(robot._region_pos("goal"))
+        tcp = _vector3(robot._tcp_pos())
+    except Exception as exc:
+        return {"stage": stage, "error": repr(exc)}
+
+    x_offset = float(getattr(robot, "contact_x_offset_m", 0.07))
+    z_offset = float(getattr(robot, "contact_z_offset_m", 0.02))
+    drag_extra = 0.025
+    nominal_contact = _add(cube, [x_offset, 0.0, z_offset])
+    nominal_pre_contact = _add(nominal_contact, [0.0, 0.0, 0.075])
+    nominal_drag_end = [goal[0] - drag_extra, cube[1], nominal_contact[2]]
+
+    if stage == "approach":
+        stage_target = nominal_pre_contact
+    elif stage in {"descent", "contact"}:
+        stage_target = nominal_contact
+    elif stage == "drag":
+        stage_target = nominal_drag_end
+    else:
+        stage_target = nominal_contact
+
+    tcp_to_stage_target = _sub(stage_target, tcp)
+    tcp_to_contact = _sub(nominal_contact, tcp)
+    tcp_to_pre_contact = _sub(nominal_pre_contact, tcp)
+    cube_to_goal_xy = [goal[0] - cube[0], goal[1] - cube[1]]
+    tcp_to_cube_xy = [cube[0] - tcp[0], cube[1] - tcp[1]]
+
+    return {
+        "stage": stage,
+        "cube_pos": _round_vec(cube),
+        "goal_pos": _round_vec(goal),
+        "tcp_pos": _round_vec(tcp),
+        "contact_x_offset_m": round(x_offset, 5),
+        "contact_z_offset_m": round(z_offset, 5),
+        "nominal_contact_pos": _round_vec(nominal_contact),
+        "nominal_pre_contact_pos": _round_vec(nominal_pre_contact),
+        "nominal_drag_end_pos": _round_vec(nominal_drag_end),
+        "stage_target_pos": _round_vec(stage_target),
+        "tcp_stage_error_xyz": _round_vec(tcp_to_stage_target),
+        "tcp_stage_error_norm": round(_norm(tcp_to_stage_target), 5),
+        "tcp_contact_error_xyz": _round_vec(tcp_to_contact),
+        "tcp_contact_error_norm": round(_norm(tcp_to_contact), 5),
+        "tcp_pre_contact_error_xyz": _round_vec(tcp_to_pre_contact),
+        "tcp_pre_contact_error_norm": round(_norm(tcp_to_pre_contact), 5),
+        "cube_goal_xy": round(_norm(cube_to_goal_xy), 5),
+        "tcp_cube_xy": round(_norm(tcp_to_cube_xy), 5),
+    }
+
+
+def _vector3(value: Any) -> list[float]:
+    if hasattr(value, "detach"):
+        value = value.detach().cpu().numpy()
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    flat: list[float] = []
+    for item in value:
+        if isinstance(item, (list, tuple)):
+            flat.extend(float(x) for x in item)
+        else:
+            flat.append(float(item))
+    return flat[:3]
+
+
+def _sub(a: list[float], b: list[float]) -> list[float]:
+    return [float(x) - float(y) for x, y in zip(a, b)]
+
+
+def _add(a: list[float], b: list[float]) -> list[float]:
+    return [float(x) + float(y) for x, y in zip(a, b)]
+
+
+def _norm(value: list[float]) -> float:
+    return float(sum(float(x) * float(x) for x in value) ** 0.5)
+
+
+def _round_vec(value: list[float]) -> list[float]:
+    return [round(float(x), 5) for x in value]
 
 
 def _failure_message(robot: Any, fallback: str) -> str:
