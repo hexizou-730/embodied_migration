@@ -1,9 +1,8 @@
-"""Adaptive xarm6_robotiq target adapter for PullCube-v1.
+"""Success-preserving adaptive xarm6_robotiq adapter for PullCube-v1.
 
-This module is an experimental follow-up to the seed-0 successful adapter. The
-multi-seed diagnostics showed that a fixed far-side contact point can be
-unreachable for many seeds. This adapter tries a small bounded set of contact
-offsets and rejects candidates whose approach/descent error stops improving.
+This module keeps the seed-0 successful far-side strategy as the first attempt,
+then adds bounded fallback contact offsets for multi-seed diagnosis. It is meant
+for A/B testing against the saved seed-0 adapter, not as an LLM generation seed.
 """
 
 from __future__ import annotations
@@ -16,20 +15,20 @@ from maniskill_backend.skill_adapter import ManiSkillPullCubeRobot
 
 
 class GeneratedXArm6PullCubeAdaptiveRobot(ManiSkillPullCubeRobot):
-    """xarm6 adapter with adaptive contact-offset search."""
+    """xarm6 adapter with far-side-first contact candidates."""
 
     def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
         super().__init__(
             env,
             robot_uid=robot_uid,
             control_mode=control_mode,
-            move_steps=34,
+            move_steps=30,
             contact_steps=10,
-            drag_steps=96,
-            settle_steps=12,
-            max_delta_m=0.045,
-            contact_x_offset_m=0.06,
-            contact_z_offset_m=0.014,
+            drag_steps=90,
+            settle_steps=15,
+            max_delta_m=0.04,
+            contact_x_offset_m=0.12,
+            contact_z_offset_m=0.015,
             gripper_open=1.0,
             gripper_close=-1.0,
         )
@@ -64,247 +63,149 @@ class GeneratedXArm6PullCubeAdaptiveRobot(ManiSkillPullCubeRobot):
             action = np.clip(action, low, high)
         return action
 
-    def _move_towards(
-        self,
-        target_pos: np.ndarray,
-        *,
-        gripper: float,
-        steps: int,
-    ) -> None:
-        self._move_towards_checked(target_pos, gripper=gripper, steps=steps)
-
-    def _move_towards_checked(
-        self,
-        target_pos: np.ndarray,
-        *,
-        gripper: float,
-        steps: int,
-        tolerance: float = 0.01,
-        command_clip: float = 0.85,
-        down_bias: float | None = None,
-        stall_window: int = 18,
-    ) -> dict[str, Any]:
-        target = np.asarray(target_pos, dtype=np.float32)
-        best_error = float("inf")
-        stale_steps = 0
-        final_error = float("inf")
-        for step_idx in range(max(1, steps)):
-            if self._early_stop():
-                break
-            tcp = self._tcp_pos()
-            delta = target - tcp
-            if down_bias is not None:
-                delta[2] = min(float(delta[2]), float(down_bias))
-            error = float(np.linalg.norm(target - tcp))
-            final_error = error
-            if error < tolerance:
-                return {
-                    "ok": True,
-                    "error": round(error, 5),
-                    "steps": step_idx,
-                    "target": np.round(target, 5).tolist(),
-                    "tcp": np.round(tcp, 5).tolist(),
-                }
-            if error < best_error - 0.002:
-                best_error = error
-                stale_steps = 0
-            else:
-                stale_steps += 1
-            if stale_steps >= stall_window and error > max(tolerance * 2.0, best_error + 0.01):
-                break
-            command = np.clip(delta / self.max_delta_m, -command_clip, command_clip)
-            self._step(self._make_action(command, gripper=gripper))
-        tcp = self._tcp_pos()
-        return {
-            "ok": bool(final_error < tolerance),
-            "error": round(float(np.linalg.norm(target - tcp)), 5),
-            "best_error": round(float(best_error), 5) if np.isfinite(best_error) else None,
-            "target": np.round(target, 5).tolist(),
-            "tcp": np.round(tcp, 5).tolist(),
-        }
-
-    def _drag_pulse(self, *, steps: int, x_command: float = -0.55, down_command: float = -0.04) -> None:
-        action = self._make_action(
-            np.array([x_command, 0.0, down_command], dtype=np.float32),
-            gripper=self.gripper_close,
-        )
+    def _move_towards(self, target_pos: np.ndarray, *, gripper: float, steps: int) -> None:
         for _ in range(max(1, steps)):
             if self._early_stop():
                 return
-            self._step(action)
+            tcp = self._tcp_pos()
+            delta = np.asarray(target_pos, dtype=np.float32) - tcp
+            if np.linalg.norm(delta) < 0.005:
+                break
+            command = np.clip(delta / self.max_delta_m, -0.9, 0.9)
+            self._step(self._make_action(command, gripper=gripper))
 
-    def _candidate_summary(
+    def _drag_pulse(self, direction: np.ndarray, *, magnitude: float, steps: int) -> None:
+        norm = float(np.linalg.norm(direction))
+        if norm < 1e-6:
+            return
+        command = direction / norm * float(np.clip(magnitude, 0.1, 0.9))
+        for _ in range(max(1, steps)):
+            if self._early_stop():
+                return
+            self._step(self._make_action(command, gripper=self.gripper_close))
+
+    def _attempt_contact(
         self,
         *,
+        obj_name: str,
+        target_name: str,
         x_offset: float,
         z_offset: float,
-        phase: str,
-        target_pos: np.ndarray,
-    ) -> dict[str, Any]:
-        tcp = self._tcp_pos()
-        cube = self._actor_pos("cube")
-        goal = self._region_pos("goal")
-        return {
-            "x_offset": round(float(x_offset), 4),
-            "z_offset": round(float(z_offset), 4),
-            "phase": phase,
-            "target": np.round(target_pos, 4).tolist(),
-            "tcp": np.round(tcp, 4).tolist(),
-            "cube": np.round(cube, 4).tolist(),
-            "tcp_target_error": round(float(np.linalg.norm(target_pos - tcp)), 4),
-            "tcp_cube_xy": round(float(np.linalg.norm((tcp - cube)[:2])), 4),
-            "cube_goal_xy": round(float(np.linalg.norm((goal - cube)[:2])), 4),
-        }
-
-    def pull(
-        self,
-        obj,
-        target,
-        *,
-        contact_x_offset=None,
-        contact_z_offset=None,
-        drag_extra=0.025,
-        stages=5,
+        drag_extra: float,
+        stages: int,
+        require_far_side: bool,
     ) -> bool:
+        cube_pos = self._actor_pos("cube")
+        goal_pos = self._region_pos(target_name)
+        contact = cube_pos + np.array([x_offset, 0.0, z_offset], dtype=np.float32)
+        pre_contact = contact + np.array([0.0, 0.0, 0.08], dtype=np.float32)
+        drag_end = np.array([goal_pos[0] - float(drag_extra), cube_pos[1], contact[2]], dtype=np.float32)
+
+        self._move_towards(pre_contact, gripper=self.gripper_close, steps=self.move_steps)
+        if self._early_stop():
+            return False
+
+        self._move_towards(contact, gripper=self.gripper_close, steps=self.move_steps)
+        if self._early_stop():
+            return False
+
+        tcp = self._tcp_pos()
+        if require_far_side and tcp[0] <= cube_pos[0] + 0.03:
+            return False
+
+        self._repeat_action(np.zeros(3, dtype=np.float32), gripper=self.gripper_close, steps=self.contact_steps)
+
+        drag_dir = np.array([-1.0, 0.0, -0.15], dtype=np.float32)
+        pulse_steps = max(4, self.drag_steps // max(1, stages * 3))
+        max_pulses = max(10, stages * 3)
+        prev_cube = self._actor_pos("cube")
+        prev_goal_dist = float(np.linalg.norm((goal_pos - prev_cube)[:2]))
+
+        for pulse_idx in range(max_pulses):
+            if self._pull_cube_success():
+                return self._log(
+                    "pull",
+                    {
+                        "obj": obj_name,
+                        "target": target_name,
+                        "contact_x_offset": round(float(x_offset), 4),
+                        "contact_z_offset": round(float(z_offset), 4),
+                        "adaptive": True,
+                    },
+                    True,
+                    True,
+                    "",
+                )
+            self._drag_pulse(drag_dir, magnitude=0.6, steps=pulse_steps)
+            cube_now = self._actor_pos("cube")
+            goal_dist = float(np.linalg.norm((goal_pos - cube_now)[:2]))
+
+            if cube_now[0] > prev_cube[0] + 0.006 or goal_dist > prev_goal_dist + 0.008:
+                break
+            if pulse_idx > 3 and abs(float(cube_now[0] - prev_cube[0])) < 0.002:
+                self._drag_pulse(np.array([-1.0, 0.0, -0.25], dtype=np.float32), magnitude=0.78, steps=pulse_steps)
+                cube_now = self._actor_pos("cube")
+                goal_dist = float(np.linalg.norm((goal_pos - cube_now)[:2]))
+                if cube_now[0] > prev_cube[0] + 0.006 or goal_dist > prev_goal_dist + 0.008:
+                    break
+
+            prev_cube = cube_now
+            prev_goal_dist = goal_dist
+
+        return self._pull_cube_success()
+
+    def pull(self, obj, target, *, contact_x_offset=None, contact_z_offset=None, drag_extra=0.03, stages=5) -> bool:
         if obj.name != "cube":
             return self._fail("pull", {"obj": obj.name, "target": target.name}, "PullCube adapter only supports cube.")
         if target.name not in {"goal", "goal_region"}:
             return self._fail("pull", {"obj": obj.name, "target": target.name}, "PullCube target must be goal.")
 
-        if contact_x_offset is None:
-            x_offsets = (0.04, 0.055, 0.07, 0.09, 0.12)
-        else:
+        if contact_x_offset is not None:
             x_offsets = (float(contact_x_offset),)
-        if contact_z_offset is None:
-            z_offsets = (0.012, 0.016)
         else:
+            # Keep the seed-0 successful far-side offsets first. Smaller offsets
+            # are only fallback candidates because they broke seed 0.
+            x_offsets = (0.14, 0.12, 0.10, 0.08, 0.06)
+        if contact_z_offset is not None:
             z_offsets = (float(contact_z_offset),)
+        else:
+            z_offsets = (0.018, 0.015, 0.012, 0.008)
 
-        stages = int(np.clip(stages, 1, 8))
-        goal_pos = self._region_pos(target.name)
-        best: dict[str, Any] | None = None
-
+        attempts = 0
         for x_offset in x_offsets:
             for z_offset in z_offsets:
                 if self._early_stop():
+                    goal_pos = self._region_pos(target.name)
                     return self._fail(
                         "pull",
-                        {"obj": obj.name, "target": target.name, "best": best},
-                        "episode ended before trying remaining adaptive contact candidates",
+                        {"obj": obj.name, "target": target.name, "attempts": attempts},
+                        f"episode ended during adaptive far-side contact search; {self._pull_diagnostics(goal_pos)}",
                     )
-
-                cube_pos = self._actor_pos("cube")
-                contact = cube_pos + np.array([float(x_offset), 0.0, float(z_offset)], dtype=np.float32)
-                pre_contact = contact + np.array([0.0, 0.0, 0.075], dtype=np.float32)
-                drag_end = np.array(
-                    [goal_pos[0] - float(drag_extra), cube_pos[1], contact[2]],
-                    dtype=np.float32,
-                )
-
-                approach = self._move_towards_checked(
-                    pre_contact,
-                    gripper=self.gripper_close,
-                    steps=self.move_steps,
-                    tolerance=0.035,
-                    command_clip=0.9,
-                )
-                best = self._candidate_summary(
+                attempts += 1
+                ok = self._attempt_contact(
+                    obj_name=obj.name,
+                    target_name=target.name,
                     x_offset=float(x_offset),
                     z_offset=float(z_offset),
-                    phase="approach",
-                    target_pos=pre_contact,
+                    drag_extra=float(drag_extra),
+                    stages=int(np.clip(stages, 1, 8)),
+                    require_far_side=float(x_offset) >= 0.08,
                 )
-                best["approach"] = approach
-                if approach["error"] > 0.09:
-                    continue
+                if ok:
+                    return True
 
-                descent = self._move_towards_checked(
-                    contact,
-                    gripper=self.gripper_close,
-                    steps=self.move_steps + 10,
-                    tolerance=0.035,
-                    command_clip=0.75,
-                )
-                best = self._candidate_summary(
-                    x_offset=float(x_offset),
-                    z_offset=float(z_offset),
-                    phase="descent",
-                    target_pos=contact,
-                )
-                best["descent"] = descent
-                if descent["error"] > 0.075:
-                    self._repeat_action(np.array([0.0, 0.0, 0.25], dtype=np.float32), gripper=self.gripper_close, steps=6)
-                    continue
+                # Recover upward before the next bounded candidate, but do not
+                # spend much budget chasing a bad contact pose.
+                self._repeat_action(np.array([0.0, 0.0, 0.25], dtype=np.float32), gripper=self.gripper_close, steps=4)
 
-                self._repeat_action(np.zeros(3, dtype=np.float32), gripper=self.gripper_close, steps=self.contact_steps)
-                self._drag_pulse(steps=8, x_command=-0.18, down_command=-0.05)
-
-                drag_start = self._tcp_pos()
-                previous_cube = self._actor_pos("cube")
-                previous_goal_dist = float(np.linalg.norm((goal_pos - previous_cube)[:2]))
-                for stage in range(1, stages + 1):
-                    alpha = stage / stages
-                    waypoint = drag_start * (1.0 - alpha) + drag_end * alpha
-                    self._move_towards_checked(
-                        waypoint,
-                        gripper=self.gripper_close,
-                        steps=max(1, self.drag_steps // stages),
-                        tolerance=0.04,
-                        command_clip=0.8,
-                        down_bias=-0.004,
-                    )
-                    self._drag_pulse(steps=5, x_command=-0.6, down_command=-0.04)
-
-                    if self._pull_cube_success():
-                        return self._log(
-                            "pull",
-                            {
-                                "obj": obj.name,
-                                "target": target.name,
-                                "contact_x_offset": round(float(x_offset), 4),
-                                "contact_z_offset": round(float(z_offset), 4),
-                                "stages": stages,
-                                "adaptive": True,
-                            },
-                            True,
-                            True,
-                            "",
-                        )
-
-                    cube_now = self._actor_pos("cube")
-                    goal_dist = float(np.linalg.norm((goal_pos - cube_now)[:2]))
-                    if cube_now[0] > previous_cube[0] + 0.025 or goal_dist > previous_goal_dist + 0.03:
-                        break
-                    previous_cube = cube_now
-                    previous_goal_dist = goal_dist
-
-                if self._pull_cube_success():
-                    return self._log(
-                        "pull",
-                        {
-                            "obj": obj.name,
-                            "target": target.name,
-                            "contact_x_offset": round(float(x_offset), 4),
-                            "contact_z_offset": round(float(z_offset), 4),
-                            "stages": stages,
-                            "adaptive": True,
-                        },
-                        True,
-                        True,
-                        "",
-                    )
-
-                self._repeat_action(np.array([0.0, 0.0, 0.25], dtype=np.float32), gripper=self.gripper_close, steps=6)
-
-        self._repeat_action(np.zeros(3, dtype=np.float32), gripper=self.gripper_close, steps=self.settle_steps)
+        goal_pos = self._region_pos(target.name)
         ok = self._pull_cube_success()
-        message = "" if ok else f"adaptive contact search failed; best={best}; {self._pull_diagnostics(goal_pos)}"
         return self._log(
             "pull",
-            {"obj": obj.name, "target": target.name, "adaptive": True},
+            {"obj": obj.name, "target": target.name, "adaptive": True, "attempts": attempts},
             ok,
             ok,
-            message,
+            "" if ok else f"adaptive far-side contact search failed; {self._pull_diagnostics(goal_pos)}",
         )
 
 
