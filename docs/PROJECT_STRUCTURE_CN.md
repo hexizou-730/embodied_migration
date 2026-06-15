@@ -1,0 +1,139 @@
+# 项目结构说明
+
+这份说明用于快速判断：哪些文件是主线，哪些文件只是实验记录或展示材料。
+
+## 一句话主线
+
+本项目研究：高层机器人程序不变时，LLM 能否为目标机器人生成新的 `adapter`，让任务在真实 ManiSkill 仿真中执行成功。
+
+```text
+高层程序 -> target adapter -> real ManiSkill env.step(action) -> success / failure
+```
+
+## 当前主线
+
+| 内容 | 当前选择 |
+|---|---|
+| Source robot | `panda` |
+| Main target robot | `xarm6_robotiq` |
+| Main positive task | `PullCube-v1` |
+| Hard case | `PickCube-v1` |
+| Secondary diagnosis | `fetch` |
+| 当前主要方法 | 直接生成 target adapter module |
+
+## 目录怎么读
+
+### 1. `maniskill_backend/`
+
+核心代码都在这里。
+
+| 文件/目录 | 作用 |
+|---|---|
+| `tasks.py` | 定义任务，例如 `pull_cube`, `pick_cube` |
+| `cases.py` | 定义迁移实验，例如 Panda -> xArm6 |
+| `case_programs/` | 高层 LMP 程序，基本不变 |
+| `skill_adapter.py` | Panda/source 默认技能实现，也是目标 adapter 继承的基础 |
+| `generated_adapters/` | LLM 或人工生成的目标机器人 adapter |
+| `module_generation_runner.py` | LLM 生成 adapter 的主入口 |
+| `real_runner.py` | 真正创建 ManiSkill 环境并执行 `env.step(action)` |
+| `env_adapter.py` | ManiSkill 环境包装 |
+| `llm.py` | 调用 LLM 的薄封装 |
+
+### 2. `maniskill_backend/case_programs/`
+
+这是“要做什么”的高层代码。
+
+| 文件 | 任务 |
+|---|---|
+| `case01_pull_cube.py` | `robot.pull(cube, goal)` |
+| `case03_pick_cube.py` | `robot.grasp(cube)` 后 `robot.place(cube, goal)` |
+
+这些文件应该尽量保持简单稳定。迁移重点不是改这里。
+
+### 3. `maniskill_backend/generated_adapters/`
+
+这是“目标机器人具体怎么做”的代码。
+
+| 文件 | 当前用途 |
+|---|---|
+| `case02_xarm6_pull_cube.py` | xArm6 PullCube 主成功 adapter |
+| `case02_xarm6_pull_cube_adaptive.py` | 多 seed 自适应 PullCube 实验 adapter |
+| `case03_xarm6_pick_cube.py` | xArm6 PickCube hard case adapter |
+| `case01_fetch_pull_cube.py` | Fetch PullCube 诊断/保留线索 |
+
+汇报时最应该展示的是 `case02_xarm6_pull_cube.py` 和 `case03_xarm6_pick_cube.py`。
+
+### 4. `scripts/`
+
+这是实验辅助脚本。
+
+| 文件 | 作用 |
+|---|---|
+| `pullcube_multiseed_eval.py` | PullCube 多 seed 成功率评估 |
+| `xarm6_pull_diagnostics.py` | xArm6 PullCube 接触行为诊断 |
+| `xarm6_pick_grasp_probe.py` | xArm6 PickCube 抓取参数探针 |
+
+### 5. `docs/`
+
+这是汇报和记录材料。
+
+| 文件 | 作用 |
+|---|---|
+| `EXPERIMENT_REPORT_CN.md` | 中文实验报告，持续更新 |
+| `WORKSHOP_FRAMING_CN.md` | workshop/research framing |
+| `RUN.md` | 远程运行命令记录 |
+| `MIGRATION_CODE_COMPARISON_DEMO_CN.docx` | 展示用 Word，代码对比 |
+| `COLLABORATION_INTERVIEW_GUIDE_CN.docx` | 合作/面试准备 |
+| `LLM_Heuristic_AFL_Embodied_Migration_ICLR方向备忘录.docx` | 研究方向备忘录 |
+
+### 6. `results/`
+
+实验输出目录。这里的文件默认不进 git。
+
+常见输出：
+
+```text
+results/module_generation_trials.jsonl
+results/module_generation_trials.md
+results/generated_modules/
+results/pullcube_xarm6_multiseed.md
+results/xarm6_pick_grasp_probe.md
+```
+
+如果要保留某次重要实验，建议把关键结论整理进 `docs/EXPERIMENT_REPORT_CN.md`，不要直接依赖 `results/` 里的临时文件。
+
+## 当前推荐展示顺序
+
+1. `README.md`：项目一句话和当前结果。
+2. `maniskill_backend/case_programs/case01_pull_cube.py`：高层程序没有变。
+3. `maniskill_backend/skill_adapter.py`：Panda/source 默认技能。
+4. `maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py`：xArm6 成功 adapter。
+5. `scripts/pullcube_multiseed_eval.py`：多 seed 验证。
+6. `docs/EXPERIMENT_REPORT_CN.md`：结果总结。
+
+## 可以暂时忽略的内容
+
+| 内容 | 说明 |
+|---|---|
+| `__pycache__/` | Python 缓存，不看 |
+| `.DS_Store` | macOS 缓存，不看 |
+| `results/docx_render_*` | Word 渲染检查图片，不是实验核心 |
+| `capabilities/` | 机器人 profile 辅助，目前不是汇报重点 |
+| `lmp/` | 高层代码执行器，稳定基础设施 |
+
+## 后续整理建议
+
+短期不要大规模删文件。建议先按这个规则整理：
+
+```text
+核心代码保留在 maniskill_backend/
+实验脚本保留在 scripts/
+汇报材料保留在 docs/
+临时输出留在 results/
+```
+
+如果要进一步瘦身，可以做两件事：
+
+1. 把 Fetch 相关内容标记为 `diagnosed secondary case`，不要作为主线展示。
+2. 把 PickCube 标记为 `hard case`，不要和 PullCube 正结果混在一起讲。
+

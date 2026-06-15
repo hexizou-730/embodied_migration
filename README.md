@@ -188,6 +188,9 @@ results/xarm6_pick_grasp_probe.md
 
 ## Main Files
 
+For a Chinese overview of the repository layout, see
+[`docs/PROJECT_STRUCTURE_CN.md`](docs/PROJECT_STRUCTURE_CN.md).
+
 | Purpose | File |
 |---|---|
 | Migration cases | `maniskill_backend/cases.py` |
