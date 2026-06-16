@@ -91,6 +91,7 @@ def result_digest(result: Dict[str, Any]) -> Dict[str, Any]:
         "final_info": final_info,
         "initial_runtime_diagnostics": result.get("initial_runtime_diagnostics") or {},
         "runtime_diagnostics": result.get("runtime_diagnostics") or {},
+        "failure_diagnosis": result.get("failure_diagnosis") or {},
     }
 
 
@@ -238,6 +239,22 @@ def summary_to_markdown(summary: Dict[str, Any]) -> str:
     lines.append("")
     failure_rows = [row for row in summary["rows"] if not row.get("success")]
     if failure_rows:
+        lines.extend(
+            [
+                "## Automatic Failure Diagnosis",
+                "",
+                "| seed | diagnosed_layer | reason | confidence | repair_hint |",
+                "|---:|---|---|---:|---|",
+            ]
+        )
+        for row in failure_rows:
+            diag = row.get("failure_diagnosis") or {}
+            hint = str(diag.get("repair_hint") or "").replace("|", "\\|")
+            lines.append(
+                f"| {row['seed']} | {diag.get('layer', '')} | {diag.get('reason', '')} | "
+                f"{diag.get('confidence', '')} | {hint} |"
+            )
+        lines.append("")
         lines.extend(
             [
                 "## Failure Diagnostics",

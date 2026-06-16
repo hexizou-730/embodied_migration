@@ -25,7 +25,7 @@ from .tasks import get_task_spec
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ADAPTER_CONTEXT_PATH = "maniskill_backend/skill_adapter.py"
-ADAPTER_CONTEXT_WINDOWS = ((1, 580),)
+ADAPTER_CONTEXT_WINDOWS = ((30, 180), (190, 365), (368, 514))
 MODULE_FENCE = re.compile(r"```(?:python|py)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 ALLOWED_IMPORT_PREFIXES = (
     "__future__",
@@ -151,152 +151,99 @@ def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: D
 
 
 def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
-    """Return prompt constraints that are specific to the target embodiment."""
+    """Return compact target-specific constraints.
+
+    Keep this section stable and short. Case-specific failure evidence should
+    come from ``failure_diagnosis`` in the latest target result, not from a long
+    hand-written history of prior experiments.
+    """
 
     common = [
         "# Mandatory target adapter constraints",
-        "- Do not return an empty pass-through subclass. A module that only inherits the source adapter without overriding behavior is a failed migration.",
+        "- Do not return an empty pass-through subclass.",
         "- Preserve action clipping against env.action_space.low/high.",
         "- Do not import os, pathlib, subprocess, requests, urllib, socket, or shutil. Do not read environment variables.",
-        "- Keep using the real ManiSkill success evaluation; do not infer success from distances you compute yourself.",
+        "- Keep using real ManiSkill env.step(action) execution and real evaluate()/success signals.",
+        "- Keep the low-level ManiSkill controller frozen; migrate only target-side adapter behavior.",
         "",
     ]
     if case.task_id == "pick_cube" and case.target_robot == "xarm6_robotiq":
         return [
             *common,
-            "# Mandatory PickCube-v1 grasp migration constraints",
-            "- PickCube-v1 is a REAL GRASPING task. Do not replace grasping with pushing, contact dragging, or direct cube-state modification.",
-            "- Keep the high-level program unchanged: robot.grasp(cube) followed by robot.place(cube, goal).",
-            "- Subclass ManiSkillPickCubeRobot and preserve real env.step(action) execution.",
-            "- A successful grasp must be validated with self._is_grasping('cube') after closing the gripper and again after lifting.",
-            "- A successful task outcome must come from self._pick_cube_success(), which delegates to the real ManiSkill evaluate() signal.",
-            "- xarm6_robotiq is a fixed-base single-arm target. Do not invent mobile-base actions, navigation APIs, or Fetch-style body/base control.",
-            "- Official PickCube-v1 supports xarm6_robotiq. In pd_ee_delta_pos mode, the observed xarm6 action_space shape is exactly (4,): action[0:3] is normalized TCP delta xyz and action[3] is the active mimic-gripper command.",
-            "- Validate the exact 4D action space. Construct clipped actions with xyz in action[0:3] and the single gripper command in action[3].",
-            "- Keep the low-level ManiSkill PDEEPosController frozen. Migrate only the target-side adapter behavior.",
-            "- Prefer a conservative top-down grasp: open gripper, approach above cube, descend near cube center, close gripper, wait for contact, verify grasp, lift, verify the cube did not slip, transport to the 3D goal, then settle.",
-            "- Compared with Panda, xarm6 has 6 DoF and a different Robotiq gripper geometry. You may search a small set of bounded xyz grasp offsets and tune approach height, lift height, motion steps, gripper settle steps, and normalized action magnitude.",
-            "- A failed physical grasp attempt may move or knock over the cube. Capture the cube position before each candidate and measure its displacement after closing the gripper.",
-            "- Only try another bounded grasp candidate in the same episode if the cube is still upright on the tabletop and its xy displacement remains small. If the cube fell, moved substantially, or left the reachable workspace, return a real failure immediately so the next generated module is evaluated from a fresh environment reset.",
-            "- Do not chase a displaced cube across the table with many sequential candidates. Prefer a small number of minimally destructive attempts and let the outer generation round reset the environment before trying a substantially different strategy.",
-            "- If a safe grasp candidate fails, reopen the gripper, retreat upward, and try a different bounded candidate. Do not continue transport without a verified grasp.",
-            "- Preserve enough episode budget for transport. Do not spend most of the episode on grasp-candidate search, long retreats, or repeated settle loops. Prefer one or two safe candidates before returning a real failure for the outer generation round.",
-            "- Latest real xarm6 PickCube failure after the transport-budget prompt: the first candidate still pushed the cube laterally by 0.1513m before candidate 2. This is an approach/descent failure, not a reason to add more candidates.",
-            "- When the first grasp attempt causes large lateral cube displacement, change the FIRST approach trajectory substantially. Use a high pre-grasp waypoint directly above the chosen grasp point, finish xy alignment while safely above the cube, then perform a slow near-vertical descent with little or no xy command.",
-            "- During the final descent near the cube, clamp horizontal normalized commands more tightly than vertical commands, or split xy alignment and z descent into separate phases. Do not send diagonal descent commands that can sweep the gripper sideways through the cube.",
-            "- Before closing the gripper, verify that the TCP is close to the intended grasp point and that horizontal tracking error is small. If the far-above alignment failed, return a real reachability or approach failure before touching the cube.",
-            "- Do not assume a fixed descent loop reached the grasp point. After bounded descent steps, recompute the actual TCP-to-grasp residual. Close the gripper only when the measured xy and z residuals are small enough for physical grasping; otherwise perform a bounded additional vertical refinement or return a real approach-alignment failure.",
-            "- Add phase-specific diagnostics before close and after close: candidate index, TCP position, intended grasp position, tcp_grasp_xy, tcp_grasp_z, cube position, cube displacement, and is_grasping after close. The final tcp_cube_xyz after retreat is not enough to identify the failed phase.",
-            "- Latest real xarm6 PickCube vertical-descent retry ended with is_grasping=False and final tcp_cube_xyz=0.1573. That final metric was recorded after failed candidates reopened and retreated, so it does NOT prove the close-time TCP was 0.1573m away. Instrument the close-time residual before changing geometry again.",
-            "- Latest instrumented xarm6 PickCube retry separated xy and z motion and reduced cube displacement after close to 0.0015m, but is_grasping remained False. The lateral-impact problem is mostly resolved. Focus the next adaptation on close-time residuals, grasp height, and gripper timing rather than adding horizontal exploration.",
-            "- Official PickCube-v1 configuration for xarm6_robotiq uses cube_half_size=0.02m. A pre-close residual threshold of 0.025m is too loose to guarantee that the TCP reached an effective grasp envelope. Use stricter measured pre-close xy and z thresholds appropriate for a 0.04m cube.",
-            "- If pre-close alignment is good, the cube remains nearly stationary, and is_grasping is still False after close, treat this as a gripper-envelope or close-timing failure. Try a small bounded Z-focused offset set at fixed xy and tune close/settle steps. Do not reopen horizontal search.",
-            "- Preserve the measured pre-close tcp_grasp_xy and tcp_grasp_z values and include them in every post-close failure message so the next generation round can adapt from the actual close-time geometry.",
-            "- Runtime diagnostic contract: if grasp fails, the returned failure message MUST include tcp_grasp_xy and tcp_grasp_z from the close-time/pre-close check, plus cube_disp_xy from before/after the close attempt. A generic message such as only `all grasp candidates failed` is invalid because the repair loop cannot infer whether the failure was xy alignment, z height, gripper timing, or side-push displacement.",
-            "- Latest real xarm6 PickCube retry after the Z-focused prompt again returned the same failed module twice. The module reported is_grasping=False, cube_goal_xyz=0.2700, final tcp_cube_xyz=0.0911, and cube_pos=[0.0091, -0.0173, 0.02], but it omitted tcp_grasp_xy/tcp_grasp_z. Treat this as insufficient close-time evidence, not a reason to repeat the same adapter.",
-            "- Since the cube stayed on the tabletop and was not severely displaced, do not enlarge horizontal search. The next meaningful change is to instrument close-time residuals and then adjust fixed-xy grasp height or gripper close/settle duration based on those residuals.",
-            "- Latest real xarm6 PickCube close-time diagnostic: tcp_grasp_xy=0.0076 and tcp_grasp_z=0.0120 before/at close, so approach alignment was already good. However, the cube ended at cube_pos=[-0.0509, -0.3862, 0.02] with cube_goal_xyz=0.4754 and is_grasping=False. This means the gripper close/contact envelope pushed the cube sideways, not that the TCP failed to reach the grasp point.",
-            "- For this side-push pattern, do not keep repeating the same centered close. Change the close-phase geometry: try a slightly higher fixed-xy grasp height, slower/longer close settle with zero xyz command, or a two-stage close at fixed TCP. Abort immediately if cube_disp_xy exceeds a small threshold such as 0.03m.",
-            "- When cube_disp_xy is large after close and is_grasping=False, treat the failure as gripper-envelope side push. Do not chase the displaced cube or try more horizontal candidates in the same episode.",
-            "- Latest real xarm6 PickCube retry after the cube_disp_xy contract: Round 2 reported tcp_grasp_xy=0.0027, tcp_grasp_z=0.0002, cube_disp_xy=0.0052, cube_pos=[-0.0059, 0.0562, 0.02], and is_grasping=False. This is no longer approach failure or side-push. The TCP reached the intended grasp point, the cube barely moved, but the gripper did not form a grasp.",
-            "- For this good-alignment/no-displacement/no-grasp pattern, keep fixed xy and do not add more horizontal candidates. Change only the close envelope: try a small Z-height sweep around the cube center, close from a slightly higher or slightly lower TCP pose, hold the TCP still during close, increase close/settle duration, and verify self._is_grasping('cube') before any retreat.",
-            "- If tcp_grasp_xy <= 0.005, tcp_grasp_z <= 0.005, cube_disp_xy <= 0.01, and is_grasping is still False, report the failure as close-envelope/force failure and change grasp_z_offset_m or gripper close timing in the next candidate. Do not repeat an unchanged centered close.",
-            "- Latest real xarm6 PickCube close-envelope retry regressed: candidate 0 used grasp_z_offset=0.0 and returned tcp_grasp_xy=0.0037, tcp_grasp_z=0.0040, cube_disp_xy=0.0406, is_grasping=False. This is a side-push regression caused by repeating the zero-offset centered close as the first candidate.",
-            "- Do not use grasp_z_offset=0.0 as the first xarm6 candidate anymore. Start with a nonzero fixed-xy Z candidate that changes the close envelope, such as a slightly higher close pose, then try a small bounded Z sweep. If a zero-offset candidate is retained at all, put it after safer nonzero Z candidates and never let it be the only attempted geometry.",
-            "- A valid next adapter must make a substantive close-envelope change relative to the failed module: nonzero first Z offset, staged gripper close command, longer zero-xyz close settle, or a different pre-close height. A module that repeats centered z_offset=0.0 first is not a meaningful repair.",
-            "- Latest real xarm6 PickCube retry with this constraint still failed the diagnostic contract wording and the physics: Round 2 used z_offset=0.0 and displaced the cube by 0.0359m during close with tcp_grasp_xy=0.0015, tcp_grasp_z=0.0020; Round 3 used z_offset=-0.005 and displaced the cube by 0.0503m with tcp_grasp_xy=0.0001, tcp_grasp_z=0.0002. These are both side-push failures despite excellent TCP alignment.",
-            "- Always include the exact key `cube_disp_xy=...` in grasp failure messages. A sentence like `cube displaced by 0.0359m` is useful but less machine-readable for repair analysis.",
-            "- Do not start with zero or negative Z close heights. The latest evidence shows z_offset=0.0 and z_offset=-0.005 both side-push the cube. Prefer a positive Z close-height sweep first, for example small fixed-xy candidates above the cube center, and use slower staged close commands at zero xyz.",
-            "- Latest structured xarm6 PickCube probe swept 32 fixed-xy close-envelope cases and found grasping_cases=0. The least destructive case was z=0.016, close_steps=12, close_command=-0.6, settle_steps=8, with cube_disp_xy=0.00458, tcp_grasp_xy=0.00239, tcp_grasp_z=0.00152, but is_grasping_after_close=False. Treat this as evidence that close-height scalar tuning alone is not enough; do not claim this probe case is a success.",
-            "- Latest LLM retry with probe feedback produced a grasp failure message with is_grasping=True and cube_pos still on the table. This is an adapter logic error: if self._is_grasping('cube') is True at any final grasp check, set self.held_object, return grasp success, and let the high-level program call place. Never return `all grasp candidates failed` while reporting is_grasping=True.",
-            "- If self._is_grasping('cube') becomes True before lift but the cube has not visibly lifted yet, do not reopen or retreat. Hold the gripper closed, perform a conservative vertical lift, then verify grasp again. Report lift slip only if is_grasping becomes False after the lift attempt.",
-            "- Latest LLM retry after preserving grasp detections used the structured probe but still failed: the generated adapter reported all grasp candidates failed with is_grasping=False, tcp_grasp_xy=0.0009, tcp_grasp_z=0.0015, cube_disp_xy=0.0297. This means the TCP alignment is excellent but the close-envelope candidate scan still pushes the cube almost to the 0.03m guard and does not form a grasp.",
-            "- Treat this as evidence that repeating a small fixed-XY close-envelope sweep is insufficient. Do not respond by adding more z_offset/close_steps/close_command combinations at the same centered XY pose. Make a more structural grasp primitive change: preserve any transient is_grasping=True, change the finger-envelope interaction, introduce a bounded micro-offset along the gripper closing axis, or report close-envelope/force infeasibility if all real close attempts remain non-grasping.",
-            "- If you introduce bounded XY micro-offsets after the fixed-XY probe failed, keep them small, explicitly diagnostic, and abort on cube_disp_xy > 0.03. This is a finger-envelope centering test, not a large horizontal search or a chase of a displaced cube.",
-            "- Latest LLM retry after the primitive-repair prompt regressed into a descent failure: it reported is_grasping=False, tcp_grasp_xy=0.0096, tcp_grasp_z=0.1328, cube_disp_xy=unknown, cube_pos=[0.0169, 0.0621, 0.02]. A tcp_grasp_z of 0.1328m means the TCP was still 13cm above the intended grasp point; this is not a gripper/force failure and not evidence about close envelope.",
-            "- If tcp_grasp_z is large, do not close the gripper and do not report all grasp candidates failed as a force failure. Continue bounded vertical descent/refinement if safe, or return a phase-specific approach/descent failure with numeric tcp_grasp_xy, tcp_grasp_z, and cube_disp_xy=0.0 if the cube was never touched.",
-            "- Diagnostic fields must be numeric. `cube_disp_xy=unknown` is invalid; if the cube displacement cannot be measured because close was skipped, report cube_disp_xy=0.0 and explain that no contact attempt occurred.",
-            "- Do not answer a repeated approach failure by adding a larger candidate grid. Reduce to one or two safe candidates and change descent speed, xy/z phase separation, settle timing, or approach waypoint geometry.",
-            "- Check self._early_stop() after approach, close, lift, and transport phases. If the episode terminated or truncated, return a phase-specific real failure message instead of trying another candidate.",
-            "- If self._is_grasping('cube') is True after lifting, immediately set self.held_object and return grasp success so the unchanged high-level program can call place(cube, goal). Do not reopen the gripper or continue searching candidates.",
-            "- Before reporting that all grasp candidates failed, check self._is_grasping('cube') one last time. If it is True and the episode is still active, preserve the grasp and return success. If it is True but the episode already truncated, report that the budget was exhausted after grasp and before transport.",
-            "- Diagnostic pattern: is_grasping=False after close means grasp geometry or gripper timing failed. is_grasping=True after close but False after lift means the cube slipped. A large cube_goal_xyz after transport means placement or waypoint execution failed.",
-            "- Latest real xarm6 PickCube evidence: one generated adapter tried seven candidates in one episode. In one round the cube was knocked off the table (cube_pos.z=-0.8996); in another it was pushed across the table to cube_pos=[0.2234, -0.1416, 0.02] while is_grasping remained False. Treat this as destructive retry behavior, not as a reason to keep following the cube.",
-            "- Latest real xarm6 PickCube retry evidence: a later adapter finished with is_grasping=True, tcp_cube_xyz=0.0102, and cube_pos.z=0.1861, but incorrectly returned 'all grasp candidates failed'. The physical grasp and partial lift succeeded. Fix that branch and preserve budget for transport to goal_pos=[0.0268, -0.0020, 0.2889].",
-            "- Include phase-specific failure evidence in the returned skill failure message when possible: candidate index, cube displacement, cube position, TCP position, and whether the cube fell or merely failed to enter the gripper.",
-            "- Do not copy a human oracle trajectory or use hidden simulator state changes. Choose your own bounded candidate offsets and step counts.",
-            "- If all bounded grasp candidates fail, return a real failure with diagnostic evidence rather than faking success.",
+            "# xarm6 PickCube fixed constraints",
+            "- PickCube-v1 is a real grasping task. Do not replace grasping with pushing, dragging, or direct cube-state edits.",
+            "- Keep the high-level program unchanged: robot.grasp(cube), then robot.place(cube, goal).",
+            "- Subclass ManiSkillPickCubeRobot and validate xarm6 pd_ee_delta_pos action_space shape (4,).",
+            "- Map normalized TCP delta xyz to action[0:3] and the single active mimic-gripper command to action[3].",
+            "- A successful grasp must be validated with self._is_grasping('cube') after close and after lift.",
+            "- If self._is_grasping('cube') becomes True, preserve the grasp, set held_object, and let place(cube, goal) run.",
+            "- Keep grasp attempts minimally destructive: one or two bounded candidates, cube displacement guard, no chasing a displaced cube.",
+            "- Failed grasp messages must include numeric tcp_grasp_xy=..., tcp_grasp_z=..., cube_disp_xy=..., and is_grasping=...",
+            "",
         ]
-    pull_common = [
-        *common,
-        "- Diagnostic pattern: cube_goal_xy remains about 0.20m, tcp_cube_xy remains large, or cube position is nearly unchanged. This means the TCP did not make effective contact.",
-        "- You may increase move/contact/drag/settle steps, but step-count changes alone are not sufficient if tcp_cube_xy stays large.",
+    if case.task_id == "pull_cube" and case.target_robot == "fetch":
+        return [
+            *common,
+            "# Fetch PullCube fixed constraints",
+            "- Fetch pd_ee_delta_pos action_space is 9D: arm[0:3], gripper[3], body[4:7], base[7:9].",
+            "- Override _validate_action_space and _make_action for the 9D layout.",
+            "- Use bounded positive base[7] pulses only when tcp_cube_xy is large; stop base motion when distance stops improving.",
+            "- After base approach, send zero base commands before arm contact and drag.",
+            "- Tune contact geometry separately from action-space mapping; arm-only contact may be insufficient.",
+            "",
+        ]
+    if case.task_id == "pull_cube" and case.target_robot == "xarm6_robotiq":
+        return [
+            *common,
+            "# xarm6 PullCube fixed constraints",
+            "- xarm6_robotiq is fixed-base. Do not invent mobile-base/body actions.",
+            "- Observed xarm6 pd_ee_delta_pos action_space is exactly 4D: action[0:3] xyz, action[3] gripper.",
+            "- Validate the 4D action space and never implement xarm6 as a 9D controller.",
+            "- PullCube goal direction for this setup is negative x. Approach from the positive-x far side, then drag toward negative x.",
+            "- Use normalized pd_ee_delta_pos commands; convert metric waypoint error by dividing by max_delta_m before clipping.",
+            "- During contact/drag, use short bounded pulses, recompute cube progress, and stop if cube moves away from the goal.",
+            "",
+        ]
+    return common
+
+
+def _diagnosis_guidance_lines(case: FullMigrationCase, target_result: Dict[str, Any]) -> List[str]:
+    """Convert structured diagnosis into the only dynamic repair instruction."""
+
+    diagnosis = target_result.get("failure_diagnosis") or {}
+    if not diagnosis:
+        return []
+    layer = str(diagnosis.get("layer") or "")
+    reason = str(diagnosis.get("reason") or "")
+    hint = str(diagnosis.get("repair_hint") or "")
+    evidence = diagnosis.get("evidence") or {}
+    lines = [
+        "",
+        "# Diagnosis-guided repair instruction",
+        f"- diagnosed_layer: {layer}",
+        f"- reason: {reason}",
+        f"- repair_hint: {hint}",
+        "- Use this diagnosis as the primary dynamic feedback. Do not infer a different failure mode unless the evidence contradicts it.",
+        "```json",
+        _json_dump({"layer": layer, "reason": reason, "evidence": evidence}),
+        "```",
     ]
-    if case.target_robot == "fetch":
-        return [
-            *pull_common,
-            "# Mandatory Fetch action-space migration for this case",
-            "- The latest failure shows Fetch uses action_space.shape == (9,), while the Panda source adapter assumes 4D or 7D actions.",
-            "- The generated Fetch adapter must override _validate_action_space and _make_action.",
-            "- Accept Fetch 9D actions in _validate_action_space in addition to any base-compatible dimensions you intentionally keep.",
-            "- Fetch pd_ee_delta_pos action layout is exactly: arm[0:3], gripper[3], body[4:7], base[7:9].",
-            "- In _make_action for 9D Fetch: write clipped xyz delta to action[0:3], write gripper command to action[3], keep action[4:7] at zero unless you give a concrete reason, and allow base commands in action[7:9] when implementing mobile-base approach.",
-            "",
-            "# Mandatory Fetch contact-geometry migration for this case",
-            "- If a previous attempt already fixed the 9D action mapping but failed with contact execution failure, continue by changing Fetch contact geometry rather than only restating the action mapping.",
-            "- For Fetch, Panda's default contact_x_offset=0.07 and contact_z_offset=0.02 may miss the cube. You must try target-specific contact offsets inside the adapter.",
-            "- Prefer closer/lower contact candidates such as contact_x_offset in [0.03, 0.06] and contact_z_offset in [0.005, 0.02], while staying physically safe.",
-            "- You may override pull(...) to use a small set of staged contact attempts, for example approaching from multiple x offsets or adding a short lateral/forward sweep before the drag.",
-            "",
-            "# Mandatory Fetch mobile-base migration for this case",
-            "- Fetch is a mobile manipulator. If tcp_cube_xy remains large (for example >0.15m or around 0.35m), arm-only/contact-only migration is insufficient.",
-            "- The generated adapter may and should use base[7:9] in the 9D action to move the base closer before fine arm contact.",
-            "- In Fetch's 9D layout, base[7:9] is a PDBaseForwardVelController action. Use bounded, staged base commands, then stop the base with zeros before arm contact/drag.",
-            "- Empirical seed-0 base diagnostic: base=[+0.3, 0.0] for 30 steps reduced tcp_cube_xy from 0.1847m to 0.1476m.",
-            "- Empirical seed-0 base diagnostic: base=[-0.3, 0.0] increased tcp_cube_xy to 0.5897m; base=[0.0, +0.3] and base=[0.0, -0.3] increased it above 1.17m.",
-            "- Therefore use short positive base[7] pulses for coarse approach, keep base[8]=0 unless you implement an explicit measured correction, and never use negative base[7] for initial approach.",
-            "- Avoid over-driving the base: previous generated adapters moved the TCP farther away (tcp_cube_xy grew to about 0.42m and later 0.77m). Stop base motion once tcp_cube_xy is around 0.12-0.15m, then rely on arm/contact refinement.",
-            "- You may add helper methods such as _make_fetch_action(delta_xyz, gripper, base=None) or _drive_base_towards_cube(...), as long as all motion still uses env.step(action).",
-            "- A good strategy is coarse mobile-base approach until tcp_cube_xy is below a contact threshold, then arm/contact geometry refinement, then drag.",
-            "- Do not keep base[7:9] permanently zero if the latest failure shows the TCP never gets near the cube.",
-            "- Required closed-loop base guard: use base[7] pulses no longer than 5-10 env.step calls before recomputing tcp_cube_xy.",
-            "- Required closed-loop base guard: cap total base approach to 40 env.step calls, use base[7] in [0.1, 0.3], and keep base[8]=0.",
-            "- Required closed-loop base guard: continue base approach only while tcp_cube_xy decreases; if it increases or improves by less than 0.005m for two checks, stop base motion.",
-            "- Required closed-loop base guard: after base approach stops, send zero base action for at least 5 steps before arm-only contact/drag.",
-            "- Do not combine long base driving, five contact retries, and overshoot in one attempt; preserve episode budget for contact and drag.",
-        ]
-    if case.target_robot == "xarm6_robotiq":
-        return [
-            *pull_common,
-            "# Mandatory xarm6_robotiq migration constraints for this case",
-            "- xarm6_robotiq is a fixed-base single-arm target. Do not invent mobile-base actions, navigation APIs, or Fetch-style base/body control.",
-            "- Real xarm6_robotiq diagnostic for this case: action_space.shape is EXACTLY (4,), with arm[0:3] and gripper_active[3].",
-            "- Do not describe or implement xarm6_robotiq as a 9D controller. Do not write gripper commands to action[3:]. The only gripper command is action[3].",
-            "- The generated adapter must validate the exact 4D action space and construct action[0:3] for xyz plus action[3] for the single active mimic-gripper command.",
-            "- Compared with Panda, xarm6 has less kinematic redundancy. Prefer conservative staged moves, smaller max_delta_m, and a few contact-offset candidates rather than aggressive one-shot motion.",
-            "- The high-level program remains robot.pull(cube, goal). Focus migration on the target adapter: action validation, contact side, contact height, staged drag, and settle behavior.",
-            "- Start from compact pd_ee_delta_pos assumptions: arm delta xyz plus gripper. Map xyz to action[0:3] and gripper to action[3] for the observed 4D controller.",
-            "- For PullCube seed 0, the cube must move toward negative x. Preserve the correct contact side: approach from the positive-x side of the cube and drag toward the goal.",
-            "- Tune contact_x_offset around 0.04-0.08m and contact_z_offset around 0.006-0.02m; try only a small candidate set before declaring failure.",
-            "- Abstract contact strategy: establish contact from the cube side opposite the desired motion, descend to contact height, maintain slight downward pressure, and drag toward the negative-x goal direction.",
-            "- Latest real failure evidence: generated adapters pushed the cube toward positive x, increasing cube_goal_xy from 0.20m to 0.31m, then 0.51m, then 0.58m. This is the wrong direction.",
-            "- Positive-x arm motion is allowed only during the pre-contact approach to reach the far side of the cube. After descent or contact establishment, do not use sustained positive-x press-in, settle, or drag commands.",
-            "- After contact, every sustained drag pulse must have a negative x component. Use short bounded pulses, then recompute cube position and cube_goal_xy.",
-            "- Required progress guard: if cube x increases or cube_goal_xy increases after a contact pulse, stop that attempt immediately. Do not keep pushing from the perturbed state.",
-            "- Latest DeepSeek failure evidence: tcp_cube_xy reached about 0.03m but cube_goal_xy stayed at 0.20m and cube position did not change. Proximity alone is not effective contact.",
-            "- Critical controller semantics: env.step action[0:3] is a NORMALIZED pd_ee_delta_pos command clipped to [-1, 1], not a displacement vector in meters.",
-            "- When converting a metric TCP waypoint error to an action, divide by a chosen max_delta_m before clipping. Do not send raw meter-scale values such as 0.004 or 0.021 directly as sustained contact actions.",
-            "- For sustained post-contact pulses, use normalized command magnitudes large enough to transmit force while remaining bounded and safe. Start conservatively in the 0.1-0.8 range, use negative x plus a slight negative-z bias, and check progress after short pulses.",
-            "- If tcp_cube_xy is small but cube position is unchanged after a pulse, adjust normalized pulse strength or contact height before repeating. Do not repeat the same ineffective tiny pulse.",
-            "- Latest DeepSeek retry failure: a fixed +0.065m contact offset followed by negative-x pulses left the cube unchanged and ended with tcp_cube_xy about 0.30m. The TCP swept away without establishing contact.",
-            "- Treat a single near-side contact point as insufficient. Use a farther positive-x pre-contact sweep start, for example a small candidate range around 0.10-0.18m from cube x, then descend and sweep toward negative x through the contact region.",
-            "- Before starting sustained drag, explicitly verify that the TCP reached the positive-x far side of the cube with a clear margin. If it did not, revise the approach candidate instead of dragging through empty space.",
-            "- If waypoint tracking loses contact, you may implement bounded staged raw arm actions through env.step(action). Choose your own values and step counts.",
-            "- Do not assume access to a successful human oracle trajectory. Do not copy an exact action tuple sequence or measured step counts.",
-            "- Success must come only from real env.step execution and the ManiSkill task success signal.",
-            "- If target execution fails, report whether the failure is reachability, action-space mapping, contact establishment, or task outcome.",
-        ]
-    return pull_common
+    if reason == "contact_side_reachability_failure":
+        lines.append("- Required change: do not only add steps; change contact pose selection or add a reachability/contact-side precheck.")
+    elif reason == "tcp_never_established_effective_contact":
+        lines.append("- Required change: revise approach/contact establishment before drag; dragging through empty space is invalid.")
+    elif reason == "contact_established_but_drag_progress_insufficient":
+        lines.append("- Required change: adjust drag pulse direction/strength/down-bias while preserving contact and checking progress.")
+    elif reason == "gripper_envelope_side_push":
+        lines.append("- Required change: keep XY bounded and change close-envelope geometry/timing to reduce cube_disp_xy.")
+    elif reason == "good_alignment_no_displacement_no_grasp":
+        lines.append("- Required change: do not add horizontal search; change gripper close timing, close command, or grasp-height envelope.")
+    elif reason == "approach_descent_alignment_failure":
+        lines.append("- Required change: fix approach/descent before closing the gripper; report phase-specific diagnostics if still unreachable.")
+    elif reason == "grasp_detected_but_not_preserved_or_placed":
+        lines.append("- Required change: preserve any true grasp and continue to lift/place instead of returning grasp failure.")
+    lines.append("")
+    return lines
 
 
 def _structured_probe_feedback_lines(case: FullMigrationCase) -> List[str]:
@@ -319,7 +266,7 @@ def _structured_probe_feedback_lines(case: FullMigrationCase) -> List[str]:
         "The following measurements came from `scripts/xarm6_pick_grasp_probe.py` using real ManiSkill env.step execution.",
         "Use this structured probe evidence before inventing another grasp geometry.",
         "```text",
-        _trim_text(feedback, 6000),
+        _trim_text(feedback, 2200),
         "```",
         "",
     ]
@@ -356,6 +303,70 @@ def _retry_strategies(case: FullMigrationCase) -> tuple[str, ...]:
     )
 
 
+def _build_retry_module_generation_prompt(
+    *,
+    case: FullMigrationCase,
+    target_result: Dict[str, Any],
+    attempts: Sequence[Dict[str, Any]],
+    current_module: str,
+    target_program: str,
+) -> str:
+    """Build a compact retry prompt after at least one generated module failed."""
+
+    retry_number = len(attempts) + 1
+    retry_strategies = _retry_strategies(case)
+    strategy = retry_strategies[min(len(attempts) - 1, len(retry_strategies) - 1)]
+    latest_attempt = attempts[-1] if attempts else {}
+    lines = [
+        "You are repairing a failed generated ManiSkill target adapter.",
+        "This is a compact retry prompt: use the current code, latest real failure, and structured diagnosis only.",
+        "",
+        "# Required output",
+        "Return one complete Python module only. Do not return a diff, JSON, Markdown, or explanation.",
+        f"The module will overwrite `{case.target_adapter_path}`.",
+        "The module must define build_robot(env, *, control_mode: str, robot_uid: str).",
+        "",
+        "# Fixed high-level target LMP program",
+        "Do not change this program or its API calls.",
+        "```python",
+        target_program,
+        "```",
+        "",
+        "# Case facts",
+        f"case_id: {case.case_id}",
+        f"task_id: {case.task_id}",
+        f"target_robot: {case.target_robot}",
+        f"target_control_mode: {case.target_control_mode}",
+        f"episode_budget: {case.max_episode_steps}",
+        "",
+        *_target_specific_generation_lines(case),
+        "",
+        "# Latest real target failure",
+        "```json",
+        _json_dump(_result_digest(target_result)),
+        "```",
+        *_diagnosis_guidance_lines(case, target_result),
+        *_structured_probe_feedback_lines(case),
+        "",
+        "# Mandatory retry adaptation",
+        f"- This is generation retry {retry_number}. Do not return a module identical to the current failed module.",
+        f"- Required substantive strategy change: {strategy}",
+        "- Change the specific failed mechanism identified by failure_diagnosis; do not restate broad migration background.",
+        "- If the evidence is insufficient, improve phase-specific diagnostics instead of guessing a large new strategy.",
+        "",
+        "# Previous attempt summary",
+        "```json",
+        _json_dump(_attempt_digest(latest_attempt)),
+        "```",
+        "",
+        "# Current failed generated target adapter module",
+        "```python",
+        current_module,
+        "```",
+    ]
+    return "\n".join(lines)
+
+
 def build_module_generation_prompt(
     *,
     case: FullMigrationCase,
@@ -369,6 +380,14 @@ def build_module_generation_prompt(
     target_profile = get_robot_profile(case.target_robot)
     current_module = _read_file(case.target_adapter_path)
     target_program = _read_file(case.target_program_path)
+    if attempts:
+        return _build_retry_module_generation_prompt(
+            case=case,
+            target_result=target_result,
+            attempts=attempts,
+            current_module=current_module,
+            target_program=target_program,
+        )
     source_adapter_context = _read_context(ADAPTER_CONTEXT_PATH, ADAPTER_CONTEXT_WINDOWS)
 
     lines = [
@@ -429,6 +448,7 @@ def build_module_generation_prompt(
         "```json",
         _json_dump(_result_digest(target_result)),
         "```",
+        *_diagnosis_guidance_lines(case, target_result),
     ]
     if attempts:
         retry_number = len(attempts) + 1
@@ -970,6 +990,7 @@ def _result_digest(result: Dict[str, Any]) -> Dict[str, Any]:
         "failure_type",
         "failure_layer",
         "message",
+        "failure_diagnosis",
         "execution_log",
         "final_info",
         "command_output",

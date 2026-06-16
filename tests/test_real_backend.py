@@ -14,6 +14,7 @@ from maniskill_backend.cases import (
     get_full_migration_case,
 )
 from maniskill_backend.evaluation import TrialRecord, classify_failure, classify_failure_layer
+from maniskill_backend.failure_diagnosis import diagnose_failure
 from maniskill_backend.iterative_runner import _code_diff, build_iterative_prompt
 from maniskill_backend.migration import METHODS, MigrationRequest, build_migration_prompt
 from maniskill_backend.module_generation_runner import (
@@ -184,51 +185,15 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
             attempts=[],
         )
         self.assertIn("ManiSkillPickCubeRobot", prompt)
-        self.assertIn("REAL GRASPING", prompt)
-        self.assertIn("robot.grasp(cube) followed by robot.place(cube, goal)", prompt)
+        self.assertIn("real grasping task", prompt)
+        self.assertIn("robot.grasp(cube), then robot.place(cube, goal)", prompt)
         self.assertIn("self._is_grasping('cube')", prompt)
-        self.assertIn("Do not chase a displaced cube", prompt)
-        self.assertIn("cube_pos.z=-0.8996", prompt)
-        self.assertIn("preserve the grasp and return success", prompt)
-        self.assertIn("tcp_cube_xyz=0.0102", prompt)
-        self.assertIn("pushed the cube laterally by 0.1513m", prompt)
-        self.assertIn("slow near-vertical descent", prompt)
-        self.assertIn("Close the gripper only when the measured xy and z residuals", prompt)
-        self.assertIn("final tcp_cube_xyz after retreat is not enough", prompt)
-        self.assertIn("does NOT prove the close-time TCP was 0.1573m away", prompt)
-        self.assertIn("reduced cube displacement after close to 0.0015m", prompt)
-        self.assertIn("cube_half_size=0.02m", prompt)
-        self.assertIn("Z-focused offset set", prompt)
-        self.assertIn("tcp_grasp_xy and tcp_grasp_z", prompt)
-        self.assertIn("tcp_cube_xyz=0.0911", prompt)
-        self.assertIn("cube_disp_xy", prompt)
-        self.assertIn("tcp_grasp_xy=0.0076", prompt)
-        self.assertIn("cube_pos=[-0.0509, -0.3862, 0.02]", prompt)
-        self.assertIn("gripper-envelope side push", prompt)
-        self.assertIn("tcp_grasp_xy=0.0027", prompt)
-        self.assertIn("cube_disp_xy=0.0052", prompt)
-        self.assertIn("good-alignment/no-displacement/no-grasp", prompt)
-        self.assertIn("close-envelope/force failure", prompt)
-        self.assertIn("cube_disp_xy=0.0406", prompt)
-        self.assertIn("Do not use grasp_z_offset=0.0 as the first", prompt)
-        self.assertIn("side-push regression", prompt)
-        self.assertIn("nonzero first Z offset", prompt)
-        self.assertIn("displaced the cube by 0.0359m", prompt)
-        self.assertIn("z_offset=-0.005", prompt)
-        self.assertIn("Always include the exact key `cube_disp_xy=...`", prompt)
-        self.assertIn("positive Z close-height sweep", prompt)
-        self.assertIn("grasping_cases=0", prompt)
-        self.assertIn("z=0.016, close_steps=12, close_command=-0.6", prompt)
-        self.assertIn("is_grasping=True", prompt)
-        self.assertIn("Never return `all grasp candidates failed` while reporting is_grasping=True", prompt)
-        self.assertIn("tcp_grasp_xy=0.0009", prompt)
-        self.assertIn("cube_disp_xy=0.0297", prompt)
-        self.assertIn("fixed-XY close-envelope sweep is insufficient", prompt)
-        self.assertIn("bounded micro-offset along the gripper closing axis", prompt)
-        self.assertIn("tcp_grasp_z=0.1328", prompt)
-        self.assertIn("cube_disp_xy=unknown", prompt)
-        self.assertIn("phase-specific approach/descent failure", prompt)
-        self.assertIn("Diagnostic fields must be numeric", prompt)
+        self.assertIn("no chasing a displaced cube", prompt)
+        self.assertIn("preserve the grasp, set held_object", prompt)
+        self.assertIn("tcp_grasp_xy=...", prompt)
+        self.assertIn("tcp_grasp_z=...", prompt)
+        self.assertIn("cube_disp_xy=...", prompt)
+        self.assertNotIn("cube_pos.z=-0.8996", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
 
     def test_module_generation_prompt_includes_pick_probe_feedback(self):
@@ -273,6 +238,12 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
             "success": False,
             "failure_layer": "skill_adapter",
             "message": "cube was not grasped",
+            "failure_diagnosis": {
+                "layer": "contact_geometry",
+                "reason": "good_alignment_no_displacement_no_grasp",
+                "repair_hint": "change close timing",
+                "evidence": {"tcp_grasp_xy": 0.002, "tcp_grasp_z": 0.001, "cube_disp_xy": 0.004},
+            },
         }
         prompt = build_module_generation_prompt(
             case=case,
@@ -288,11 +259,11 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
             ],
         )
         self.assertIn("Do not return a module identical", prompt)
-        self.assertIn("bounded grasp-offset search", prompt)
+        self.assertIn("Required substantive strategy change", prompt)
         self.assertIn("cube-displacement guard", prompt)
-        self.assertIn("Preserve enough episode budget for transport", prompt)
-        self.assertIn("finish xy alignment while safely above the cube", prompt)
-        self.assertIn("Add phase-specific diagnostics before close and after close", prompt)
+        self.assertIn("one or two bounded candidates", prompt)
+        self.assertIn("failure_diagnosis", prompt)
+        self.assertIn("Diagnosis-guided repair instruction", prompt)
 
     def test_pick_cube_runtime_requires_close_time_diagnostics(self):
         case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
@@ -528,6 +499,56 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
             ),
             "controller_primitive",
         )
+
+    def test_structured_pull_failure_diagnosis_contact_reachability(self):
+        diagnosis = diagnose_failure(
+            task_id="pull_cube",
+            success=False,
+            message="Episode ended during descent.",
+            failure_type="contact execution failure",
+            failure_layer="skill_adapter",
+            execution_log=[{"api": "pull", "ok": False, "message": "Episode ended during descent."}],
+            runtime_diagnostics={
+                "stage": "descent",
+                "tcp_stage_error_norm": 0.14752,
+                "tcp_stage_error_xyz": [0.14363, 0.03361, -0.00086],
+                "tcp_cube_xy": 0.04109,
+                "cube_goal_xy": 0.27472,
+            },
+        )
+        self.assertEqual(diagnosis["layer"], "contact_geometry")
+        self.assertEqual(diagnosis["reason"], "contact_side_reachability_failure")
+        self.assertIn("reachability precheck", diagnosis["repair_hint"])
+
+    def test_structured_pick_failure_diagnosis_close_patterns(self):
+        side_push = diagnose_failure(
+            task_id="pick_cube",
+            success=False,
+            message=(
+                "cube displaced laterally during close; tcp_grasp_xy=0.0037, "
+                "tcp_grasp_z=0.0040, cube_disp_xy=0.0406, is_grasping=False"
+            ),
+            failure_type="gripper/force failure",
+            failure_layer="skill_adapter",
+            execution_log=[{"api": "grasp", "ok": False}],
+        )
+        self.assertEqual(side_push["layer"], "contact_geometry")
+        self.assertEqual(side_push["reason"], "gripper_envelope_side_push")
+
+        no_grasp = diagnose_failure(
+            task_id="pick_cube",
+            success=False,
+            message=(
+                "grasp failed after close; tcp_grasp_xy=0.0027, tcp_grasp_z=0.0002, "
+                "cube_disp_xy=0.0052, is_grasping=False"
+            ),
+            failure_type="gripper/force failure",
+            failure_layer="skill_adapter",
+            execution_log=[{"api": "grasp", "ok": False}],
+        )
+        self.assertEqual(no_grasp["layer"], "contact_geometry")
+        self.assertEqual(no_grasp["reason"], "good_alignment_no_displacement_no_grasp")
+        self.assertIn("close timing", no_grasp["repair_hint"])
 
     def test_pull_cube_failure_report(self):
         task = get_task_spec("pull_cube")

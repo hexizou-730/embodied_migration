@@ -30,6 +30,8 @@ FAILURE_LAYERS = (
     "program",
     "skill_adapter",
     "controller_primitive",
+    "contact_geometry",
+    "infeasibility",
     "task_outcome",
     "runtime_setup",
     "unknown",

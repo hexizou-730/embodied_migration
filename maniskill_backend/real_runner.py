@@ -12,6 +12,7 @@ from lmp.executor import execute_lmp
 
 from .env_adapter import ManiSkillEnvAdapter
 from .evaluation import TrialRecord, classify_failure, classify_failure_layer
+from .failure_diagnosis import diagnose_failure
 from .llm import gen_code
 from .migration import MigrationRequest, build_migration_prompt, get_source_copy_code, norm_method
 from .reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
@@ -102,11 +103,19 @@ def run_real_trial(
     if requested_robot_uid != robot_uid:
         result["requested_robot_uid"] = requested_robot_uid
     if task_id not in SUPPORTED_REAL_TASKS:
+        failure_message = f"real runner currently supports only: {', '.join(SUPPORTED_REAL_TASKS)}"
         result.update(
             success=False,
             failure_type="execution failure",
             failure_layer="runtime_setup",
-            message=f"real runner currently supports only: {', '.join(SUPPORTED_REAL_TASKS)}",
+            message=failure_message,
+            failure_diagnosis=diagnose_failure(
+                task_id=task_id,
+                success=False,
+                message=failure_message,
+                failure_type="execution failure",
+                failure_layer="runtime_setup",
+            ),
         )
         return result
 
@@ -227,13 +236,21 @@ def run_real_code_trial(
     if requested_robot_uid != robot_uid:
         result["requested_robot_uid"] = requested_robot_uid
     if task_id not in SUPPORTED_REAL_TASKS:
+        failure_message = f"real runner currently supports only: {', '.join(SUPPORTED_REAL_TASKS)}"
         result.update(
             success=False,
             failure_type="execution failure",
             failure_layer="runtime_setup",
-            message=f"real runner currently supports only: {', '.join(SUPPORTED_REAL_TASKS)}",
+            message=failure_message,
             generated_code=code,
             prompt=prompt,
+            failure_diagnosis=diagnose_failure(
+                task_id=task_id,
+                success=False,
+                message=failure_message,
+                failure_type="execution failure",
+                failure_layer="runtime_setup",
+            ),
         )
         if extra_result:
             result.update(extra_result)
@@ -274,7 +291,7 @@ def run_real_code_trial(
         )
         execution_log = robot.execution_log()
         final_info = _jsonable(robot.last_info)
-        failure_layer = classify_failure_layer(
+        baseline_failure_layer = classify_failure_layer(
             success=success,
             code_ok=code_ok,
             message=failure_message,
@@ -289,6 +306,19 @@ def run_real_code_trial(
             robot,
             stage=_stage_from_message(failure_message),
         )
+        failure_diagnosis = diagnose_failure(
+            task_id=task_id,
+            success=success,
+            code_ok=code_ok,
+            message=failure_message,
+            failure_type=failure_type,
+            failure_layer=baseline_failure_layer,
+            execution_log=execution_log,
+            final_info=final_info,
+            runtime_diagnostics=runtime_diagnostics,
+            initial_runtime_diagnostics=initial_runtime_diagnostics,
+        )
+        failure_layer = str(failure_diagnosis.get("layer") or baseline_failure_layer)
         result.update(
             success=success,
             failure_type=failure_type,
@@ -301,18 +331,27 @@ def run_real_code_trial(
             final_info=final_info,
             initial_runtime_diagnostics=initial_runtime_diagnostics,
             runtime_diagnostics=runtime_diagnostics,
+            failure_diagnosis=failure_diagnosis,
         )
         if extra_result:
             result.update(extra_result)
     except Exception as exc:  # pragma: no cover - depends on local Vulkan/GPU stack
+        failure_message = repr(exc)
         result.update(
             success=False,
             failure_type="execution failure",
             failure_layer="runtime_setup",
-            message=repr(exc),
+            message=failure_message,
             generated_code=code,
             prompt=prompt,
             graphics_diagnosis=diagnose_graphics_stack(),
+            failure_diagnosis=diagnose_failure(
+                task_id=task_id,
+                success=False,
+                message=failure_message,
+                failure_type="execution failure",
+                failure_layer="runtime_setup",
+            ),
         )
         if extra_result:
             result.update(extra_result)
