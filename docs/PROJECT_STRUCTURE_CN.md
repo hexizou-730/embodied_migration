@@ -53,6 +53,22 @@ controller = 底层怎么把 action 变成关节运动
 
 ## 目录怎么读
 
+### 0. 最短入口
+
+日常实验优先用根目录的短命令：
+
+```bash
+python auto.py pull
+```
+
+它会自动串起：
+
+```text
+Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observation
+```
+
+底层脚本还在，但多数时候不用手动记。
+
 ### 1. `maniskill_backend/`
 
 核心代码都在这里。
@@ -64,6 +80,9 @@ controller = 底层怎么把 action 变成关节运动
 | `case_programs/` | 高层 LMP 程序，基本不变 |
 | `skill_adapter.py` | Panda/source 默认技能实现，也是目标 adapter 继承的基础 |
 | `generated_adapters/` | LLM 或人工生成的目标机器人 adapter |
+| `autonomous_harness.py` | 把仿真结果整理成 Agent observation / human report |
+| `structured_probe.py` | 定义 structured probe 的参数网格、打分和反馈格式 |
+| `generalization.py` | 多 seed 成功率和失败聚类策略选择 |
 | `module_generation_runner.py` | LLM 生成 adapter 的主入口 |
 | `real_runner.py` | 真正创建 ManiSkill 环境并执行 `env.step(action)` |
 | `env_adapter.py` | ManiSkill 环境包装 |
@@ -95,11 +114,15 @@ controller = 底层怎么把 action 变成关节运动
 
 ### 4. `scripts/`
 
-这是实验辅助脚本。
+这是底层实验辅助脚本。一般先用 `python auto.py pull`，只有调试某一步时才直接运行这些脚本。
 
 | 文件 | 作用 |
 |---|---|
+| `autonomous_loop_runner.py` | 自动闭环主流程，被 `auto.py pull` 调用 |
+| `autonomous_harness_runner.py` | 只生成 agent observation / human report，不执行完整闭环 |
 | `pullcube_multiseed_eval.py` | PullCube 多 seed 成功率评估 |
+| `structured_probe_runner.py` | 通用 structured probe 入口 |
+| `xarm6_pull_contact_probe.py` | xArm6 PullCube 接触参数探针 |
 | `xarm6_pull_diagnostics.py` | xArm6 PullCube 接触行为诊断 |
 | `xarm6_pick_grasp_probe.py` | xArm6 PickCube 抓取参数探针 |
 
@@ -123,6 +146,7 @@ controller = 底层怎么把 action 变成关节运动
 常见输出：
 
 ```text
+results/auto_runs/
 results/module_generation_trials.jsonl
 results/module_generation_trials.md
 results/generated_modules/
@@ -130,16 +154,29 @@ results/pullcube_xarm6_multiseed.md
 results/xarm6_pick_grasp_probe.md
 ```
 
+现在推荐优先看自动闭环输出：
+
+```text
+results/auto_runs/<run_name>/
+  summary.md                 # 一次自动实验的总览
+  commands.log               # 自动执行过的命令
+  cycle_01/multiseed.md       # 多 seed 结果
+  cycle_01/harness/...        # agent_observation / human_report
+  cycle_01/structured_probe/  # probe 表格
+  cycle_01/module_generation.md
+```
+
 如果要保留某次重要实验，建议把关键结论整理进 `docs/EXPERIMENT_REPORT_CN.md`，不要直接依赖 `results/` 里的临时文件。
 
 ## 当前推荐展示顺序
 
 1. `README.md`：项目一句话和当前结果。
-2. `maniskill_backend/case_programs/case01_pull_cube.py`：高层程序没有变。
-3. `maniskill_backend/skill_adapter.py`：Panda/source 默认技能。
-4. `maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py`：xArm6 成功 adapter。
-5. `scripts/pullcube_multiseed_eval.py`：多 seed 验证。
-6. `docs/EXPERIMENT_REPORT_CN.md`：结果总结。
+2. `auto.py`：一条命令自动实验入口。
+3. `maniskill_backend/case_programs/case01_pull_cube.py`：高层程序没有变。
+4. `maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py`：xArm6 adapter。
+5. `maniskill_backend/autonomous_harness.py`：Agent observation / human report 分离。
+6. `results/auto_runs/<run_name>/summary.md`：自动实验结果。
+7. `docs/EXPERIMENT_REPORT_CN.md`：人工汇报总结。
 
 ## 可以暂时忽略的内容
 

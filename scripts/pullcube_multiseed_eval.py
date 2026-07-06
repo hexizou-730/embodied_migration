@@ -31,6 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from maniskill_backend.generalization import build_generalization_report, generalization_report_to_markdown
 from maniskill_backend.real_runner import run_real_code_trial
 
 
@@ -162,7 +163,12 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
                 flush=True,
             )
 
-    summary = build_summary(metadata, results)
+    summary = build_summary(
+        metadata,
+        results,
+        success_threshold=args.success_threshold,
+        min_trials_for_accept=args.min_trials_for_accept,
+    )
     md_path.write_text(summary_to_markdown(summary), encoding="utf-8")
 
     payload = {
@@ -177,13 +183,19 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     return payload
 
 
-def build_summary(metadata: Dict[str, Any], results: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+def build_summary(
+    metadata: Dict[str, Any],
+    results: Iterable[Dict[str, Any]],
+    *,
+    success_threshold: float = 0.8,
+    min_trials_for_accept: int = 5,
+) -> Dict[str, Any]:
     rows = [result_digest(item) for item in results]
     successes = [row for row in rows if row["success"]]
     failures = [row for row in rows if not row["success"]]
     steps = [elapsed_steps(item) for item in results]
     good_steps = [step for step in steps if step is not None]
-    return {
+    summary = {
         **metadata,
         "num_trials": len(rows),
         "num_success": len(successes),
@@ -192,6 +204,12 @@ def build_summary(metadata: Dict[str, Any], results: Iterable[Dict[str, Any]]) -
         "mean_elapsed_steps": round(mean(good_steps), 2) if good_steps else None,
         "rows": rows,
     }
+    summary["generalization_strategy"] = build_generalization_report(
+        summary,
+        success_threshold=success_threshold,
+        min_trials_for_accept=min_trials_for_accept,
+    )
+    return summary
 
 
 def summary_to_markdown(summary: Dict[str, Any]) -> str:
@@ -219,11 +237,19 @@ def summary_to_markdown(summary: Dict[str, Any]) -> str:
         f"- success rate: `{summary['success_rate']}`",
         f"- mean elapsed steps: `{summary['mean_elapsed_steps']}`",
         "",
-        "## Seeds",
-        "",
-        "| seed | success | failure_type | failure_layer | elapsed_steps | message |",
-        "|---:|---|---|---|---:|---|",
     ]
+    strategy = summary.get("generalization_strategy") or {}
+    if strategy:
+        lines.extend(generalization_report_to_markdown(strategy).splitlines())
+        lines.append("")
+    lines.extend(
+        [
+            "## Seeds",
+            "",
+            "| seed | success | failure_type | failure_layer | elapsed_steps | message |",
+            "|---:|---|---|---|---:|---|",
+        ]
+    )
     for row in summary["rows"]:
         final_info = row.get("final_info") or {}
         raw_steps = final_info.get("elapsed_steps")
@@ -308,6 +334,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default="results")
     parser.add_argument("--jsonl-name", default="pullcube_xarm6_multiseed.jsonl")
     parser.add_argument("--md-name", default="pullcube_xarm6_multiseed.md")
+    parser.add_argument("--success-threshold", type=float, default=0.8)
+    parser.add_argument("--min-trials-for-accept", type=int, default=5)
     return parser
 
 

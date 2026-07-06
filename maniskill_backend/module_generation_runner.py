@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Sequence
 from .cases import PRIMARY_FULL_MIGRATION_CASE_ID, FullMigrationCase, get_full_migration_case
 from .llm import gen_text
 from .profiles import get_robot_profile
+from .structured_probe import get_probe_spec
 from .tasks import get_task_spec
 
 
@@ -246,12 +247,75 @@ def _diagnosis_guidance_lines(case: FullMigrationCase, target_result: Dict[str, 
     return lines
 
 
-def _structured_probe_feedback_lines(case: FullMigrationCase) -> List[str]:
-    """Return optional local probe evidence generated outside the LLM loop."""
+def _probe_json_companion(prompt_path: Path) -> Path:
+    if prompt_path.name.endswith("_prompt.txt"):
+        return prompt_path.with_name(prompt_path.name[: -len("_prompt.txt")] + ".json")
+    return prompt_path.with_suffix(".json")
 
-    if case.task_id != "pick_cube" or case.target_robot != "xarm6_robotiq":
+
+def _measured_probe_prompt_path(prompt_path: Path) -> bool:
+    """Return True when a structured probe prompt came from real probe rows."""
+
+    payload_path = _probe_json_companion(prompt_path)
+    if not payload_path.exists():
+        return True
+    try:
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if payload.get("dry_run"):
+        return False
+    try:
+        return int(payload.get("num_cases") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _candidate_structured_probe_feedback_paths(case: FullMigrationCase) -> List[tuple[str, Path]]:
+    """Return measured probe prompt files in preferred prompt-injection order."""
+
+    candidates: List[tuple[str, Path]] = []
+    seen: set[Path] = set()
+
+    try:
+        spec = get_probe_spec(case)
+    except KeyError:
+        spec = None
+
+    if spec is not None:
+        case_probe_dir = REPO_ROOT / "results" / "structured_probes" / case.case_id
+        exact_path = case_probe_dir / f"{spec.probe_id}_prompt.txt"
+        if exact_path.exists() and _measured_probe_prompt_path(exact_path):
+            candidates.append(("structured", exact_path))
+            seen.add(exact_path.resolve())
+        if case_probe_dir.exists():
+            prompt_paths = sorted(
+                case_probe_dir.glob("*_prompt.txt"),
+                key=lambda path: path.stat().st_mtime if path.exists() else 0.0,
+                reverse=True,
+            )
+            for path in prompt_paths:
+                resolved = path.resolve()
+                if resolved in seen or not _measured_probe_prompt_path(path):
+                    continue
+                candidates.append(("structured", path))
+                seen.add(resolved)
+
+    if case.task_id == "pick_cube" and case.target_robot == "xarm6_robotiq":
+        legacy_path = REPO_ROOT / "results" / "xarm6_pick_grasp_probe_prompt.txt"
+        if legacy_path.exists() and legacy_path.resolve() not in seen:
+            candidates.append(("legacy_xarm6_pick", legacy_path))
+
+    return candidates
+
+
+def _structured_probe_feedback_lines(case: FullMigrationCase) -> List[str]:
+    """Return optional measured probe evidence generated outside the LLM loop."""
+
+    candidates = _candidate_structured_probe_feedback_paths(case)
+    if not candidates:
         return []
-    feedback_path = REPO_ROOT / "results" / "xarm6_pick_grasp_probe_prompt.txt"
+    source_kind, feedback_path = candidates[0]
     if not feedback_path.exists():
         return []
     try:
@@ -260,11 +324,22 @@ def _structured_probe_feedback_lines(case: FullMigrationCase) -> List[str]:
         return []
     if not feedback:
         return []
+    rel_path = feedback_path.relative_to(REPO_ROOT)
+    if source_kind == "legacy_xarm6_pick":
+        source_line = (
+            "The following measurements came from legacy `scripts/xarm6_pick_grasp_probe.py` "
+            f"output at `{rel_path}` using real ManiSkill env.step execution."
+        )
+    else:
+        source_line = (
+            "The following measurements came from `scripts/structured_probe_runner.py` "
+            f"output at `{rel_path}` using real ManiSkill env.step execution."
+        )
     return [
         "",
-        "# Structured xArm6 PickCube probe feedback",
-        "The following measurements came from `scripts/xarm6_pick_grasp_probe.py` using real ManiSkill env.step execution.",
-        "Use this structured probe evidence before inventing another grasp geometry.",
+        "# Structured probe feedback",
+        source_line,
+        "Use this measured probe evidence before inventing another geometry. Do not treat it as a success oracle.",
         "```text",
         _trim_text(feedback, 2200),
         "```",

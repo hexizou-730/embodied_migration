@@ -38,6 +38,27 @@ def parse_int_list(text: str) -> List[int]:
     return [int(item.strip()) for item in text.split(",") if item.strip()]
 
 
+def load_probe_plan(text_or_path: str) -> List[Dict[str, Any]]:
+    """Load an explicit probe plan from a JSON string or JSON file path."""
+
+    if not text_or_path:
+        return []
+    stripped = text_or_path.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        data = json.loads(stripped)
+    else:
+        path = Path(stripped)
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            data = json.loads(stripped)
+    if isinstance(data, dict):
+        data = data.get("next_probe_suggestions") or data.get("planned_probe_cases") or data.get("probe_plan") or []
+    if not isinstance(data, list):
+        raise ValueError("probe plan must be a JSON list of parameter dictionaries.")
+    return [dict(item) for item in data]
+
+
 def make_action(env: Any, arm: ArmCommand = (0.0, 0.0, 0.0), *, gripper: float = -1.0) -> Any:
     space = env.action_space
     action = np.zeros(space.shape, dtype=getattr(space, "dtype", np.float32))
@@ -378,6 +399,9 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     close_steps = parse_int_list(args.close_steps)
     close_commands = parse_float_list(args.close_commands)
     settle_steps = parse_int_list(args.settle_steps)
+    explicit_plan = list(getattr(args, "probe_plan", None) or [])
+    if not explicit_plan:
+        explicit_plan = load_probe_plan(getattr(args, "probe_plan_json", ""))
 
     adapter = make_env(args)
     env = adapter.make()
@@ -399,17 +423,31 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
             "close_commands": close_commands,
             "settle_steps": settle_steps,
         },
+        "probe_plan_mode": "explicit" if explicit_plan else "grid",
     }
+    if explicit_plan:
+        summary["probe_plan"] = explicit_plan
     adapter.close()
 
     results: List[Dict[str, Any]] = []
-    grid: Iterable[Tuple[float, int, float, int]] = (
-        (z, steps, command, settle)
-        for z in z_offsets
-        for steps in close_steps
-        for command in close_commands
-        for settle in settle_steps
-    )
+    if explicit_plan:
+        grid: Iterable[Tuple[float, int, float, int]] = (
+            (
+                float(item["grasp_z_offset"]),
+                int(item["close_steps"]),
+                float(item["close_command"]),
+                int(item["settle_steps"]),
+            )
+            for item in explicit_plan
+        )
+    else:
+        grid = (
+            (z, steps, command, settle)
+            for z in z_offsets
+            for steps in close_steps
+            for command in close_commands
+            for settle in settle_steps
+        )
     for idx, (z, steps, command, settle) in enumerate(grid, start=1):
         if args.max_cases and idx > args.max_cases:
             break
@@ -480,6 +518,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stop-on-grasp", action="store_true")
     parser.add_argument("--max-cases", type=int, default=0)
     parser.add_argument("--top-k", type=int, default=8)
+    parser.add_argument(
+        "--probe-plan-json",
+        default="",
+        help="Optional JSON list/path containing explicit probe cases to run instead of the Cartesian grid.",
+    )
     return parser
 
 
