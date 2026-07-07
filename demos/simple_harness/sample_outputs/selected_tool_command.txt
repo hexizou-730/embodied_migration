@@ -1,0 +1,1 @@
+python scripts/pullcube_multiseed_eval.py --seeds 0 --robot xarm6_robotiq --adapter-module maniskill_backend.generated_adapters.case02_xarm6_pull_cube --code-file maniskill_backend/case_programs/case01_pull_cube.py --control-mode pd_ee_delta_pos --sim-backend auto --render-backend gpu --max-episode-steps 500

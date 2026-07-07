@@ -1,10 +1,12 @@
-"""Tiny Guava-style harness demo for this project.
+"""Minimal Guava-style harness demo for this project.
 
-Default:
-    python demo.py
+Run from the repository root:
 
-Run one selected simulator tool:
-    python demo.py --run
+    python demos/simple_harness/demo.py
+
+Run one selected simulator tool on a remote GPU machine:
+
+    python demos/simple_harness/demo.py --run
 """
 
 from __future__ import annotations
@@ -18,11 +20,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from maniskill_backend.agent_planner import fallback_agent_actions, plan_agent_actions
 from maniskill_backend.autonomous_harness import build_harness_plan
-
-
-REPO_ROOT = Path(__file__).resolve().parent
 
 
 def _timestamp() -> str:
@@ -71,9 +75,7 @@ def _run_command(command: str, *, run_dir: Path, execute: bool) -> dict[str, Any
 def _write_readme(run_dir: Path, *, plan: Mapping[str, Any], tool_result: Mapping[str, Any]) -> None:
     action = (plan.get("actions") or [{}])[0]
     lines = [
-        "# Simple Harness Demo",
-        "",
-        "This is a minimal Guava-style loop for this project:",
+        "# Simple Harness Demo Run",
         "",
         "```text",
         "agent_observation.json -> agent_plan.json -> selected simulator tool -> tool_result.json",
@@ -87,24 +89,10 @@ def _write_readme(run_dir: Path, *, plan: Mapping[str, Any], tool_result: Mappin
         "",
         "## Files",
         "",
-        "- `agent_observation.json`: what the LLM agent sees",
-        "- `agent_plan.json`: the next tool action selected by the agent",
+        "- `agent_observation.json`: what the LLM/Agent sees",
+        "- `agent_plan.json`: the next tool action selected by the Agent",
         "- `selected_tool_command.txt`: the command exposed by the harness",
         "- `tool_result.json`: dry-run or real simulator execution result",
-        "",
-        "## Next Commands",
-        "",
-        "Dry-run demo:",
-        "",
-        "```bash",
-        "python demo.py",
-        "```",
-        "",
-        "Run one real simulator tool on the remote GPU machine:",
-        "",
-        "```bash",
-        "python demo.py --run",
-        "```",
     ]
     (run_dir / "README.md").write_text("\n".join(lines), encoding="utf-8")
 

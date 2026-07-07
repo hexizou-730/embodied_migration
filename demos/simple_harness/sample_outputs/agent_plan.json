@@ -1,0 +1,12 @@
+{
+  "actions": [
+    {
+      "tool": "run_multi_seed",
+      "args": {}
+    }
+  ],
+  "stop_reason": "",
+  "schema": "agent_action_plan.v1",
+  "used_llm": false,
+  "llm_model": ""
+}

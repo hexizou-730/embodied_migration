@@ -1,0 +1,172 @@
+{
+  "schema": "agent_observation.v1",
+  "case_id": "case02_pull_cube_panda_to_xarm6",
+  "task_id": "pull_cube",
+  "source_robot": "panda",
+  "target_robot": "xarm6_robotiq",
+  "current_adapter": {
+    "path": "maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py",
+    "module": "maniskill_backend.generated_adapters.case02_xarm6_pull_cube"
+  },
+  "high_level_program": {
+    "path": "maniskill_backend/case_programs/case01_pull_cube.py",
+    "fixed": true,
+    "editable": false
+  },
+  "constraints": {
+    "editable": [
+      "target_adapter"
+    ],
+    "frozen": [
+      "controller",
+      "simulator",
+      "success_signal",
+      "high_level_program"
+    ],
+    "must_use_real_env_step": true,
+    "direct_state_edit_allowed": false,
+    "target_adapter_path": "maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py",
+    "fixed_program_call": "robot.pull(cube, goal)"
+  },
+  "low_level_interface": {
+    "simulator": "ManiSkill",
+    "execution_boundary": "real_runner creates env, adapter calls env.step(action)",
+    "available_runtime_calls": [
+      "env.reset(seed)",
+      "env.step(action)",
+      "env.action_space",
+      "robot._tcp_pos()",
+      "robot._actor_pos(name)",
+      "robot._region_pos(name)",
+      "robot._pull_cube_success() / robot._is_grasping(name) when provided by adapter base"
+    ],
+    "observable_diagnostics": [
+      "success",
+      "failure_type",
+      "failure_layer",
+      "message",
+      "elapsed_steps",
+      "tcp_pos",
+      "cube_pos",
+      "goal_pos",
+      "stage_target_pos",
+      "tcp_stage_error_norm",
+      "tcp_cube_xy",
+      "cube_goal_xy"
+    ],
+    "writable_artifacts": [
+      "target_adapter module with build_robot(env, *, control_mode, robot_uid)",
+      "experiment action plan JSON choosing allowed_tools"
+    ],
+    "known_action_layout": {
+      "control_mode": "pd_ee_delta_pos",
+      "action_space_shape": "(4,) for observed xarm6 pd_ee_delta_pos",
+      "action_semantics": "action[0:3]=normalized TCP xyz delta, action[3]=active gripper command"
+    }
+  },
+  "latest_results": {
+    "multiseed": {},
+    "structured_probe": {}
+  },
+  "allowed_tools": [
+    {
+      "name": "run_single_seed",
+      "description": "Run the current target adapter once in the real ManiSkill environment.",
+      "inputs": [
+        "seed",
+        "case_id",
+        "adapter_module",
+        "max_episode_steps"
+      ],
+      "outputs": [
+        "trial_json"
+      ],
+      "returns": [
+        "success",
+        "failure_layer",
+        "failure_diagnosis",
+        "runtime_diagnostics"
+      ],
+      "command_template": "python -m maniskill_backend.real_runner --task pull_cube --robot xarm6_robotiq --method target-module-generation --seed 0 --control-mode pd_ee_delta_pos --sim-backend auto --render-backend gpu --max-episode-steps 500 --code-file maniskill_backend/case_programs/case01_pull_cube.py --adapter-module maniskill_backend.generated_adapters.case02_xarm6_pull_cube"
+    },
+    {
+      "name": "run_multi_seed",
+      "description": "Evaluate current adapter across a seed set without regenerating code.",
+      "inputs": [
+        "seed_range",
+        "case_id",
+        "adapter_module",
+        "max_episode_steps"
+      ],
+      "outputs": [
+        "multiseed_jsonl",
+        "multiseed_markdown"
+      ],
+      "returns": [
+        "success_rate",
+        "failure_seed_clusters",
+        "generalization_strategy"
+      ],
+      "command_template": "python scripts/pullcube_multiseed_eval.py --seeds 0 --robot xarm6_robotiq --adapter-module maniskill_backend.generated_adapters.case02_xarm6_pull_cube --code-file maniskill_backend/case_programs/case01_pull_cube.py --control-mode pd_ee_delta_pos --sim-backend auto --render-backend gpu --max-episode-steps 500"
+    },
+    {
+      "name": "run_structured_probe",
+      "description": "Run a bounded parameter sweep for the current physical bottleneck.",
+      "inputs": [
+        "seed",
+        "case_id",
+        "failure_diagnosis"
+      ],
+      "outputs": [
+        "probe_json",
+        "probe_markdown",
+        "probe_prompt_feedback"
+      ],
+      "returns": [
+        "probe_table",
+        "best_probe_case",
+        "top_probe_cases",
+        "prompt_feedback"
+      ],
+      "command_template": "python scripts/structured_probe_runner.py --case case02_pull_cube_panda_to_xarm6 --seed 0 --failure-diagnosis-json '{}' --sim-backend auto --render-backend gpu --max-episode-steps 500"
+    },
+    {
+      "name": "run_llm_repair",
+      "description": "Ask the LLM to rewrite only the target-side adapter using available tool outputs.",
+      "inputs": [
+        "case_id",
+        "current_adapter",
+        "latest_results",
+        "probe_outputs"
+      ],
+      "outputs": [
+        "generated_adapter",
+        "target_result",
+        "migration_analysis"
+      ],
+      "returns": [
+        "generated_adapter",
+        "verification_result",
+        "target_result",
+        "migration_analysis"
+      ],
+      "command_template": "python -m maniskill_backend.module_generation_runner --case case02_pull_cube_panda_to_xarm6 --max-attempts 3 --sim-backend auto --render-backend gpu"
+    },
+    {
+      "name": "inspect_results",
+      "description": "Read compact JSON/Markdown artifacts instead of raw simulator internals.",
+      "inputs": [
+        "artifact_path"
+      ],
+      "outputs": [
+        "artifact_text"
+      ],
+      "returns": [
+        "latest_summary",
+        "failure_clusters",
+        "runtime_diagnostics"
+      ],
+      "command_template": "tail -n 120 results/pullcube_xarm6_multiseed.md"
+    }
+  ]
+}
