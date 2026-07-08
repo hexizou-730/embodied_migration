@@ -150,3 +150,50 @@ def get_full_migration_case(case_id: str) -> FullMigrationCase:
 
 def iter_full_migration_cases() -> Iterable[FullMigrationCase]:
     return FULL_MIGRATION_CASES.values()
+
+
+def find_full_migration_case(task_id: str, source_robot: str, target_robot: str) -> FullMigrationCase:
+    """Find a migration case from user-facing task/source/target names."""
+
+    task = _normalize_task_id(task_id)
+    source = _normalize_robot_uid(source_robot)
+    target = _normalize_robot_uid(target_robot)
+    for case in iter_full_migration_cases():
+        if (
+            _normalize_task_id(case.task_id) == task
+            and _normalize_robot_uid(case.source_robot) == source
+            and _normalize_robot_uid(case.target_robot) == target
+        ):
+            return case
+    available = ", ".join(
+        f"{case.task_id}:{case.source_robot}->{case.target_robot}" for case in iter_full_migration_cases()
+    )
+    raise KeyError(
+        "No migration case is registered for "
+        f"task={task_id!r}, source={source_robot!r}, target={target_robot!r}. "
+        f"Available: {available}"
+    )
+
+
+def _normalize_task_id(value: str) -> str:
+    text = str(value or "").strip().lower().replace("-", "_")
+    aliases = {
+        "pullcube": "pull_cube",
+        "pullcube_v1": "pull_cube",
+        "pull_cube_v1": "pull_cube",
+        "pickcube": "pick_cube",
+        "pickcube_v1": "pick_cube",
+        "pick_cube_v1": "pick_cube",
+    }
+    return aliases.get(text, text)
+
+
+def _normalize_robot_uid(value: str) -> str:
+    text = str(value or "").strip().lower().replace("-", "_")
+    aliases = {
+        "xarm6": "xarm6_robotiq",
+        "xarm6_robotiq": "xarm6_robotiq",
+        "franka": "panda",
+        "franka_panda": "panda",
+    }
+    return aliases.get(text, text)

@@ -55,7 +55,25 @@ controller = 底层怎么把 action 变成关节运动
 
 ### 0. 最短入口
 
-日常实验优先用根目录的短命令：
+如果想按“任务 + 源机器人 + 目标机器人”的形式发起迁移请求，用：
+
+```bash
+python migrate.py --task pull_cube --source panda --target xarm6_robotiq
+```
+
+这是当前最小成功案例入口：
+
+```text
+PullCube-v1 + Panda -> xArm6
+```
+
+不跑仿真时可以先检查：
+
+```bash
+python migrate.py --task PullCube-v1 --source panda --target xarm6 --dry-run
+```
+
+如果要跑完整自动实验闭环，用根目录短命令：
 
 ```bash
 python auto.py pull

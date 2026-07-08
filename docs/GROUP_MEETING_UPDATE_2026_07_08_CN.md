@@ -17,6 +17,31 @@
 
 ## 当前可展示证据
 
+### 0. 用户级迁移入口已补齐
+
+现在可以把迁移请求写成：
+
+```bash
+python migrate.py --task pull_cube --source panda --target xarm6_robotiq
+```
+
+这个入口会自动解析到当前至少一个成功案例：
+
+```text
+任务：PullCube-v1
+源机器人：Panda
+目标机器人：xArm6
+对应 case：case02_pull_cube_panda_to_xarm6
+```
+
+不跑仿真时可以先检查：
+
+```bash
+python migrate.py --task PullCube-v1 --source panda --target xarm6 --dry-run
+```
+
+含义：汇报中的目标形式已经从“记住 case id”推进到“输入任务 + 源机器人 + 目标机器人”。
+
 ### 1. Simple harness demo 已在远程跑通
 
 ```bash

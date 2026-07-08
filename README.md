@@ -201,6 +201,37 @@ evidence that simple close-envelope parameter tuning is insufficient.
 
 ## One-Command Auto Run
 
+For the user-facing migration request shape:
+
+```bash
+python migrate.py --task pull_cube --source panda --target xarm6_robotiq
+```
+
+This resolves the registered case:
+
+```text
+case02_pull_cube_panda_to_xarm6
+```
+
+and evaluates the current migrated adapter once. This is the minimal successful
+case for the current project:
+
+```text
+PullCube-v1 + Panda -> xArm6
+```
+
+Dry-run without ManiSkill:
+
+```bash
+python migrate.py --task PullCube-v1 --source panda --target xarm6 --dry-run
+```
+
+List registered migration requests:
+
+```bash
+python migrate.py --list-cases
+```
+
 For the main PullCube Panda -> xarm6 workflow, use the short entrypoint:
 
 ```bash

@@ -7,6 +7,14 @@
 
 今天我想先补充这两周的新进展。之前项目主要是在做“LLM 生成一个 target adapter，然后我手动读日志、手动改 prompt”。这两周我把流程推进成了一个更接近 Guava-style 的 autonomous harness：系统会生成 `agent_observation.json`，Agent 选择一个安全工具，比如跑 single seed、multi-seed、structured probe 或 LLM repair，然后 harness 在真实 ManiSkill 环境里执行并保存结果。
 
+另外我刚补了一个更接近最终目标的用户级入口：
+
+```bash
+python migrate.py --task pull_cube --source panda --target xarm6_robotiq
+```
+
+它会自动找到当前至少一个成功案例：`PullCube-v1 + Panda -> xArm6`，也就是 `case02_pull_cube_panda_to_xarm6`。这样汇报时就不用说“我手动指定 case id”，而是可以说系统已经开始支持“任务 + 源机器人 + 目标机器人”的迁移请求形式。
+
 现在已经有一个最小 demo：
 
 ```bash
