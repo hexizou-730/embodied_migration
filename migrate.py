@@ -162,6 +162,66 @@ def _run_auto(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
     }
 
 
+def _run_agent(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
+    case = find_full_migration_case(args.task, args.source, args.target)
+    command = [
+        sys.executable,
+        "scripts/agent_migration_runner.py",
+        "--case",
+        case.case_id,
+        "--max-cycles",
+        str(args.max_cycles),
+        "--attempts-per-cycle",
+        str(args.attempts_per_cycle),
+        "--seed",
+        str(args.seed),
+        "--sim-backend",
+        args.sim_backend,
+        "--render-backend",
+        args.render_backend,
+        "--max-episode-steps",
+        str(args.max_episode_steps or case.max_episode_steps),
+        "--output-root",
+        str(run_dir),
+        "--run-name",
+        "agent_loop",
+    ]
+    if args.keep_current_adapter:
+        command.append("--keep-current-adapter")
+    if args.no_source_check:
+        command.append("--no-source-check")
+    if args.dry_run:
+        command.append("--dry-run")
+    stdout_path = run_dir / "agent_stdout.txt"
+    process = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    stdout_path.write_text(process.stdout or "", encoding="utf-8")
+    summary_path = run_dir / "agent_loop" / "summary.json"
+    agent_summary: dict[str, Any] = {}
+    if summary_path.exists():
+        agent_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    return {
+        "dry_run": bool(args.dry_run),
+        "success": bool(agent_summary.get("success")) if agent_summary else process.returncode == 0,
+        "returncode": int(process.returncode),
+        "stdout": str(stdout_path.relative_to(run_dir)),
+        "agent_summary": str(summary_path.relative_to(run_dir)) if summary_path.exists() else "",
+        "message": (
+            "agent migration loop reached success"
+            if agent_summary.get("success")
+            else "agent migration loop finished without success"
+            if process.returncode == 0
+            else "agent migration loop failed"
+        ),
+    }
+
+
 def _real_runner_command(case: Any, *, seed: int) -> str:
     parts = [
         "python",
@@ -226,17 +286,20 @@ def main() -> None:
     parser.add_argument("--task", default="pull_cube", help="Task id, e.g. pull_cube or PullCube-v1.")
     parser.add_argument("--source", default="panda", help="Source robot, e.g. panda.")
     parser.add_argument("--target", default="xarm6_robotiq", help="Target robot, e.g. xarm6_robotiq or xarm6.")
-    parser.add_argument("--mode", choices=("evaluate", "generate", "auto"), default="evaluate")
+    parser.add_argument("--mode", choices=("evaluate", "generate", "auto", "agent"), default="evaluate")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seeds", default="0-9")
     parser.add_argument("--max-cycles", type=int, default=3)
     parser.add_argument("--max-attempts", type=int, default=1)
+    parser.add_argument("--attempts-per-cycle", type=int, default=1)
     parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--sim-backend", default="auto")
     parser.add_argument("--render-backend", default="gpu")
     parser.add_argument("--max-episode-steps", type=int, default=0)
     parser.add_argument("--output-root", default="results/migrations")
     parser.add_argument("--run-name", default="")
+    parser.add_argument("--keep-current-adapter", action="store_true")
+    parser.add_argument("--no-source-check", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--list-cases", action="store_true")
     args = parser.parse_args()
@@ -253,7 +316,9 @@ def main() -> None:
     latest_path.parent.mkdir(parents=True, exist_ok=True)
     latest_path.write_text(str(run_dir), encoding="utf-8")
 
-    if args.mode == "generate":
+    if args.mode == "agent":
+        result = _run_agent(args, run_dir)
+    elif args.mode == "generate":
         result = _run_generate(args, run_dir)
     elif args.mode == "auto":
         result = _run_auto(args, run_dir)

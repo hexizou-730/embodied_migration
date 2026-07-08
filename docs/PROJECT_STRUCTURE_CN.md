@@ -73,7 +73,24 @@ PullCube-v1 + Panda -> xArm6
 python migrate.py --task PullCube-v1 --source panda --target xarm6 --dry-run
 ```
 
-如果要跑完整自动实验闭环，用根目录短命令：
+如果要从零开始让 LLM/agent 自动迁移，用：
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6_robotiq \
+  --mode agent \
+  --max-cycles 5
+```
+
+这个命令会先恢复 neutral seed adapter，然后循环执行：
+
+```text
+LLM 生成 adapter -> ManiSkill 仿真验证 -> 失败则 structured probe -> 下一轮 LLM 修复
+```
+
+如果只想用旧的 PullCube 专用自动实验闭环，用根目录短命令：
 
 ```bash
 python auto.py pull
@@ -98,6 +115,7 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 | `case_programs/` | 高层 LMP 程序，基本不变 |
 | `skill_adapter.py` | Panda/source 默认技能实现，也是目标 adapter 继承的基础 |
 | `generated_adapters/` | LLM 或人工生成的目标机器人 adapter |
+| `seed_adapters/` | 从零迁移前恢复用的 neutral seed adapter |
 | `autonomous_harness.py` | 把仿真结果整理成 Agent observation / human report |
 | `structured_probe.py` | 定义 structured probe 的参数网格、打分和反馈格式 |
 | `generalization.py` | 多 seed 成功率和失败聚类策略选择 |
@@ -129,6 +147,17 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 | `case01_fetch_pull_cube.py` | Fetch PullCube 诊断/保留线索 |
 
 汇报时最应该展示的是 `case02_xarm6_pull_cube.py` 和 `case03_xarm6_pick_cube.py`。
+
+### 3.1 `maniskill_backend/seed_adapters/`
+
+这是“从零迁移”的起点模板。agent 模式默认会先把对应 seed adapter 复制回 `generated_adapters/`，再让 LLM 重新生成目标 adapter。
+
+这样做的意义是：
+
+```text
+不是从已有答案继续改
+而是从一个固定、可复现、未解决目标问题的初始 adapter 开始迁移
+```
 
 ### 4. `scripts/`
 

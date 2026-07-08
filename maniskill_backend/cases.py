@@ -27,6 +27,7 @@ class FullMigrationCase:
     migration_layers: Tuple[str, ...]
     required_evidence: Tuple[str, ...]
     notes: str = ""
+    seed_adapter_path: str = ""
 
 
 CASE01_PULL_CUBE = FullMigrationCase(
@@ -60,6 +61,7 @@ CASE01_PULL_CUBE = FullMigrationCase(
         "Primary clean migration case. PullCube-v1 is a contact-rich pulling "
         "task supported by both active embodiments."
     ),
+    seed_adapter_path="maniskill_backend/seed_adapters/case01_fetch_pull_cube.py",
 )
 
 CASE02_PULL_CUBE_XARM6 = FullMigrationCase(
@@ -94,6 +96,7 @@ CASE02_PULL_CUBE_XARM6 = FullMigrationCase(
         "single-arm target, so this case should isolate controller/contact "
         "migration without Fetch-style mobile-base reachability failures."
     ),
+    seed_adapter_path="maniskill_backend/seed_adapters/case02_xarm6_pull_cube.py",
 )
 
 CASE03_PICK_CUBE_XARM6 = FullMigrationCase(
@@ -128,6 +131,7 @@ CASE03_PICK_CUBE_XARM6 = FullMigrationCase(
         "adapter to establish a real gripper grasp, lift the cube, and move it "
         "to a 3D goal while the low-level controller remains frozen."
     ),
+    seed_adapter_path="maniskill_backend/seed_adapters/case03_xarm6_pick_cube.py",
 )
 
 FULL_MIGRATION_CASES: Dict[str, FullMigrationCase] = {

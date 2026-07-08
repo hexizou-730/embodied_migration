@@ -220,10 +220,37 @@ case for the current project:
 PullCube-v1 + Panda -> xArm6
 ```
 
+For a from-zero autonomous migration run, use agent mode:
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6_robotiq \
+  --mode agent \
+  --max-cycles 5
+```
+
+Agent mode restores the stable seed adapter, then repeats:
+
+```text
+LLM generates target adapter
+-> real ManiSkill verification
+-> structured probe if needed
+-> next LLM repair
+```
+
+This is the closest current interface to the intended final workflow:
+
+```text
+task + source robot + target robot -> autonomous migration loop
+```
+
 Dry-run without ManiSkill:
 
 ```bash
 python migrate.py --task PullCube-v1 --source panda --target xarm6 --dry-run
+python migrate.py --task PullCube-v1 --source panda --target xarm6 --mode agent --dry-run
 ```
 
 List registered migration requests:
@@ -232,7 +259,7 @@ List registered migration requests:
 python migrate.py --list-cases
 ```
 
-For the main PullCube Panda -> xarm6 workflow, use the short entrypoint:
+For the older PullCube-only harness workflow, use the short entrypoint:
 
 ```bash
 python auto.py pull
