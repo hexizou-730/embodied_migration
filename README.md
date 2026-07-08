@@ -441,8 +441,10 @@ For a Chinese overview of the repository layout, see
 | Module generation runner | `maniskill_backend/module_generation_runner.py` |
 | PickCube probe | `scripts/xarm6_pick_grasp_probe.py` |
 | Generated xarm6 PickCube adapter | `maniskill_backend/generated_adapters/case03_xarm6_pick_cube.py` |
-| Chinese experiment report | `docs/EXPERIMENT_REPORT_CN.md` |
-| Workshop framing notes | `docs/WORKSHOP_FRAMING_CN.md` |
+| Current harness explanation | `docs/HARNESS_ENGINEERING_CN.md` |
+| Current project structure | `docs/PROJECT_STRUCTURE_CN.md` |
+| Archived experiment report | `archive/legacy_docs/EXPERIMENT_REPORT_CN.md` |
+| Archived workshop notes | `archive/legacy_docs/WORKSHOP_FRAMING_CN.md` |
 
 ## Research Framing
 

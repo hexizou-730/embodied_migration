@@ -168,17 +168,15 @@ agent_observation.json -> agent_plan.json -> selected simulator tool -> tool_res
 
 ### 6. `docs/`
 
-这是汇报和记录材料。
+这是当前还在使用的说明和汇报材料。历史报告、旧 PPT/Word、安装备忘录已经移到 `archive/`。
 
 | 文件 | 作用 |
 |---|---|
-| `EXPERIMENT_REPORT_CN.md` | 中文实验报告，持续更新 |
+| `PROJECT_STRUCTURE_CN.md` | 当前项目结构说明 |
+| `HARNESS_ENGINEERING_CN.md` | harness engineering 中文解释 |
 | `GROUP_MEETING_UPDATE_2026_07_08_CN.md` | 组会前两周进度速览 |
-| `WORKSHOP_FRAMING_CN.md` | workshop/research framing |
-| `RUN.md` | 远程运行命令记录 |
-| `MIGRATION_CODE_COMPARISON_DEMO_CN.docx` | 展示用 Word，代码对比 |
-| `COLLABORATION_INTERVIEW_GUIDE_CN.docx` | 合作/面试准备 |
-| `LLM_Heuristic_AFL_Embodied_Migration_ICLR方向备忘录.docx` | 研究方向备忘录 |
+| `GROUP_MEETING_PPT_ADDENDUM_2026_07_08_CN.md` | 可复制到 PPT 的补充页文案 |
+| `LLM_ROBOT_MIGRATION_SPEAKER_SCRIPT_CN.md` | 10-15 分钟汇报演讲稿 |
 
 ### 7. `results/`
 
@@ -207,7 +205,19 @@ results/auto_runs/<run_name>/
   cycle_01/module_generation.md
 ```
 
-如果要保留某次重要实验，建议把关键结论整理进 `docs/EXPERIMENT_REPORT_CN.md`，不要直接依赖 `results/` 里的临时文件。
+如果要保留某次重要实验，建议把关键结论整理进 `docs/` 下的新 Markdown 文件，不要直接依赖 `results/` 里的临时文件。
+
+### 8. `archive/`
+
+这是历史材料归档区，不作为当前开发主线。
+
+| 文件/目录 | 作用 |
+|---|---|
+| `archive/legacy_docs/` | 旧实验报告、旧运行命令、旧 setup 文档、旧 workshop framing |
+| `archive/setup_scripts/` | 旧环境配置脚本 |
+| `archive/untracked_materials/` | 本地未跟踪材料：旧 PPT/Word、patch、临时文件、历史 results |
+
+`archive/untracked_materials/` 被 git 忽略，只作为本地整理区。
 
 ## 当前推荐展示顺序
 
@@ -216,8 +226,9 @@ results/auto_runs/<run_name>/
 3. `maniskill_backend/case_programs/case01_pull_cube.py`：高层程序没有变。
 4. `maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py`：xArm6 adapter。
 5. `maniskill_backend/autonomous_harness.py`：Agent observation / human report 分离。
-6. `results/auto_runs/<run_name>/summary.md`：自动实验结果。
-7. `docs/EXPERIMENT_REPORT_CN.md`：人工汇报总结。
+6. `demos/simple_harness/`：最小 harness demo。
+7. `results/auto_runs/<run_name>/summary.md`：自动实验结果。
+8. `docs/GROUP_MEETING_UPDATE_2026_07_08_CN.md`：人工汇报总结。
 
 ## 可以暂时忽略的内容
 
@@ -228,19 +239,24 @@ results/auto_runs/<run_name>/
 | `results/docx_render_*` | Word 渲染检查图片，不是实验核心 |
 | `capabilities/` | 机器人 profile 辅助，目前不是汇报重点 |
 | `lmp/` | 高层代码执行器，稳定基础设施 |
+| `archive/` | 历史材料，不是当前开发入口 |
 
 ## 后续整理建议
 
-短期不要大规模删文件。建议先按这个规则整理：
+当前已经按这个规则整理：
 
 ```text
 核心代码保留在 maniskill_backend/
 实验脚本保留在 scripts/
-汇报材料保留在 docs/
+当前说明保留在 docs/
+历史材料保留在 archive/
 临时输出留在 results/
 ```
 
-如果要进一步瘦身，可以做两件事：
+后续继续开发时，只需要优先维护：
 
-1. 把 Fetch 相关内容标记为 `diagnosed secondary case`，不要作为主线展示。
-2. 把 PickCube 标记为 `hard case`，不要和 PullCube 正结果混在一起讲。
+1. `migrate.py`：用户级入口。
+2. `auto.py`：自动闭环入口。
+3. `maniskill_backend/`：核心框架。
+4. `scripts/`：实验工具。
+5. `demos/simple_harness/`：最小演示。

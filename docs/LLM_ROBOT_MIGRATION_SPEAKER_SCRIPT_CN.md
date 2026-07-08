@@ -1,6 +1,6 @@
 # 诊断驱动的机器人代码迁移：组会演讲稿
 
-对应 PPT：`docs/LLM_ROBOT_MIGRATION_PROGRESS_REPORT_CN_15SLIDES.pptx`  
+旧 PPT 已归档；当前以这份 Markdown 讲稿和 `docs/GROUP_MEETING_UPDATE_2026_07_08_CN.md` 为准。  
 建议时长：10-15 分钟
 
 ## 0. 组会前 30 秒更新
