@@ -2151,3 +2151,106 @@ cube_disp_xy=unknown 不再算合格；
 ## 10. 当前一句话总结
 
 当前项目已经从简单高层代码迁移推进到真实仿真控制迁移：DeepSeek V4-Pro 已成功为 xarm6 自动生成可执行的 `PullCube-v1` 目标 adapter，并在 `PickCube-v1` 中生成过能够真实夹住并部分抬升方块的 adapter；当前 PickCube 已加入自动抓取参数探针，首轮探针未找到成功 close 参数，且最新回归显示 LLM 有时会在 TCP 仍高于抓取点 13cm 时报告抓取失败，因此下一步同时约束 approach/descent 到位检查与 gripper-envelope repair。
+
+## 11. 2026-07-08 组会前补充：从手动 prompt 到 autonomous harness
+
+过去两周的主要进展不是单纯多跑了几个 seed，而是把实验流程从“人手动复制失败日志给 LLM”推进到“harness 生成机器可读 observation，Agent 选择工具，真实 ManiSkill 工具返回结果”。
+
+### 11.1 新增 simple harness demo
+
+新增最小展示文件夹：
+
+```text
+demos/simple_harness/
+  README.md
+  demo.py
+  sample_outputs/
+    agent_observation.json
+    agent_plan.json
+    selected_tool_command.txt
+    tool_result.json
+```
+
+远程已经跑通：
+
+```bash
+python demos/simple_harness/demo.py
+python demos/simple_harness/demo.py --run
+```
+
+`--run` 的结果为：
+
+```text
+selected_tool = run_multi_seed
+executed = true
+returncode = 0
+```
+
+这说明 demo 不只是静态生成 prompt，而是可以在远程通过 harness 调用真实 ManiSkill 实验工具。
+
+### 11.2 新增自动化主线
+
+当前自动化主线是：
+
+```text
+agent_observation.json
+-> agent_plan.json
+-> selected simulator tool
+-> tool_result.json
+```
+
+正式闭环入口：
+
+```bash
+python auto.py pull --seeds 0-9 --max-cycles 3
+```
+
+其中 Agent 可调用的工具包括：
+
+```text
+run_single_seed
+run_multi_seed
+run_structured_probe
+run_llm_repair
+inspect_results
+stop
+```
+
+### 11.3 当前结果怎么解释
+
+PullCube Panda -> xArm6：
+
+```text
+seed 0 已有成功 adapter；
+one-shot migration runner 会先发现当前 adapter 已成功，因此不重复生成。
+```
+
+这说明 PullCube 是当前正案例，但不是泛化终点。之前 0-9 seed 结果显示只有部分 seeds 成功，失败主要集中在：
+
+```text
+contact_geometry / contact_side_reachability_failure
+```
+
+PickCube Panda -> xArm6：
+
+```text
+Panda source 成功；
+xArm6 target 仍是 hard case；
+probe 显示即使 TCP 对齐，Robotiq close envelope 仍可能无法形成稳定 grasp。
+```
+
+### 11.4 当前汇报结论
+
+项目现在的核心贡献可以表述为：
+
+```text
+同一个高层机器人程序换机器人后，失败往往不是语法错误，而是 embodiment constraint。
+因此我不直接重写高层 program，而是生成 target-side adapter，并用真实 ManiSkill 仿真反馈驱动诊断、probe 和 repair。
+```
+
+下一步重点：
+
+1. 用 PullCube 的 structured contact probing 修复多 seed 泛化。
+2. 把 PickCube 保留为 hard case，系统整理 grasp/contact failure taxonomy。
+3. 继续减少人工 prompt，让 Agent 只看 `agent_observation.json` 和工具输出。
+4. 用 probe 结果做 learning-guided optimization，而不是继续手动试参数。

@@ -126,20 +126,43 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 | `xarm6_pull_diagnostics.py` | xArm6 PullCube 接触行为诊断 |
 | `xarm6_pick_grasp_probe.py` | xArm6 PickCube 抓取参数探针 |
 
-### 5. `docs/`
+### 5. `demos/`
+
+这是展示用的最小 demo，不替代正式实验脚本。
+
+| 文件/目录 | 作用 |
+|---|---|
+| `demos/simple_harness/demo.py` | 最小 harness demo：生成 observation、plan、命令和 result |
+| `demos/simple_harness/sample_outputs/` | 已提交的 dry-run 示例输出 |
+
+推荐现场展示：
+
+```bash
+python demos/simple_harness/demo.py
+python demos/simple_harness/demo.py --run
+```
+
+它展示的是：
+
+```text
+agent_observation.json -> agent_plan.json -> selected simulator tool -> tool_result.json
+```
+
+### 6. `docs/`
 
 这是汇报和记录材料。
 
 | 文件 | 作用 |
 |---|---|
 | `EXPERIMENT_REPORT_CN.md` | 中文实验报告，持续更新 |
+| `GROUP_MEETING_UPDATE_2026_07_08_CN.md` | 组会前两周进度速览 |
 | `WORKSHOP_FRAMING_CN.md` | workshop/research framing |
 | `RUN.md` | 远程运行命令记录 |
 | `MIGRATION_CODE_COMPARISON_DEMO_CN.docx` | 展示用 Word，代码对比 |
 | `COLLABORATION_INTERVIEW_GUIDE_CN.docx` | 合作/面试准备 |
 | `LLM_Heuristic_AFL_Embodied_Migration_ICLR方向备忘录.docx` | 研究方向备忘录 |
 
-### 6. `results/`
+### 7. `results/`
 
 实验输出目录。这里的文件默认不进 git。
 

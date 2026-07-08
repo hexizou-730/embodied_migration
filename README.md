@@ -307,6 +307,35 @@ results/autonomous_harness/<case_id>/harness_bundle.json
 See [`docs/HARNESS_ENGINEERING_CN.md`](docs/HARNESS_ENGINEERING_CN.md) for the
 Chinese explanation and reporting framing.
 
+## Simple Harness Demo
+
+For presentations or quick checks, use the minimal demo folder:
+
+```bash
+python demos/simple_harness/demo.py
+```
+
+This dry run writes:
+
+```text
+results/simple_demo/<run_name>/
+  agent_observation.json
+  agent_plan.json
+  selected_tool_command.txt
+  tool_result.json
+  README.md
+```
+
+On a remote GPU machine, run one real selected tool:
+
+```bash
+python demos/simple_harness/demo.py --run
+```
+
+This is not a full repair loop. It demonstrates that the project can expose a
+bounded simulator tool to an Agent and record the result. Use `auto.py pull` for
+the full autonomous loop.
+
 ## Run
 
 Install:
