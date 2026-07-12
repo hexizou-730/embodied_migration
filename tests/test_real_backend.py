@@ -33,6 +33,11 @@ from maniskill_backend.module_generation_runner import (
     pick_cube_runtime_diagnostic_error,
     validate_generated_adapter_module,
 )
+from maniskill_backend.online_harness import (
+    build_pull_cube_online_observation,
+    fallback_online_pull_action,
+    validate_online_action,
+)
 from maniskill_backend.profiles import get_robot_profile, iter_robot_profiles
 from maniskill_backend.real_runner import (
     _build_robot_adapter,
@@ -1130,6 +1135,42 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         dry_plan = plan_agent_actions(observation, dry_run=True)
         self.assertEqual(dry_plan["actions"][0]["tool"], "run_multi_seed")
         self.assertFalse(dry_plan["used_llm"])
+
+    def test_online_pull_observation_builds_far_side_contact(self):
+        observation = build_pull_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[-0.2, 0.05, 0.001],
+            tcp_pos=[0.0, 0.0, 0.16],
+        )
+        self.assertEqual(observation["schema"], "online_pull_cube_observation.v1")
+        self.assertAlmostEqual(observation["targets"]["contact"][0], 0.12, places=4)
+        self.assertAlmostEqual(observation["targets"]["contact"][1], 0.05, places=4)
+        self.assertEqual(observation["metrics"]["goal_dir_xy"], [-1.0, 0.0])
+        self.assertEqual(observation["metrics"]["far_side_xy"], [1.0, -0.0])
+
+    def test_online_pull_fallback_selects_next_primitive(self):
+        far_observation = build_pull_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[-0.2, 0.05, 0.001],
+            tcp_pos=[0.0, 0.0, 0.16],
+        )
+        self.assertEqual(fallback_online_pull_action(far_observation)["primitive"], "move_to_pre_contact")
+
+        contact_observation = build_pull_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[-0.2, 0.05, 0.001],
+            tcp_pos=[0.12, 0.05, 0.035],
+        )
+        self.assertEqual(fallback_online_pull_action(contact_observation)["primitive"], "drag_toward_goal")
+
+    def test_online_action_validation_rejects_unsafe_primitive(self):
+        observation = build_pull_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[-0.2, 0.05, 0.001],
+            tcp_pos=[0.0, 0.0, 0.16],
+        )
+        validated = validate_online_action({"primitive": "teleport_cube", "args": {}}, observation)
+        self.assertEqual(validated["primitive"], "move_to_pre_contact")
 
     def test_short_auto_pull_entrypoint_dry_run(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -90,6 +90,29 @@ python migrate.py \
 LLM 生成 adapter -> ManiSkill 仿真验证 -> 失败则 structured probe -> 下一轮 LLM 修复
 ```
 
+如果要展示“边做边看边改”的在线 harness，用：
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6_robotiq \
+  --mode online \
+  --max-online-steps 240
+```
+
+它不是等整局结束后才看失败，而是在同一个 episode 里循环：
+
+```text
+观察 TCP / cube / goal
+-> 选择一个安全 primitive
+-> 执行几步 env.step(action)
+-> 再观察
+-> 再决定下一步
+```
+
+当前 online harness 先支持 `PullCube`。它展示的是实时闭环控制机制；`PickCube` 之后需要补抓取专用 primitive。
+
 如果只想用旧的 PullCube 专用自动实验闭环，用根目录短命令：
 
 ```bash
@@ -117,6 +140,7 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 | `generated_adapters/` | LLM 或人工生成的目标机器人 adapter |
 | `seed_adapters/` | 从零迁移前恢复用的 neutral seed adapter |
 | `autonomous_harness.py` | 把仿真结果整理成 Agent observation / human report |
+| `online_harness.py` | 在线 observe-decide-act harness：边执行边读状态边选下一段动作 |
 | `structured_probe.py` | 定义 structured probe 的参数网格、打分和反馈格式 |
 | `generalization.py` | 多 seed 成功率和失败聚类策略选择 |
 | `module_generation_runner.py` | LLM 生成 adapter 的主入口 |
@@ -167,6 +191,7 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 |---|---|
 | `autonomous_loop_runner.py` | 自动闭环主流程，被 `auto.py pull` 调用 |
 | `autonomous_harness_runner.py` | 只生成 agent observation / human report，不执行完整闭环 |
+| `online_harness_runner.py` | 在线 harness 调试入口，会输出 online trace |
 | `pullcube_multiseed_eval.py` | PullCube 多 seed 成功率评估 |
 | `structured_probe_runner.py` | 通用 structured probe 入口 |
 | `xarm6_pull_contact_probe.py` | xArm6 PullCube 接触参数探针 |

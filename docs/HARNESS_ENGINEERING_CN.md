@@ -10,6 +10,69 @@ LLM Agent -> harness tools -> real ManiSkill env.step(action) -> structured resu
 
 这样 Agent 可以自主判断“当前代码是否符合物理约束”，但不能绕过任务成功信号，也不能直接修改 simulator、controller 或物体状态。
 
+## 两种 harness 粒度
+
+现在项目里有两种粒度：
+
+| 粒度 | 什么时候看环境 | 解决什么问题 |
+|---|---|---|
+| Episode-level harness | 一整次 trial 结束后看 success/failure 和诊断 | 让 LLM 重写或修复 adapter |
+| Online harness | 同一个 episode 中每执行几步就重新观察 TCP/cube/goal | 边做边看，下一小段动作按当前物理状态调整 |
+
+你说的“实时感知环境”对应第二种 online harness。
+
+它的核心循环是：
+
+```text
+observe current simulator state
+-> choose bounded primitive
+-> execute a short env.step(action) segment
+-> observe again
+-> choose the next primitive
+```
+
+当前 online harness 先落在 `PullCube` 上，状态包括：
+
+```text
+cube_pos
+goal_pos
+tcp_pos
+tcp_contact_error
+cube_goal_xy
+allowed_primitives
+```
+
+可选 primitive 包括：
+
+```text
+move_to_pre_contact
+move_to_contact
+drag_toward_goal
+hold
+stop
+```
+
+运行方式：
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6_robotiq \
+  --mode online
+```
+
+如果想让 LLM 在每个小段之前选择 primitive，可以加：
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6_robotiq \
+  --mode online \
+  --online-planner llm
+```
+
 ## 现有项目中的 harness 工具
 
 | 工具 | 作用 | 回传给 Agent 的信息 |

@@ -246,11 +246,39 @@ This is the closest current interface to the intended final workflow:
 task + source robot + target robot -> autonomous migration loop
 ```
 
+For online observe-decide-act control inside a single episode:
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6_robotiq \
+  --mode online \
+  --max-online-steps 240
+```
+
+Online mode runs a shorter loop inside the simulator episode:
+
+```text
+observe current TCP/cube/goal
+-> choose a bounded primitive
+-> execute a few env.step(action) calls
+-> observe again
+```
+
+This is the “边做边看边改” harness. It is different from agent mode:
+
+| Mode | Feedback timing | Main use |
+|---|---|---|
+| `agent` | after a full trial fails or succeeds | rewrite/repair the adapter module |
+| `online` | after every short action segment | adjust the next primitive using live simulator state |
+
 Dry-run without ManiSkill:
 
 ```bash
 python migrate.py --task PullCube-v1 --source panda --target xarm6 --dry-run
 python migrate.py --task PullCube-v1 --source panda --target xarm6 --mode agent --dry-run
+python migrate.py --task PullCube-v1 --source panda --target xarm6 --mode online --dry-run
 ```
 
 List registered migration requests:

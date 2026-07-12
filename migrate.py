@@ -222,6 +222,73 @@ def _run_agent(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
     }
 
 
+def _run_online(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
+    case = find_full_migration_case(args.task, args.source, args.target)
+    command = [
+        sys.executable,
+        "scripts/online_harness_runner.py",
+        "--case",
+        case.case_id,
+        "--seed",
+        str(args.seed),
+        "--planner",
+        args.online_planner,
+        "--segment-steps",
+        str(args.segment_steps),
+        "--max-online-steps",
+        str(args.max_online_steps),
+        "--obs-mode",
+        args.obs_mode,
+        "--sim-backend",
+        args.sim_backend,
+        "--render-backend",
+        args.render_backend,
+        "--max-episode-steps",
+        str(args.max_episode_steps or case.max_episode_steps),
+        "--output-root",
+        str(run_dir),
+        "--run-name",
+        "online_loop",
+    ]
+    if args.dry_run:
+        command.append("--dry-run")
+    stdout_path = run_dir / "online_stdout.txt"
+    process = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    stdout_path.write_text(process.stdout or "", encoding="utf-8")
+    summary_path = run_dir / "online_loop" / "summary.json"
+    online_summary: dict[str, Any] = {}
+    if summary_path.exists():
+        online_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if args.dry_run:
+        success: bool | None = None
+        message = "dry run: online harness would observe and act in short closed-loop segments"
+    else:
+        success = bool(online_summary.get("success")) if online_summary else process.returncode == 0
+        message = (
+            "online harness reached success"
+            if online_summary.get("success")
+            else "online harness finished without success"
+            if process.returncode == 0
+            else "online harness failed"
+        )
+    return {
+        "dry_run": bool(args.dry_run),
+        "success": success,
+        "returncode": int(process.returncode),
+        "stdout": str(stdout_path.relative_to(run_dir)),
+        "online_summary": str(summary_path.relative_to(run_dir)) if summary_path.exists() else "",
+        "online_trace": "online_loop/online_trace.jsonl" if summary_path.exists() else "",
+        "message": message,
+    }
+
+
 def _real_runner_command(case: Any, *, seed: int) -> str:
     parts = [
         "python",
@@ -286,12 +353,15 @@ def main() -> None:
     parser.add_argument("--task", default="pull_cube", help="Task id, e.g. pull_cube or PullCube-v1.")
     parser.add_argument("--source", default="panda", help="Source robot, e.g. panda.")
     parser.add_argument("--target", default="xarm6_robotiq", help="Target robot, e.g. xarm6_robotiq or xarm6.")
-    parser.add_argument("--mode", choices=("evaluate", "generate", "auto", "agent"), default="evaluate")
+    parser.add_argument("--mode", choices=("evaluate", "generate", "auto", "agent", "online"), default="evaluate")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seeds", default="0-9")
     parser.add_argument("--max-cycles", type=int, default=3)
     parser.add_argument("--max-attempts", type=int, default=1)
     parser.add_argument("--attempts-per-cycle", type=int, default=1)
+    parser.add_argument("--online-planner", choices=("fallback", "llm"), default="fallback")
+    parser.add_argument("--segment-steps", type=int, default=8)
+    parser.add_argument("--max-online-steps", type=int, default=240)
     parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--sim-backend", default="auto")
     parser.add_argument("--render-backend", default="gpu")
@@ -318,6 +388,8 @@ def main() -> None:
 
     if args.mode == "agent":
         result = _run_agent(args, run_dir)
+    elif args.mode == "online":
+        result = _run_online(args, run_dir)
     elif args.mode == "generate":
         result = _run_generate(args, run_dir)
     elif args.mode == "auto":
