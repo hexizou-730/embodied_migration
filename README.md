@@ -28,36 +28,36 @@ and real simulator verification.
 
 | Case | Task | Source -> Target | Result | Main evidence |
 |---|---|---|---|---|
-| Case 02 | `PullCube-v1` | Panda -> xarm6_robotiq | Success | LLM-generated adapter reached `ret_val=True`, `elapsed_steps=460` |
-| Case 03 | `PickCube-v1` | Panda -> xarm6_robotiq | Source succeeds; target hard case | Panda baseline reached `ret_val=True`, `elapsed_steps=40`; xarm6 force-closure grasp remains unstable |
-| Case 01 | `PullCube-v1` | Panda -> Fetch | Diagnosed failure | Mobile-base/contact-side reachability and action-space mismatch |
+| Case 02 | `PullCube-v1` | Panda -> xarm6_robotiq | Success on seed 0 | Target adapter reached `ret_val=True`; multi-seed robustness remains an active target |
+| Case 03 | `PickCube-v1` | Panda -> xarm6_robotiq | Success on seed 0 | Pick/place migration is now a positive case, but force-closure/contact stability remains the harder mechanism |
+| Case 01 | `PullCube-v1` | Panda -> Fetch | Success on seed 0 | Fetch required 9D action mapping plus mobile-base/contact-side adaptation |
 
 The strongest current result is:
 
 ```text
-PullCube-v1 can be migrated from Panda to xarm6_robotiq by an LLM-generated
-target adapter, verified through real ManiSkill execution.
+The registered Panda -> xarm6_robotiq and Panda -> Fetch cases can enter the
+same adapter-migration harness and be verified through real ManiSkill execution.
 ```
 
-The main negative result is:
+The main open problem is:
 
 ```text
-PickCube-v1 is validated on the Panda source stack, but exposes the limit of
-prompt-only target-adapter synthesis for xarm6_robotiq. The LLM can generate
-structured grasp adapters and use probe feedback, but robust force-closure
-grasping still fails due to descent, gripper-envelope, and contact-force issues.
+Seed-0 success is not the same as robust cross-seed generalization. Multi-seed
+PullCube and PickCube still expose contact geometry, reachability, and gripper
+envelope constraints that need better online/probe-guided repair.
 ```
 
-## Why PullCube Succeeds And PickCube Fails
+## Why PullCube And PickCube Are Different
 
 | Dimension | PullCube | PickCube |
 |---|---|---|
 | Required physical interaction | Contact drag/push | Real two-finger grasp |
 | Success requirement | Move cube to target region | Grasp, lift, and transport to 3D goal |
 | Main adapter change | Contact side, drag pulses, action scaling | Grasp height, close timing, gripper envelope, lift preservation |
-| Current outcome | Solved for xarm6 | Panda source succeeds; xarm6 target remains hard case |
+| Current outcome | Positive case for xarm6 and Fetch seed 0 | Positive xarm6 seed-0 case, still the harder generalization target |
 
-The PickCube failure is not a high-level program error. The program remains:
+The key point is that these are not high-level program changes. For PickCube,
+the program remains:
 
 ```python
 cube = scene.get_object("cube")
@@ -67,8 +67,8 @@ grasp_ok = robot.grasp(cube)
 ret_val = robot.place(cube, goal) if grasp_ok else False
 ```
 
-The failure occurs inside the target adapter, where xarm6 must create a real
-Robotiq grasp under frozen ManiSkill controller semantics.
+The embodiment-specific work happens inside the target adapter, where xarm6 must
+create a real Robotiq grasp under frozen ManiSkill controller semantics.
 
 ## Structured Probe
 
@@ -450,7 +450,7 @@ Run tests:
 python -m unittest discover -s tests -v
 ```
 
-Run the successful PullCube migration case:
+Run the main PullCube migration case:
 
 ```bash
 python -m maniskill_backend.module_generation_runner \
@@ -460,7 +460,7 @@ python -m maniskill_backend.module_generation_runner \
   --render-backend gpu
 ```
 
-Run the PickCube hard case:
+Run the PickCube grasp/place case:
 
 ```bash
 python scripts/xarm6_pick_grasp_probe.py \
@@ -498,6 +498,8 @@ For a Chinese overview of the repository layout, see
 | Generated xarm6 PickCube adapter | `maniskill_backend/generated_adapters/case03_xarm6_pick_cube.py` |
 | Current harness explanation | `docs/HARNESS_ENGINEERING_CN.md` |
 | Current project structure | `docs/PROJECT_STRUCTURE_CN.md` |
+| New collaborator onboarding | `docs/COLLABORATOR_ONBOARDING_CN.md` |
+| Literature review | `docs/LITERATURE_REVIEW_CN.md` |
 | Archived experiment report | `archive/legacy_docs/EXPERIMENT_REPORT_CN.md` |
 | Archived workshop notes | `archive/legacy_docs/WORKSHOP_FRAMING_CN.md` |
 
@@ -508,7 +510,7 @@ This project supports the following workshop-style claim:
 ```text
 LLMs can migrate high-level robot programs across embodiments for contact-based
 manipulation when the target adapter exposes the right control/contact
-abstractions. However, force-closure grasp migration remains a hard case:
-structured physical probing improves diagnosis, but robust transfer requires
-constraint-aware repair and deeper contact/controller modeling.
+abstractions. Seed-0 successes show the feasibility of adapter migration, while
+multi-seed and grasp/contact cases motivate structured probing, online harness
+control, and constraint-aware repair.
 ```

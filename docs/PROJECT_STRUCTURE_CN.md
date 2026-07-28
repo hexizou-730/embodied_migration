@@ -47,8 +47,8 @@ controller = 底层怎么把 action 变成关节运动
 | Source robot | `panda` |
 | Main target robot | `xarm6_robotiq` |
 | Main positive task | `PullCube-v1` |
-| Hard case | `PickCube-v1` |
-| Secondary diagnosis | `fetch` |
+| Grasp/contact task | `PickCube-v1` |
+| Secondary target | `fetch` |
 | 当前主要方法 | 直接生成 target adapter module |
 
 ## 目录怎么读
@@ -167,8 +167,8 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 |---|---|
 | `case02_xarm6_pull_cube.py` | xArm6 PullCube 主成功 adapter |
 | `case02_xarm6_pull_cube_adaptive.py` | 多 seed 自适应 PullCube 实验 adapter |
-| `case03_xarm6_pick_cube.py` | xArm6 PickCube hard case adapter |
-| `case01_fetch_pull_cube.py` | Fetch PullCube 诊断/保留线索 |
+| `case03_xarm6_pick_cube.py` | xArm6 PickCube 抓取/放置 adapter |
+| `case01_fetch_pull_cube.py` | Fetch PullCube adapter |
 
 汇报时最应该展示的是 `case02_xarm6_pull_cube.py` 和 `case03_xarm6_pick_cube.py`。
 
@@ -228,6 +228,8 @@ agent_observation.json -> agent_plan.json -> selected simulator tool -> tool_res
 |---|---|
 | `PROJECT_STRUCTURE_CN.md` | 当前项目结构说明 |
 | `HARNESS_ENGINEERING_CN.md` | harness engineering 中文解释 |
+| `COLLABORATOR_ONBOARDING_CN.md` | 新同学上手文档、复现实验命令和下一阶段目标 |
+| `LITERATURE_REVIEW_CN.md` | 文献综述和论文定位 |
 | `GROUP_MEETING_UPDATE_2026_07_08_CN.md` | 组会前两周进度速览 |
 | `GROUP_MEETING_PPT_ADDENDUM_2026_07_08_CN.md` | 可复制到 PPT 的补充页文案 |
 | `LLM_ROBOT_MIGRATION_SPEAKER_SCRIPT_CN.md` | 10-15 分钟汇报演讲稿 |
