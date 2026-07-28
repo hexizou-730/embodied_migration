@@ -9,3 +9,4 @@ venv/
 MUJOCO_LOG.TXT
 results/*
 !results/.gitkeep
+docs/rendered_progress_doc/
