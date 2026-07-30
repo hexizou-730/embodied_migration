@@ -1,5 +1,19 @@
 # Harness Engineering：把仿真环境暴露给 LLM Agent
 
+## 当前主入口
+
+现有 episode-level、online 和 structured-probe harness 现在由 CEGIS 主循环统一调度：
+
+```bash
+python migrate.py --task pull_cube --source panda --target xarm6 --mode cegis
+```
+
+CEGIS 在 development seeds 上选择失败反例，把诊断转成违反的 embodiment
+constraints，只主动 probe 相关参数，再让 LLM 生成 guarded adapter。Development
+达标后才运行 held-out seeds，且 held-out 结果不会用于继续修复。
+
+详细方法见 `METHOD_CEGIS_ADAPTER_SYNTHESIS_CN.md`。
+
 ## 一句话定义
 
 这里的 Harness Engineering 不是让 LLM 直接操作 ManiSkill 的内部对象，而是把仿真环境封装成一组安全、可复现、可记录的工具接口：

@@ -15,12 +15,14 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Mapping, Sequence
 
 from .cases import PRIMARY_FULL_MIGRATION_CASE_ID, FullMigrationCase, get_full_migration_case
+from .counterexamples import counterexample_prompt
+from .embodiment_contracts import contract_prompt_from_case
 from .llm import gen_text
 from .profiles import get_robot_profile
-from .structured_probe import get_probe_spec
+from .structured_probe import build_probe_feedback, get_probe_spec
 from .tasks import get_task_spec
 
 
@@ -166,6 +168,8 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
         "- Do not import os, pathlib, subprocess, requests, urllib, socket, or shutil. Do not read environment variables.",
         "- Keep using real ManiSkill env.step(action) execution and real evaluate()/success signals.",
         "- Keep the low-level ManiSkill controller frozen; migrate only target-side adapter behavior.",
+        "- Generate guarded behavior: branch on measured reachability/contact/progress state instead of encoding one fixed seed trajectory.",
+        "- Every fallback branch must either make measurable progress or return an evidence-backed failure/infeasibility result.",
         "",
     ]
     if case.task_id == "pick_cube" and case.target_robot == "xarm6_robotiq":
@@ -347,6 +351,23 @@ def _structured_probe_feedback_lines(case: FullMigrationCase) -> List[str]:
     ]
 
 
+def _explicit_probe_feedback_lines(probe_feedback: Mapping[str, Any] | None) -> List[str]:
+    if not probe_feedback:
+        return []
+    feedback = str(probe_feedback.get("prompt_feedback") or "").strip()
+    if not feedback:
+        feedback = build_probe_feedback(probe_feedback)
+    return [
+        "",
+        "# Probe evidence selected by the current CEGIS cycle",
+        "This evidence belongs to the selected counterexample and takes precedence over older probe files.",
+        "```text",
+        feedback,
+        "```",
+        "",
+    ]
+
+
 def _task_design_lines(case: FullMigrationCase) -> List[str]:
     """Describe the generated adapter design space for the active task."""
 
@@ -385,6 +406,8 @@ def _build_retry_module_generation_prompt(
     attempts: Sequence[Dict[str, Any]],
     current_module: str,
     target_program: str,
+    counterexample: Mapping[str, Any] | None = None,
+    probe_feedback: Mapping[str, Any] | None = None,
 ) -> str:
     """Build a compact retry prompt after at least one generated module failed."""
 
@@ -414,6 +437,8 @@ def _build_retry_module_generation_prompt(
         f"target_control_mode: {case.target_control_mode}",
         f"episode_budget: {case.max_episode_steps}",
         "",
+        contract_prompt_from_case(case),
+        "",
         *_target_specific_generation_lines(case),
         "",
         "# Latest real target failure",
@@ -421,6 +446,8 @@ def _build_retry_module_generation_prompt(
         _json_dump(_result_digest(target_result)),
         "```",
         *_diagnosis_guidance_lines(case, target_result),
+        counterexample_prompt(counterexample),
+        *_explicit_probe_feedback_lines(probe_feedback),
         *_structured_probe_feedback_lines(case),
         "",
         "# Mandatory retry adaptation",
@@ -447,6 +474,8 @@ def build_module_generation_prompt(
     case: FullMigrationCase,
     target_result: Dict[str, Any],
     attempts: Sequence[Dict[str, Any]],
+    counterexample: Mapping[str, Any] | None = None,
+    probe_feedback: Mapping[str, Any] | None = None,
 ) -> str:
     """Prompt the LLM for a complete generated target adapter module."""
 
@@ -462,6 +491,8 @@ def build_module_generation_prompt(
             attempts=attempts,
             current_module=current_module,
             target_program=target_program,
+            counterexample=counterexample,
+            probe_feedback=probe_feedback,
         )
     source_adapter_context = _read_context(ADAPTER_CONTEXT_PATH, ADAPTER_CONTEXT_WINDOWS)
 
@@ -487,7 +518,10 @@ def build_module_generation_prompt(
         *_task_design_lines(case),
         "- You may import numpy, sapien, mani_skill motion-planning helpers, and maniskill_backend.skill_adapter symbols.",
         "",
+        contract_prompt_from_case(case),
+        "",
         *_target_specific_generation_lines(case),
+        *_explicit_probe_feedback_lines(probe_feedback),
         *_structured_probe_feedback_lines(case),
         "",
         "# Infeasibility policy",
@@ -502,7 +536,7 @@ def build_module_generation_prompt(
         f"target_robot: {case.target_robot}",
         f"source_control_mode: {case.source_control_mode}",
         f"target_control_mode: {case.target_control_mode}",
-        f"seed: {case.seed}",
+        f"seed: {target_result.get('seed', case.seed)}",
         f"episode_budget: {case.max_episode_steps}",
         "",
         "# Task Spec",
@@ -524,6 +558,7 @@ def build_module_generation_prompt(
         _json_dump(_result_digest(target_result)),
         "```",
         *_diagnosis_guidance_lines(case, target_result),
+        counterexample_prompt(counterexample),
     ]
     if attempts:
         retry_number = len(attempts) + 1
@@ -633,10 +668,15 @@ def run_module_generation_migration(
     test_timeout_s: int = 240,
     dry_run: bool = False,
     source_check: bool = True,
+    seed: int | None = None,
+    counterexample: Mapping[str, Any] | None = None,
+    probe_feedback: Mapping[str, Any] | None = None,
+    attach_analysis: bool = True,
 ) -> Dict[str, Any]:
     """Generate, test, and evaluate complete target adapter modules."""
 
     case = get_full_migration_case(case_id)
+    execution_seed = int(case.seed if seed is None else seed)
     rounds = max_attempts if max_attempts is not None else case.max_attempts
     source_result: Dict[str, Any] | None = None
     if source_check:
@@ -646,6 +686,7 @@ def run_module_generation_migration(
             sim_backend=sim_backend,
             render_backend=render_backend,
             timeout_s=trial_timeout_s,
+            seed=execution_seed,
         )
         if not bool(source_result.get("success", False)):
             return _base_result(
@@ -664,6 +705,7 @@ def run_module_generation_migration(
         sim_backend=sim_backend,
         render_backend=render_backend,
         timeout_s=trial_timeout_s,
+        seed=execution_seed,
     )
     initial_target_result = target_result
     attempts: List[Dict[str, Any]] = []
@@ -677,11 +719,21 @@ def run_module_generation_migration(
             success=True,
             message="target generated adapter already succeeded before regeneration",
         )
-        return _attach_analysis(case=case, result=result, dry_run=dry_run)
+        return (
+            _attach_analysis(case=case, result=result, dry_run=dry_run)
+            if attach_analysis
+            else _without_analysis(result)
+        )
 
     module_path = REPO_ROOT / case.target_adapter_path
     for round_idx in range(1, max(0, rounds) + 1):
-        prompt = build_module_generation_prompt(case=case, target_result=target_result, attempts=attempts)
+        prompt = build_module_generation_prompt(
+            case=case,
+            target_result=target_result,
+            attempts=attempts,
+            counterexample=counterexample,
+            probe_feedback=probe_feedback,
+        )
         current_module = module_path.read_text(encoding="utf-8")
         generated = gen_text(
             prompt=prompt,
@@ -732,6 +784,7 @@ def run_module_generation_migration(
                 sim_backend=sim_backend,
                 render_backend=render_backend,
                 timeout_s=trial_timeout_s,
+                seed=execution_seed,
             )
             attempt["target_result"] = target_result
             diagnostic_error = pick_cube_runtime_diagnostic_error(case, target_result)
@@ -761,7 +814,11 @@ def run_module_generation_migration(
         success=bool(target_result.get("success", False)),
         message="target success reached" if target_result.get("success") else "module generation budget exhausted",
     )
-    return _attach_analysis(case=case, result=result, dry_run=dry_run)
+    return (
+        _attach_analysis(case=case, result=result, dry_run=dry_run)
+        if attach_analysis
+        else _without_analysis(result)
+    )
 
 
 def write_module_generation_outputs(
@@ -905,6 +962,7 @@ def _run_source_trial(
     sim_backend: str,
     render_backend: str,
     timeout_s: int,
+    seed: int | None = None,
 ) -> Dict[str, Any]:
     return _run_real_runner_json(
         [
@@ -915,7 +973,7 @@ def _run_source_trial(
             "--method",
             "source-copy",
             "--seed",
-            str(case.seed),
+            str(case.seed if seed is None else seed),
             "--control-mode",
             case.source_control_mode,
             "--obs-mode",
@@ -938,6 +996,7 @@ def _run_target_program_trial(
     sim_backend: str,
     render_backend: str,
     timeout_s: int,
+    seed: int | None = None,
 ) -> Dict[str, Any]:
     return _run_real_runner_json(
         [
@@ -948,7 +1007,7 @@ def _run_target_program_trial(
             "--method",
             "target-module-generation",
             "--seed",
-            str(case.seed),
+            str(case.seed if seed is None else seed),
             "--control-mode",
             case.target_control_mode,
             "--obs-mode",
@@ -1133,6 +1192,33 @@ def _fallback_analysis(result: Dict[str, Any]) -> str:
     )
 
 
+def _without_analysis(result: Dict[str, Any]) -> Dict[str, Any]:
+    result = dict(result)
+    result["migration_analysis"] = ""
+    result["analysis_used_llm"] = False
+    result["analysis_llm_model"] = ""
+    result["analysis_llm_reason"] = "disabled for machine-facing CEGIS loop"
+    return result
+
+
+def _load_json_argument(value: str) -> Dict[str, Any]:
+    text = str(value or "").strip()
+    if not text:
+        return {}
+    if text.startswith("{"):
+        payload = json.loads(text)
+    else:
+        path = Path(text)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("counterexample JSON must contain an object")
+    if payload.get("selected"):
+        payload = payload["selected"]
+    if not isinstance(payload, dict):
+        raise ValueError("selected counterexample JSON must contain an object")
+    return payload
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run direct LLM target-adapter module generation.")
     parser.add_argument("--case", default=PRIMARY_FULL_MIGRATION_CASE_ID)
@@ -1142,15 +1228,33 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--render-backend", default="gpu")
     parser.add_argument("--trial-timeout-s", type=int, default=900)
     parser.add_argument("--test-timeout-s", type=int, default=240)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--counterexample-json",
+        default="",
+        help="Optional selected counterexample JSON string/path for guarded repair.",
+    )
+    parser.add_argument(
+        "--probe-feedback-json",
+        default="",
+        help="Optional structured probe result JSON string/path selected by CEGIS.",
+    )
     parser.add_argument("--jsonl", default="results/module_generation_trials.jsonl")
     parser.add_argument("--md", default="results/module_generation_trials.md")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-source-check", action="store_true")
+    parser.add_argument(
+        "--no-analysis",
+        action="store_true",
+        help="Skip the extra human-facing LLM migration analysis call.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
+    counterexample = _load_json_argument(args.counterexample_json)
+    probe_feedback = _load_json_argument(args.probe_feedback_json)
     result = run_module_generation_migration(
         case_id=args.case,
         max_attempts=args.max_attempts,
@@ -1161,6 +1265,10 @@ def main() -> None:
         test_timeout_s=args.test_timeout_s,
         dry_run=args.dry_run,
         source_check=not args.no_source_check,
+        seed=args.seed,
+        counterexample=counterexample,
+        probe_feedback=probe_feedback,
+        attach_analysis=not args.no_analysis,
     )
     write_module_generation_outputs(
         result,

@@ -88,12 +88,12 @@ class RealBackendTest(unittest.TestCase):
         self.assertEqual(case.target_adapter_path, "maniskill_backend/generated_adapters/case03_xarm6_pick_cube.py")
         self.assertIn("grasp_geometry", case.migration_layers)
 
-    def test_case01_remains_fetch_failure_case(self):
+    def test_case01_remains_fetch_registered_case(self):
         case = get_full_migration_case("case01_pull_cube_panda_to_fetch")
         self.assertEqual(case.target_robot, "fetch")
         self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case01_fetch_pull_cube")
 
-    def test_case02_remains_xarm6_pull_success_case(self):
+    def test_case02_remains_xarm6_pull_registered_case(self):
         case = get_full_migration_case("case02_pull_cube_panda_to_xarm6")
         self.assertEqual(case.task_id, "pull_cube")
         self.assertEqual(case.target_robot, "xarm6_robotiq")

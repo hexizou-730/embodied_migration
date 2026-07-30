@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, Mapping
 
+from maniskill_backend.counterexamples import REASON_CONSTRAINTS
+
 
 NUMERIC_FIELD_RE = re.compile(
     r"\b(?P<key>tcp_grasp_xy|tcp_grasp_z|cube_disp_xy|tcp_cube_xy|cube_goal_xy|tcp_stage_error_norm)"
@@ -283,6 +285,9 @@ def _diagnosis(
         "reason": reason,
         "repair_hint": repair_hint,
         "confidence": round(float(confidence), 3),
+        "violated_constraints": list(
+            REASON_CONSTRAINTS.get(reason, (f"unclassified:{layer}",))
+        ),
         "evidence": _compact_evidence(evidence),
     }
 

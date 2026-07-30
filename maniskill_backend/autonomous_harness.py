@@ -18,6 +18,7 @@ from statistics import mean
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from maniskill_backend.cases import FullMigrationCase, get_full_migration_case
+from maniskill_backend.embodiment_contracts import contract_from_case
 from maniskill_backend.generalization import build_generalization_report
 from maniskill_backend.structured_probe import get_probe_spec
 
@@ -610,6 +611,7 @@ def _machine_constraints(case: FullMigrationCase) -> Dict[str, Any]:
 
 
 def _low_level_interface(case: FullMigrationCase) -> Dict[str, Any]:
+    contract = contract_from_case(case)
     interface: Dict[str, Any] = {
         "simulator": "ManiSkill",
         "execution_boundary": "real_runner creates env, adapter calls env.step(action)",
@@ -640,13 +642,13 @@ def _low_level_interface(case: FullMigrationCase) -> Dict[str, Any]:
             "target_adapter module with build_robot(env, *, control_mode, robot_uid)",
             "experiment action plan JSON choosing allowed_tools",
         ],
+        "embodiment_contract": contract.to_dict(),
+        "known_action_layout": {
+            "control_mode": contract.control_mode,
+            "action_space_shape": f"({contract.action_dim},)",
+            "channels": [channel.__dict__ for channel in contract.action_channels],
+        },
     }
-    if case.target_robot == "xarm6_robotiq":
-        interface["known_action_layout"] = {
-            "control_mode": case.target_control_mode,
-            "action_space_shape": "(4,) for observed xarm6 pd_ee_delta_pos",
-            "action_semantics": "action[0:3]=normalized TCP xyz delta, action[3]=active gripper command",
-        }
     return interface
 
 

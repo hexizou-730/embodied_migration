@@ -7,7 +7,8 @@
 本项目研究：高层机器人程序不变时，LLM 能否为目标机器人生成新的 `adapter`，让任务在真实 ManiSkill 仿真中执行成功。
 
 ```text
-高层程序 -> target adapter -> real ManiSkill env.step(action) -> success / failure
+高层程序 -> target adapter -> development seeds -> counterexample/probe
+-> guarded repair -> held-out evaluation
 ```
 
 ## Adapter 是什么
@@ -49,7 +50,7 @@ controller = 底层怎么把 action 变成关节运动
 | Main positive task | `PullCube-v1` |
 | Grasp/contact task | `PickCube-v1` |
 | Secondary target | `fetch` |
-| 当前主要方法 | 直接生成 target adapter module |
+| 当前主要方法 | 反例驱动的 target adapter synthesis |
 
 ## 目录怎么读
 
@@ -61,7 +62,7 @@ controller = 底层怎么把 action 变成关节运动
 python migrate.py --task pull_cube --source panda --target xarm6_robotiq
 ```
 
-这是当前最小成功案例入口：
+这是当前 adapter 单次验证入口：
 
 ```text
 PullCube-v1 + Panda -> xArm6
@@ -73,21 +74,25 @@ PullCube-v1 + Panda -> xArm6
 python migrate.py --task PullCube-v1 --source panda --target xarm6 --dry-run
 ```
 
-如果要从零开始让 LLM/agent 自动迁移，用：
+如果要从零开始运行当前主方法，用：
 
 ```bash
 python migrate.py \
   --task pull_cube \
   --source panda \
   --target xarm6_robotiq \
-  --mode agent \
-  --max-cycles 5
+  --mode cegis
 ```
 
 这个命令会先恢复 neutral seed adapter，然后循环执行：
 
 ```text
-LLM 生成 adapter -> ManiSkill 仿真验证 -> 失败则 structured probe -> 下一轮 LLM 修复
+LLM 生成 adapter
+-> development seeds
+-> 失败反例和违反约束
+-> active probe
+-> guarded adapter 修复
+-> held-out seeds
 ```
 
 如果要展示“边做边看边改”的在线 harness，用：
@@ -139,6 +144,10 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 | `skill_adapter.py` | Panda/source 默认技能实现，也是目标 adapter 继承的基础 |
 | `generated_adapters/` | LLM 或人工生成的目标机器人 adapter |
 | `seed_adapters/` | 从零迁移前恢复用的 neutral seed adapter |
+| `embodiment_contracts.py` | action layout、机器人能力边界和冻结接口 |
+| `counterexamples.py` | 把失败 trial 转成可排序的物理反例 |
+| `active_probe.py` | 根据违反约束选择少量 probe 参数 |
+| `counterexample_loop.py` | development/held-out 分离的 CEGIS 主循环 |
 | `autonomous_harness.py` | 把仿真结果整理成 Agent observation / human report |
 | `online_harness.py` | 在线 observe-decide-act harness：边执行边读状态边选下一段动作 |
 | `structured_probe.py` | 定义 structured probe 的参数网格、打分和反馈格式 |
@@ -165,12 +174,12 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 
 | 文件 | 当前用途 |
 |---|---|
-| `case02_xarm6_pull_cube.py` | xArm6 PullCube 主成功 adapter |
+| `case02_xarm6_pull_cube.py` | xArm6 PullCube 当前 neutral seed 起点 |
 | `case02_xarm6_pull_cube_adaptive.py` | 多 seed 自适应 PullCube 实验 adapter |
-| `case03_xarm6_pick_cube.py` | xArm6 PickCube 抓取/放置 adapter |
-| `case01_fetch_pull_cube.py` | Fetch PullCube adapter |
+| `case03_xarm6_pick_cube.py` | xArm6 PickCube 当前 neutral seed 起点 |
+| `case01_fetch_pull_cube.py` | Fetch hand-written oracle 上界 |
 
-汇报时最应该展示的是 `case02_xarm6_pull_cube.py` 和 `case03_xarm6_pick_cube.py`。
+当前证据来源以 `docs/EVIDENCE_LEDGER_CN.md` 为准。
 
 ### 3.1 `maniskill_backend/seed_adapters/`
 
@@ -190,6 +199,8 @@ Agent observation -> LLM planner 选择工具 -> harness 执行 -> 新 observati
 | 文件 | 作用 |
 |---|---|
 | `autonomous_loop_runner.py` | 自动闭环主流程，被 `auto.py pull` 调用 |
+| `cegis_migration_runner.py` | 当前统一反例驱动迁移入口 |
+| `multiseed_eval.py` | 通用任务多 seed 评估入口 |
 | `autonomous_harness_runner.py` | 只生成 agent observation / human report，不执行完整闭环 |
 | `online_harness_runner.py` | 在线 harness 调试入口，会输出 online trace |
 | `pullcube_multiseed_eval.py` | PullCube 多 seed 成功率评估 |
@@ -227,6 +238,9 @@ agent_observation.json -> agent_plan.json -> selected simulator tool -> tool_res
 | 文件 | 作用 |
 |---|---|
 | `PROJECT_STRUCTURE_CN.md` | 当前项目结构说明 |
+| `METHOD_CEGIS_ADAPTER_SYNTHESIS_CN.md` | 当前方法和算法闭环 |
+| `EXPERIMENT_PROTOCOL_CN.md` | development/held-out、baseline 和指标 |
+| `EVIDENCE_LEDGER_CN.md` | 当前 Git 仓库可追溯的实验结论 |
 | `HARNESS_ENGINEERING_CN.md` | harness engineering 中文解释 |
 | `COLLABORATOR_ONBOARDING_CN.md` | 新同学上手文档、复现实验命令和下一阶段目标 |
 | `LITERATURE_REVIEW_CN.md` | 文献综述和论文定位 |

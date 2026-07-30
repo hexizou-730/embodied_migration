@@ -17,35 +17,72 @@ real `env.step(action)` execution on the target embodiment.
 | Main target robot | xarm6_robotiq |
 | Secondary diagnosed target | Fetch |
 | Active tasks | `PullCube-v1`, `PickCube-v1` |
-| LLM model used in current runs | DeepSeek V4-Pro |
-| Main method | direct target adapter module generation |
+| Configured LLM model | DeepSeek V4-Pro |
+| Main method | counterexample-guided target adapter synthesis |
 
-The project no longer focuses on simple PyBullet block-placement demos or
-patch-loop repair. The active research path is full target-adapter generation
-and real simulator verification.
+The active research path is full target-adapter generation, real simulator
+counterexamples, active physical probing, and held-out verification.
 
-## Current Results
+## Evidence Status
 
-| Case | Task | Source -> Target | Result | Main evidence |
+| Case | Task | Source -> Target | Current committed adapter | Tracked reproducible result |
 |---|---|---|---|---|
-| Case 02 | `PullCube-v1` | Panda -> xarm6_robotiq | Success on seed 0 | Target adapter reached `ret_val=True`; multi-seed robustness remains an active target |
-| Case 03 | `PickCube-v1` | Panda -> xarm6_robotiq | Success on seed 0 | Pick/place migration is now a positive case, but force-closure/contact stability remains the harder mechanism |
-| Case 01 | `PullCube-v1` | Panda -> Fetch | Success on seed 0 | Fetch required 9D action mapping plus mobile-base/contact-side adaptation |
+| Case 02 | `PullCube-v1` | Panda -> xarm6_robotiq | Neutral seed adapter | Not yet tracked in Git |
+| Case 03 | `PickCube-v1` | Panda -> xarm6_robotiq | Neutral seed adapter | Not yet tracked in Git |
+| Case 01 | `PullCube-v1` | Panda -> Fetch | Hand-written oracle | Oracle upper bound, not LLM success |
 
-The strongest current result is:
+Earlier remote runs reported seed-0 successes, but the current repository does
+not track the matching raw logs and generated adapter snapshots. They are
+therefore historical observations, not reproducible repository evidence.
+The machine-generated evidence ledger is:
 
-```text
-The registered Panda -> xarm6_robotiq and Panda -> Fetch cases can enter the
-same adapter-migration harness and be verified through real ManiSkill execution.
+[`docs/EVIDENCE_LEDGER_CN.md`](docs/EVIDENCE_LEDGER_CN.md)
+
+Regenerate it after adding experiment artifacts:
+
+```bash
+python scripts/build_evidence_ledger.py
 ```
 
-The main open problem is:
+## Counterexample-Guided Migration
+
+The main research path is now counterexample-guided embodiment adapter
+synthesis:
 
 ```text
-Seed-0 success is not the same as robust cross-seed generalization. Multi-seed
-PullCube and PickCube still expose contact geometry, reachability, and gripper
-envelope constraints that need better online/probe-guided repair.
+generate adapter
+-> validate on development seeds
+-> select a physical counterexample
+-> identify violated embodiment constraints
+-> actively probe relevant parameters
+-> generate guarded adapter repair
+-> evaluate once on held-out seeds
 ```
+
+Run the complete loop:
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6 \
+  --mode cegis
+```
+
+Inspect the plan without ManiSkill or an LLM call:
+
+```bash
+python migrate.py \
+  --task pull_cube \
+  --source panda \
+  --target xarm6 \
+  --mode cegis \
+  --dry-run
+```
+
+Method details: [`docs/METHOD_CEGIS_ADAPTER_SYNTHESIS_CN.md`](docs/METHOD_CEGIS_ADAPTER_SYNTHESIS_CN.md)
+
+Experiment protocol: [`docs/EXPERIMENT_PROTOCOL_CN.md`](docs/EXPERIMENT_PROTOCOL_CN.md)
 
 ## Why PullCube And PickCube Are Different
 
@@ -54,7 +91,7 @@ envelope constraints that need better online/probe-guided repair.
 | Required physical interaction | Contact drag/push | Real two-finger grasp |
 | Success requirement | Move cube to target region | Grasp, lift, and transport to 3D goal |
 | Main adapter change | Contact side, drag pulses, action scaling | Grasp height, close timing, gripper envelope, lift preservation |
-| Current outcome | Positive case for xarm6 and Fetch seed 0 | Positive xarm6 seed-0 case, still the harder generalization target |
+| Current evidence target | Robust contact migration across held-out seeds | Force-closure and grasp-preservation hard case |
 
 The key point is that these are not high-level program changes. For PickCube,
 the program remains:
@@ -491,11 +528,19 @@ For a Chinese overview of the repository layout, see
 | Purpose | File |
 |---|---|
 | Migration cases | `maniskill_backend/cases.py` |
+| Embodiment contracts | `maniskill_backend/embodiment_contracts.py` |
+| Counterexample extraction | `maniskill_backend/counterexamples.py` |
+| Active probe selection | `maniskill_backend/active_probe.py` |
+| CEGIS loop | `maniskill_backend/counterexample_loop.py` |
 | Task specs | `maniskill_backend/tasks.py` |
 | Shared skill adapters | `maniskill_backend/skill_adapter.py` |
 | Module generation runner | `maniskill_backend/module_generation_runner.py` |
 | PickCube probe | `scripts/xarm6_pick_grasp_probe.py` |
 | Generated xarm6 PickCube adapter | `maniskill_backend/generated_adapters/case03_xarm6_pick_cube.py` |
+| CEGIS method | `docs/METHOD_CEGIS_ADAPTER_SYNTHESIS_CN.md` |
+| Experiment protocol | `docs/EXPERIMENT_PROTOCOL_CN.md` |
+| Evidence ledger | `docs/EVIDENCE_LEDGER_CN.md` |
+| Workshop framing | `docs/WORKSHOP_FRAMING_CN.md` |
 | Current harness explanation | `docs/HARNESS_ENGINEERING_CN.md` |
 | Current project structure | `docs/PROJECT_STRUCTURE_CN.md` |
 | New collaborator onboarding | `docs/COLLABORATOR_ONBOARDING_CN.md` |
@@ -505,12 +550,11 @@ For a Chinese overview of the repository layout, see
 
 ## Research Framing
 
-This project supports the following workshop-style claim:
+The intended research claim is:
 
 ```text
-LLMs can migrate high-level robot programs across embodiments for contact-based
-manipulation when the target adapter exposes the right control/contact
-abstractions. Seed-0 successes show the feasibility of adapter migration, while
-multi-seed and grasp/contact cases motivate structured probing, online harness
-control, and constraint-aware repair.
+Fixed high-level robot programs can be migrated across embodiments by
+synthesizing only target-side adapters. Machine-readable embodiment contracts,
+simulation counterexamples, and active physical probes guide guarded adapter
+repair under frozen controller and simulator semantics.
 ```

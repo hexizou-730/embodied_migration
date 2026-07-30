@@ -25,13 +25,15 @@ LLM 主要生成的是 target-side adapter。adapter 负责把 `robot.pull(...)`
 
 ## 2. 当前已有成果
 
-目前已经注册并跑过的核心迁移 case：
+目前已经注册的核心迁移 case：
 
 | Case | 任务 | 源机器人 | 目标机器人 | 当前状态 |
 |---|---|---|---|---|
-| case01 | PullCube-v1 | Panda | Fetch | seed 0 已有成功验证，重点在 9D action 与移动底盘适配 |
-| case02 | PullCube-v1 | Panda | xarm6_robotiq | seed 0 已有成功验证，当前主正结果 |
-| case03 | PickCube-v1 | Panda | xarm6_robotiq | seed 0 已有成功验证，但仍是更难的 grasp/contact case |
+| case01 | PullCube-v1 | Panda | Fetch | 当前提交为 hand-written oracle；LLM 成功证据待补 |
+| case02 | PullCube-v1 | Panda | xarm6_robotiq | 当前提交为 neutral seed；主 CEGIS 实验 case |
+| case03 | PickCube-v1 | Panda | xarm6_robotiq | 当前提交为 neutral seed；grasp/contact hard case |
+
+远程历史运行曾报告 seed-0 成功，但对应原始日志和 adapter snapshot 未提交，因此不能作为当前仓库的可复现结论。以 `docs/EVIDENCE_LEDGER_CN.md` 为准。
 
 当前最重要的研究进展不是“某个 seed 成功”，而是已经形成了一个迁移闭环：
 
@@ -39,9 +41,11 @@ LLM 主要生成的是 target-side adapter。adapter 负责把 `robot.pull(...)`
 高层程序不变
 -> LLM 生成 target adapter
 -> ManiSkill env.step(action) 真实执行
--> 自动诊断失败层
--> structured probe / online harness
--> 下一轮修复
+-> development seeds 找出反例
+-> embodiment contract + 五层诊断
+-> active structured probe
+-> guarded adapter 修复
+-> held-out seeds 最终验证
 ```
 
 ## 3. 你第一天应该先看哪些文件
@@ -50,11 +54,13 @@ LLM 主要生成的是 target-side adapter。adapter 负责把 `robot.pull(...)`
 
 1. `README.md`：项目总览、主要命令和当前结果。
 2. `docs/PROJECT_STRUCTURE_CN.md`：目录结构，哪些文件重要。
-3. `docs/HARNESS_ENGINEERING_CN.md`：harness 是什么，Agent 怎么和仿真交互。
-4. `docs/LITERATURE_REVIEW_CN.md`：相关工作和论文定位。
-5. `maniskill_backend/case_programs/case01_pull_cube.py`：高层任务程序。
-6. `maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py`：一个目标 adapter 示例。
-7. `migrate.py`：统一入口。
+3. `docs/METHOD_CEGIS_ADAPTER_SYNTHESIS_CN.md`：当前统一方法。
+4. `docs/EXPERIMENT_PROTOCOL_CN.md`：seed 划分、baseline 和证据要求。
+5. `docs/EVIDENCE_LEDGER_CN.md`：哪些结论在仓库中真正可复现。
+6. `docs/HARNESS_ENGINEERING_CN.md`：harness 是什么，Agent 怎么和仿真交互。
+7. `maniskill_backend/case_programs/case01_pull_cube.py`：高层任务程序。
+8. `maniskill_backend/generated_adapters/case02_xarm6_pull_cube.py`：目标 adapter 起点。
+9. `migrate.py`：统一入口。
 
 ## 4. 环境准备
 
@@ -237,12 +243,12 @@ message
 
 ### 目标 B：多 seed 泛化
 
-当前 seed 0 成功已经足够作为正结果，但论文/项目继续推进需要知道泛化情况。
+单 seed 只能作为 smoke test。论文结论必须使用 development/held-out 分离的多 seed 结果。
 
 优先跑：
 
 ```bash
-python scripts/pullcube_multiseed_eval.py --seeds 0-9 --max-episode-steps 500
+python migrate.py --task pull_cube --source panda --target xarm6 --mode cegis
 ```
 
 要回答：
@@ -338,4 +344,4 @@ docs/ 下整理好的结论文档
 
 可以这样概括：
 
-> 这个项目不是单纯让 LLM 写一段机器人代码，而是研究 cross-embodiment robot code migration。高层任务程序不变，LLM 生成目标机器人的 adapter。我们用 ManiSkill 真实 `env.step(action)` 做验证，并把失败分解到 program / skill adapter / controller primitive / contact geometry / infeasibility 等层。现在已有 seed-0 成功案例，也已经搭建了 structured probe、agent loop 和 online harness，下一步重点是多 seed 泛化和更强的实时闭环修复。
+> 这个项目研究 cross-embodiment robot code migration。高层程序、底层 controller、simulator 和 success signal 固定，只生成目标 adapter。系统在 development seeds 上找物理反例，把失败映射为违反的 embodiment constraints，再主动选择 probe 并生成带状态 guard 的修复代码，最后只在 held-out seeds 上评估。Fetch oracle 与 LLM 结果严格分开，所有成功结论必须绑定 adapter SHA 和原始仿真日志。

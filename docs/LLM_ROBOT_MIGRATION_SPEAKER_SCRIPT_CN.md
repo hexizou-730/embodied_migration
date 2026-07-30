@@ -1,5 +1,7 @@
 # 诊断驱动的机器人代码迁移：组会演讲稿
 
+> 历史材料说明：本讲稿基于 2026-07-08 当时的远程观察。由于对应 adapter snapshot 和原始日志未提交，文中的成功描述不能作为当前仓库的可复现证据；请以 `EVIDENCE_LEDGER_CN.md` 为准。
+
 旧 PPT 已归档；当前以这份 Markdown 讲稿和 `docs/GROUP_MEETING_UPDATE_2026_07_08_CN.md` 为准。  
 建议时长：10-15 分钟
 

@@ -1,5 +1,7 @@
 # 组会进度速览 2026-07-08
 
+> 历史材料说明：本文件记录 2026-07-08 当时的远程观察。由于对应 adapter snapshot 和原始日志未提交，文中的成功描述不能作为当前仓库的可复现证据；请以 `EVIDENCE_LEDGER_CN.md` 为准。
+
 ## 一句话进展
 
 这两周项目从“手动让 LLM 改 adapter”推进到“把 ManiSkill 包装成 autonomous harness，让 Agent 根据仿真结果选择工具和修复路径”。

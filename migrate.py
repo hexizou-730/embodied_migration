@@ -289,6 +289,78 @@ def _run_online(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
     }
 
 
+def _run_cegis(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
+    case = find_full_migration_case(args.task, args.source, args.target)
+    command = [
+        sys.executable,
+        "scripts/cegis_migration_runner.py",
+        "--case",
+        case.case_id,
+        "--development-seeds",
+        args.development_seeds,
+        "--held-out-seeds",
+        args.held_out_seeds,
+        "--max-cycles",
+        str(args.max_cycles),
+        "--attempts-per-cycle",
+        str(args.attempts_per_cycle),
+        "--probe-budget",
+        str(args.probe_budget),
+        "--success-threshold",
+        str(args.success_threshold),
+        "--min-trials-for-accept",
+        str(args.min_trials_for_accept),
+        "--obs-mode",
+        args.obs_mode,
+        "--sim-backend",
+        args.sim_backend,
+        "--render-backend",
+        args.render_backend,
+        "--max-episode-steps",
+        str(args.max_episode_steps or case.max_episode_steps),
+        "--output-root",
+        str(run_dir),
+        "--run-name",
+        "cegis_loop",
+    ]
+    if args.keep_current_adapter:
+        command.append("--keep-current-adapter")
+    if args.no_source_check:
+        command.append("--no-source-check")
+    if args.dry_run:
+        command.append("--dry-run")
+    stdout_path = run_dir / "cegis_stdout.txt"
+    process = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    stdout_path.write_text(process.stdout or "", encoding="utf-8")
+    summary_path = run_dir / "cegis_loop" / "summary.json"
+    summary: dict[str, Any] = {}
+    if summary_path.exists():
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    success = None if args.dry_run else bool(summary.get("success"))
+    return {
+        "dry_run": bool(args.dry_run),
+        "success": success,
+        "returncode": int(process.returncode),
+        "stdout": str(stdout_path.relative_to(run_dir)),
+        "cegis_summary": str(summary_path.relative_to(run_dir)) if summary_path.exists() else "",
+        "status": summary.get("status"),
+        "message": (
+            "dry run: CEGIS migration loop planned"
+            if args.dry_run
+            else "CEGIS migration accepted on held-out seeds"
+            if summary.get("success")
+            else "CEGIS migration finished without held-out acceptance"
+        ),
+    }
+
+
 def _real_runner_command(case: Any, *, seed: int) -> str:
     parts = [
         "python",
@@ -353,7 +425,11 @@ def main() -> None:
     parser.add_argument("--task", default="pull_cube", help="Task id, e.g. pull_cube or PullCube-v1.")
     parser.add_argument("--source", default="panda", help="Source robot, e.g. panda.")
     parser.add_argument("--target", default="xarm6_robotiq", help="Target robot, e.g. xarm6_robotiq or xarm6.")
-    parser.add_argument("--mode", choices=("evaluate", "generate", "auto", "agent", "online"), default="evaluate")
+    parser.add_argument(
+        "--mode",
+        choices=("evaluate", "generate", "auto", "agent", "online", "cegis"),
+        default="evaluate",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seeds", default="0-9")
     parser.add_argument("--max-cycles", type=int, default=3)
@@ -362,6 +438,11 @@ def main() -> None:
     parser.add_argument("--online-planner", choices=("fallback", "llm"), default="fallback")
     parser.add_argument("--segment-steps", type=int, default=8)
     parser.add_argument("--max-online-steps", type=int, default=240)
+    parser.add_argument("--development-seeds", default="0-4")
+    parser.add_argument("--held-out-seeds", default="100-109")
+    parser.add_argument("--probe-budget", type=int, default=8)
+    parser.add_argument("--success-threshold", type=float, default=0.8)
+    parser.add_argument("--min-trials-for-accept", type=int, default=5)
     parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--sim-backend", default="auto")
     parser.add_argument("--render-backend", default="gpu")
@@ -386,7 +467,9 @@ def main() -> None:
     latest_path.parent.mkdir(parents=True, exist_ok=True)
     latest_path.write_text(str(run_dir), encoding="utf-8")
 
-    if args.mode == "agent":
+    if args.mode == "cegis":
+        result = _run_cegis(args, run_dir)
+    elif args.mode == "agent":
         result = _run_agent(args, run_dir)
     elif args.mode == "online":
         result = _run_online(args, run_dir)

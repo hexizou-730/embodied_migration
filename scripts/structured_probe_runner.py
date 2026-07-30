@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from maniskill_backend.active_probe import select_active_probe_plan, write_active_probe_plan
 from maniskill_backend.cases import get_full_migration_case
 from maniskill_backend.structured_probe import (
     build_probe_feedback,
@@ -131,8 +132,25 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
     diagnosis = _load_json(args.failure_diagnosis_json) if args.failure_diagnosis_json else {}
     spec = get_probe_spec(case, diagnosis=diagnosis)
     adaptive_source: Dict[str, Any] = _load_json(args.adaptive_from) if args.adaptive_from else {}
+    counterexample: Dict[str, Any] = (
+        _load_json(args.active_counterexample_json)
+        if args.active_counterexample_json
+        else {}
+    )
+    if counterexample.get("selected"):
+        counterexample = dict(counterexample["selected"])
     adaptive_plan = []
-    if adaptive_source:
+    active_plan: Dict[str, Any] = {}
+    if counterexample:
+        active_plan = select_active_probe_plan(
+            case,
+            spec,
+            counterexample,
+            previous_probe=adaptive_source,
+            budget=args.suggestion_budget,
+        )
+        adaptive_plan = list(active_plan.get("candidates") or [])
+    elif adaptive_source:
         adaptive_plan = suggest_next_probe_cases(
             spec,
             adaptive_source.get("all_probe_cases") or adaptive_source.get("results") or [],
@@ -148,6 +166,8 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
         if adaptive_source:
             payload["learning_guided_source"] = args.adaptive_from
             payload["learning_guided_mode"] = "suggest_only" if args.suggest_only else "dry_run_adaptive_plan"
+        if active_plan:
+            payload["active_probe_plan"] = active_plan
         payload["prompt_feedback"] = build_probe_feedback(payload, top_k=args.top_k)
     elif spec.probe_id == "pick_cube_xarm6_close_envelope":
         from scripts import xarm6_pick_grasp_probe
@@ -163,6 +183,8 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
         if adaptive_plan:
             payload["learning_guided_source"] = args.adaptive_from
             payload["learning_guided_probe_plan"] = adaptive_plan
+        if active_plan:
+            payload["active_probe_plan"] = active_plan
         payload["legacy_probe_wrote"] = task_payload.get("wrote", {})
         payload["controller_summary"] = task_payload.get("controller_summary", {})
         payload["initial"] = task_payload.get("initial", {})
@@ -180,6 +202,8 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
         if adaptive_plan:
             payload["learning_guided_source"] = args.adaptive_from
             payload["learning_guided_probe_plan"] = adaptive_plan
+        if active_plan:
+            payload["active_probe_plan"] = active_plan
         payload["legacy_probe_wrote"] = task_payload.get("wrote", {})
         payload["controller_summary"] = task_payload.get("controller_summary", {})
         payload["initial"] = task_payload.get("initial", {})
@@ -187,7 +211,13 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
         raise RuntimeError(f"No executable probe backend for {spec.probe_id!r}.")
 
     output_dir = Path(args.output_dir) / case.case_id
+    if active_plan:
+        active_plan_path = output_dir / f"{spec.probe_id}_active_plan.json"
+        write_active_probe_plan(active_plan_path, active_plan)
+        payload["active_probe_plan_path"] = str(active_plan_path)
     payload["wrote"] = write_probe_outputs(output_dir, payload)
+    if active_plan:
+        payload["wrote"]["active_plan"] = str(active_plan_path)
     return payload
 
 
@@ -204,6 +234,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--adaptive-from",
         default="",
         help="Optional previous structured probe JSON path/string used to generate a score-guided next probe plan.",
+    )
+    parser.add_argument(
+        "--active-counterexample-json",
+        default="",
+        help=(
+            "Optional counterexample JSON string/path. When provided, only "
+            "parameters connected to its violated constraint are actively probed."
+        ),
     )
     parser.add_argument(
         "--suggest-only",

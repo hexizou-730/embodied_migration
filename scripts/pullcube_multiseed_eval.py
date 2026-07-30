@@ -1,4 +1,4 @@
-"""Evaluate a PullCube target adapter across multiple random seeds.
+"""Evaluate a target adapter across multiple random seeds.
 
 This script does not call the LLM and does not regenerate code. It runs the
 current target adapter module in the real ManiSkill environment, then writes a
@@ -141,7 +141,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     with jsonl_path.open("w", encoding="utf-8") as f:
         f.write(json.dumps({"type": "metadata", **metadata}, ensure_ascii=False) + "\n")
         for seed in seeds:
-            print(f"[pullcube-multiseed] seed={seed}", flush=True)
+            print(f"[multiseed] task={args.task} seed={seed}", flush=True)
             result = run_real_code_trial(
                 task_id=args.task,
                 robot_uid=args.robot,
@@ -214,7 +214,7 @@ def build_summary(
 
 def summary_to_markdown(summary: Dict[str, Any]) -> str:
     lines = [
-        "# PullCube Multi-Seed Evaluation",
+        f"# {summary.get('task_id')} Multi-Seed Evaluation",
         "",
         "This evaluation runs the current target adapter directly in ManiSkill. It does not call the LLM.",
         "",
