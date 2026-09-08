@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, Mapping, Tuple
 
+import numpy as np
+
 
 @dataclass(frozen=True)
 class ActionChannel:
@@ -264,3 +266,52 @@ def contract_prompt_from_case(case: Any) -> str:
     else:
         lines.append("- No declared interface differences; runtime geometry still requires validation.")
     return "\n".join(lines)
+
+
+def observe_runtime_contract(env: Any, contract: EmbodimentContract) -> Dict[str, Any]:
+    """Measure the execution interface exposed by a live ManiSkill environment."""
+
+    space = getattr(env, "action_space", None)
+    shape = getattr(space, "shape", None)
+    validation = contract.validate_action_shape(shape)
+    low = getattr(space, "low", None)
+    high = getattr(space, "high", None)
+    low_values = np.asarray(low).reshape(-1).tolist() if low is not None else []
+    high_values = np.asarray(high).reshape(-1).tolist() if high is not None else []
+
+    unwrapped = getattr(env, "unwrapped", env)
+    agent = getattr(unwrapped, "agent", None)
+    controller = getattr(agent, "controller", None)
+    subcontrollers = getattr(controller, "controllers", None)
+    controller_channels = (
+        sorted(str(name) for name in subcontrollers)
+        if isinstance(subcontrollers, Mapping)
+        else []
+    )
+    controller_text = repr(controller) if controller is not None else ""
+    return {
+        "schema": "runtime_embodiment_contract.v1",
+        "robot_uid": contract.robot_uid,
+        "control_mode": contract.control_mode,
+        "declared_action_dim": contract.action_dim,
+        "observed_action_shape": list(shape) if shape is not None else None,
+        "observed_action_dtype": str(getattr(space, "dtype", "unknown")),
+        "observed_action_low": low_values,
+        "observed_action_high": high_values,
+        "bounds_finite": bool(
+            low_values
+            and high_values
+            and np.isfinite(np.asarray(low_values, dtype=float)).all()
+            and np.isfinite(np.asarray(high_values, dtype=float)).all()
+        ),
+        "controller_type": type(controller).__name__ if controller is not None else "unknown",
+        "controller_channels": controller_channels,
+        "controller_summary": controller_text[:1200],
+        "declared_channels": [asdict(channel) for channel in contract.action_channels],
+        "validation": validation,
+        "valid": bool(
+            validation["valid"]
+            and len(low_values) == contract.action_dim
+            and len(high_values) == contract.action_dim
+        ),
+    }

@@ -365,6 +365,89 @@ class ManiSkillPullCubeRobot(ManiSkillDeltaEERobot):
             return "pull diagnostics unavailable"
 
 
+class ManiSkillPushCubeRobot(ManiSkillPullCubeRobot):
+    """PushCube-v1 wrapper with contact geometry derived from cube-to-goal direction."""
+
+    def push(
+        self,
+        obj: SkillTarget,
+        target: SkillTarget,
+        *,
+        contact_offset: Optional[float] = None,
+        contact_z_offset: Optional[float] = None,
+        push_extra: float = 0.02,
+        stages: int = 4,
+    ) -> bool:
+        if obj.name != "cube":
+            return self._fail("push", {"obj": obj.name, "target": target.name}, "PushCube adapter only supports cube.")
+        if target.name not in {"goal", "goal_region"}:
+            return self._fail("push", {"obj": obj.name, "target": target.name}, "PushCube target must be goal.")
+
+        offset = self.contact_x_offset_m if contact_offset is None else float(contact_offset)
+        z_offset = self.contact_z_offset_m if contact_z_offset is None else float(contact_z_offset)
+        offset = float(np.clip(offset, 0.03, 0.14))
+        z_offset = float(np.clip(z_offset, 0.005, 0.06))
+        stages = int(np.clip(stages, 1, 8))
+
+        cube_pos = self._actor_pos("cube")
+        goal_pos = self._region_pos(target.name)
+        goal_delta = goal_pos[:2] - cube_pos[:2]
+        goal_distance = float(np.linalg.norm(goal_delta))
+        if goal_distance < 1e-6:
+            return self._log("push", {"obj": obj.name, "target": target.name}, True, True, "")
+        direction = goal_delta / goal_distance
+        contact = cube_pos + np.array(
+            [-direction[0] * offset, -direction[1] * offset, z_offset],
+            dtype=np.float32,
+        )
+        pre_contact = contact + np.array([0.0, 0.0, 0.08], dtype=np.float32)
+        push_end = np.array(
+            [
+                goal_pos[0] + direction[0] * float(push_extra),
+                goal_pos[1] + direction[1] * float(push_extra),
+                contact[2],
+            ],
+            dtype=np.float32,
+        )
+
+        self._move_towards(pre_contact, gripper=self.gripper_close, steps=self.move_steps)
+        self._move_towards(contact, gripper=self.gripper_close, steps=self.move_steps)
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.contact_steps)
+        for stage in range(1, stages + 1):
+            alpha = stage / stages
+            waypoint = contact * (1.0 - alpha) + push_end * alpha
+            self._move_towards(waypoint, gripper=self.gripper_close, steps=max(1, self.drag_steps // stages))
+            if self._push_cube_success():
+                return self._log(
+                    "push",
+                    {
+                        "obj": obj.name,
+                        "target": target.name,
+                        "contact_offset": round(offset, 4),
+                        "contact_z_offset": round(z_offset, 4),
+                        "stages": stages,
+                    },
+                    True,
+                    True,
+                    "",
+                )
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.settle_steps)
+        ok = self._push_cube_success()
+        return self._log(
+            "push",
+            {"obj": obj.name, "target": target.name, "contact_offset": round(offset, 4), "stages": stages},
+            ok,
+            ok,
+            "" if ok else f"cube was not pushed to target; {self._pull_diagnostics(goal_pos)}",
+        )
+
+    def pull(self, obj: SkillTarget, target: SkillTarget, **kwargs: Any) -> bool:
+        return self._fail("pull", {"obj": obj.name, "target": target.name}, "PushCube-v1 uses robot.push(cube, goal).")
+
+    def _push_cube_success(self) -> bool:
+        return self._pull_cube_success()
+
+
 class ManiSkillPickCubeRobot(ManiSkillDeltaEERobot):
     """PickCube-v1 wrapper using real grasp, lift, and transport actions."""
 
@@ -512,6 +595,33 @@ class ManiSkillPickCubeRobot(ManiSkillDeltaEERobot):
             )
         except Exception:
             return "pick diagnostics unavailable"
+
+
+class ManiSkillFetchPickCubeRobot(ManiSkillPickCubeRobot):
+    """PickCube adapter with only Fetch's observed 9D action layout mapped.
+
+    This is an interface adapter for direct runner compatibility, not a
+    successful migration policy: base channels remain zero unless a generated
+    target adapter explicitly implements guarded base-arm coordination.
+    """
+
+    def _validate_action_space(self) -> None:
+        space = getattr(self.env, "action_space", None)
+        shape = getattr(space, "shape", None)
+        if not shape or shape[-1] != 9:
+            raise RuntimeError(f"Fetch PickCube adapter expects observed 9D action space, got {shape!r}.")
+
+    def _make_action(self, delta_xyz: np.ndarray, *, gripper: float) -> Any:
+        space = self.env.action_space
+        action = np.zeros(space.shape, dtype=getattr(space, "dtype", np.float32))
+        flat = action.reshape(-1)
+        flat[0:3] = np.asarray(delta_xyz, dtype=np.float32).reshape(-1)[:3]
+        flat[3] = float(gripper)
+        low = getattr(space, "low", None)
+        high = getattr(space, "high", None)
+        if low is not None and high is not None:
+            action = np.clip(action, low, high)
+        return action
 
 
 def _to_numpy(value: Any) -> np.ndarray:

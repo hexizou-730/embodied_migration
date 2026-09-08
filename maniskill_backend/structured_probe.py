@@ -140,6 +140,150 @@ def get_probe_spec(case: FullMigrationCase, *, diagnosis: Optional[Mapping[str, 
             ),
         )
 
+    if case.case_id == "case01_pull_cube_panda_to_fetch":
+        description = (
+            "Fetch PullCube base-arm reachability and contact sweep. Varies a "
+            "bounded base pulse, far-side contact geometry, and drag strength "
+            "while measuring whether base motion improves TCP reachability and "
+            "whether arm contact moves the cube toward the goal."
+        )
+        if reason:
+            description += f" Triggered by diagnosis reason: {reason}."
+        return ProbeSpec(
+            probe_id="pull_cube_fetch_base_contact",
+            case_id=case.case_id,
+            task_id=case.task_id,
+            robot_uid=case.target_robot,
+            description=description,
+            parameter_grid={
+                "base_speed": (-0.30, 0.15, 0.30),
+                "base_steps": (8, 20),
+                "contact_x_offset": (0.015, 0.035),
+                "contact_z_offset": (0.006, 0.010),
+                "drag_strength": (0.45, 0.65),
+                "down_bias": (-0.04,),
+                "stages": (4,),
+            },
+            primary_metrics=(
+                "task_success",
+                "base_reach_improvement",
+                "tcp_cube_xy_after_base",
+                "tcp_contact_xy",
+                "tcp_contact_z",
+                "cube_goal_xy",
+                "cube_goal_improvement",
+                "cube_delta_x",
+            ),
+            success_keys=("task_success",),
+            score_key="score",
+            output_slug="pull_cube_fetch_base_contact",
+            no_success_guidance=(
+                "No bounded Fetch probe solved PullCube. First inspect "
+                "base_reach_improvement: if it is non-positive, repair the base "
+                "branch or declare that branch infeasible; if base reach improves "
+                "but contact errors remain large, repair arm contact geometry; if "
+                "contact is accurate but cube progress is small, repair drag control."
+            ),
+            success_guidance=(
+                "At least one bounded Fetch probe solved PullCube. Use the "
+                "successful low-cost parameters as measured evidence for a guarded "
+                "base-then-arm adapter; do not copy the probe implementation itself."
+            ),
+        )
+
+    if case.case_id == "case04_pick_cube_panda_to_fetch":
+        description = (
+            "Fetch PickCube base-reachability and close-envelope sweep. Varies "
+            "a bounded base pulse, grasp height, close duration/command, and "
+            "settle duration while measuring reach improvement and real grasp preservation."
+        )
+        if reason:
+            description += f" Triggered by diagnosis reason: {reason}."
+        return ProbeSpec(
+            probe_id="pick_cube_fetch_base_close_envelope",
+            case_id=case.case_id,
+            task_id=case.task_id,
+            robot_uid=case.target_robot,
+            description=description,
+            parameter_grid={
+                "base_speed": (-0.30, 0.15, 0.30),
+                "base_steps": (8, 20),
+                "grasp_z_offset": (0.004, 0.012, 0.020),
+                "close_steps": (12, 24),
+                "close_command": (-0.6, -1.0),
+                "settle_steps": (8,),
+            },
+            primary_metrics=(
+                "base_reach_improvement",
+                "tcp_cube_xy_after_base",
+                "is_grasping_after_close",
+                "is_grasping_after_lift",
+                "cube_disp_xy",
+                "tcp_grasp_xy",
+                "tcp_grasp_z",
+                "cube_lift_delta_z",
+            ),
+            success_keys=("is_grasping_after_lift", "is_grasping_after_close"),
+            score_key="score",
+            output_slug="pick_cube_fetch_base_close_envelope",
+            no_success_guidance=(
+                "No Fetch probe formed a grasp. Separate the diagnosis by stage: "
+                "non-positive base reach improvement requires a different bounded "
+                "base branch; large TCP residuals require approach repair; accurate "
+                "alignment without grasp requires close-envelope repair."
+            ),
+            success_guidance=(
+                "At least one Fetch probe formed and preserved a grasp. Use its "
+                "measured base/reach and close envelope to synthesize guarded "
+                "base-then-arm behavior, then validate full placement separately."
+            ),
+        )
+
+    if case.case_id == "case05_push_cube_panda_to_fetch":
+        description = (
+            "Fetch PushCube base-arm reachability and rear-side contact sweep. "
+            "Varies a bounded base pulse, contact geometry, push strength, and "
+            "down-bias while measuring reachability and cube progress toward the goal."
+        )
+        if reason:
+            description += f" Triggered by diagnosis reason: {reason}."
+        return ProbeSpec(
+            probe_id="push_cube_fetch_base_contact",
+            case_id=case.case_id,
+            task_id=case.task_id,
+            robot_uid=case.target_robot,
+            description=description,
+            parameter_grid={
+                "base_speed": (-0.30, 0.15, 0.30),
+                "base_steps": (8, 20),
+                "contact_x_offset": (0.015, 0.035),
+                "contact_z_offset": (0.006, 0.010),
+                "drag_strength": (0.45, 0.65),
+                "down_bias": (-0.04,),
+                "stages": (4,),
+            },
+            primary_metrics=(
+                "task_success",
+                "base_reach_improvement",
+                "tcp_cube_xy_after_base",
+                "tcp_contact_xy",
+                "tcp_contact_z",
+                "cube_goal_xy",
+                "cube_goal_improvement",
+                "cube_delta_along_goal",
+            ),
+            success_keys=("task_success",),
+            score_key="score",
+            output_slug="push_cube_fetch_base_contact",
+            no_success_guidance=(
+                "No bounded Fetch probe solved PushCube. Separate base reachability, "
+                "rear-side contact accuracy, and push progress; do not only increase steps."
+            ),
+            success_guidance=(
+                "At least one bounded Fetch probe solved PushCube. Use its measured "
+                "low-cost parameters to synthesize a guarded adapter, then validate held-out seeds."
+            ),
+        )
     raise KeyError(f"No structured probe is registered for case {case.case_id!r}.")
 
 
@@ -155,6 +299,50 @@ def probe_grid(spec: ProbeSpec, *, max_cases: int = 0) -> List[ProbeCase]:
         row["case_index"] = index
         rows.append(row)
     return rows
+
+
+def space_filling_probe_cases(spec: ProbeSpec, *, budget: int) -> List[ProbeCase]:
+    """Select a deterministic, approximately uniform subset of the full grid.
+
+    Taking the first ``budget`` Cartesian rows heavily biases early parameters.
+    This selector spreads a fixed probe budget over the full ordered grid, which
+    makes fixed-grid baselines reproducible and gives each method the same number
+    of simulator calls.
+    """
+
+    if budget <= 0:
+        return probe_grid(spec)
+    full = probe_grid(spec)
+    if len(full) <= budget:
+        return full
+    if budget == 1:
+        selected_indices = [len(full) // 2]
+    else:
+        last = len(full) - 1
+        selected_indices = [round(index * last / (budget - 1)) for index in range(budget)]
+    selected: List[ProbeCase] = []
+    for rank, index in enumerate(dict.fromkeys(selected_indices), start=1):
+        row = dict(full[index])
+        row["selection_rank"] = rank
+        row["suggestion_reason"] = "deterministic_space_filling_fixed_grid"
+        selected.append(row)
+    return selected
+
+
+def fixed_grid_probe_batch(
+    spec: ProbeSpec,
+    *,
+    total_budget: int,
+    offset: int,
+    batch_size: int,
+) -> List[ProbeCase]:
+    """Return a non-overlapping slice of one frozen fixed-grid design."""
+
+    if total_budget <= 0 or batch_size <= 0:
+        return []
+    design = space_filling_probe_cases(spec, budget=total_budget)
+    start = max(0, int(offset))
+    return design[start : start + int(batch_size)]
 
 
 def is_successful_probe_case(case: Mapping[str, Any], spec: ProbeSpec) -> bool:

@@ -108,6 +108,14 @@ def _module_generation_command(args: argparse.Namespace, case: FullMigrationCase
         case.case_id,
         "--max-attempts",
         str(args.attempts_per_cycle),
+        "--seed",
+        str(args.seed),
+        "--max-episode-steps",
+        str(args.max_episode_steps or case.max_episode_steps),
+        "--obs-mode",
+        args.obs_mode,
+        "--force-regeneration",
+        "--no-analysis",
         "--sim-backend",
         args.sim_backend,
         "--render-backend",
@@ -218,6 +226,11 @@ def run_agent_migration(args: argparse.Namespace) -> Dict[str, Any]:
             cycles.append(cycle_record)
             status = "success"
             break
+        if latest_result.get("source_result") and not latest_result["source_result"].get("success"):
+            cycle_record["status"] = "source_baseline_failed"
+            cycles.append(cycle_record)
+            status = "source_baseline_failed"
+            break
 
         if cycle < args.max_cycles and _has_structured_probe(case):
             probe_rc = _run_command(
@@ -293,6 +306,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-cycles", type=int, default=5)
     parser.add_argument("--attempts-per-cycle", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--sim-backend", default="auto")
     parser.add_argument("--render-backend", default="gpu")
     parser.add_argument("--max-episode-steps", type=int, default=0)

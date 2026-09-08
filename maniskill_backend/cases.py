@@ -28,6 +28,9 @@ class FullMigrationCase:
     required_evidence: Tuple[str, ...]
     notes: str = ""
     seed_adapter_path: str = ""
+    support_status: str = "unknown"
+    support_source_url: str = ""
+    benchmark_enabled: bool = True
 
 
 CASE01_PULL_CUBE = FullMigrationCase(
@@ -44,7 +47,7 @@ CASE01_PULL_CUBE = FullMigrationCase(
     target_adapter_path="maniskill_backend/generated_adapters/case01_fetch_pull_cube.py",
     seed=0,
     max_attempts=3,
-    max_episode_steps=100,
+    max_episode_steps=500,
     migration_layers=(
         "program",
         "skill_adapter",
@@ -62,6 +65,11 @@ CASE01_PULL_CUBE = FullMigrationCase(
         "task supported by both active embodiments."
     ),
     seed_adapter_path="maniskill_backend/seed_adapters/case01_fetch_pull_cube.py",
+    support_status="official_supported",
+    support_source_url=(
+        "https://maniskill.readthedocs.io/en/latest/api/mani_skill/envs/tasks/"
+        "tabletop/pull_cube/index.html"
+    ),
 )
 
 CASE02_PULL_CUBE_XARM6 = FullMigrationCase(
@@ -97,6 +105,11 @@ CASE02_PULL_CUBE_XARM6 = FullMigrationCase(
         "migration without Fetch-style mobile-base reachability failures."
     ),
     seed_adapter_path="maniskill_backend/seed_adapters/case02_xarm6_pull_cube.py",
+    support_status="stress_test_override",
+    support_source_url=(
+        "https://maniskill.readthedocs.io/en/latest/api/mani_skill/envs/tasks/"
+        "tabletop/pull_cube/index.html"
+    ),
 )
 
 CASE03_PICK_CUBE_XARM6 = FullMigrationCase(
@@ -132,12 +145,129 @@ CASE03_PICK_CUBE_XARM6 = FullMigrationCase(
         "to a 3D goal while the low-level controller remains frozen."
     ),
     seed_adapter_path="maniskill_backend/seed_adapters/case03_xarm6_pick_cube.py",
+    support_status="official_supported",
+    support_source_url=(
+        "https://maniskill.readthedocs.io/en/latest/_modules/mani_skill/envs/"
+        "tasks/tabletop/pick_cube.html"
+    ),
+)
+
+CASE04_PICK_CUBE_FETCH = FullMigrationCase(
+    case_id="case04_pick_cube_panda_to_fetch",
+    case_number=4,
+    title="PickCube Panda to Fetch",
+    task_id="pick_cube",
+    source_robot="panda",
+    target_robot="fetch",
+    source_control_mode="pd_ee_delta_pos",
+    target_control_mode="pd_ee_delta_pos",
+    target_program_path="maniskill_backend/case_programs/case03_pick_cube.py",
+    target_adapter_module="maniskill_backend.generated_adapters.case04_fetch_pick_cube",
+    target_adapter_path="maniskill_backend/generated_adapters/case04_fetch_pick_cube.py",
+    seed=0,
+    max_attempts=3,
+    max_episode_steps=500,
+    migration_layers=(
+        "program",
+        "skill_adapter",
+        "controller_primitive",
+        "grasp_geometry",
+        "base_arm_coordination",
+    ),
+    required_evidence=(
+        "Panda source task stack succeeds in real ManiSkill simulation.",
+        "Fetch target execution uses the observed 9D action layout and real grasp validation.",
+        "Base reachability and gripper close-envelope evidence are measured independently.",
+        "Final success or failure is evaluated on held-out seeds with the official success state.",
+    ),
+    notes=(
+        "Officially supported ManiSkill PickCube target that adds mobile-base/arm "
+        "coordination to the grasp-migration benchmark."
+    ),
+    seed_adapter_path="maniskill_backend/seed_adapters/case04_fetch_pick_cube.py",
+    support_status="official_supported",
+    support_source_url=(
+        "https://maniskill.readthedocs.io/en/latest/_modules/mani_skill/envs/"
+        "tasks/tabletop/pick_cube.html"
+    ),
+)
+
+CASE05_PUSH_CUBE_FETCH = FullMigrationCase(
+    case_id="case05_push_cube_panda_to_fetch",
+    case_number=5,
+    title="PushCube Panda to Fetch",
+    task_id="push_cube",
+    source_robot="panda",
+    target_robot="fetch",
+    source_control_mode="pd_ee_delta_pos",
+    target_control_mode="pd_ee_delta_pos",
+    target_program_path="maniskill_backend/case_programs/case05_push_cube.py",
+    target_adapter_module="maniskill_backend.generated_adapters.case05_fetch_push_cube",
+    target_adapter_path="maniskill_backend/generated_adapters/case05_fetch_push_cube.py",
+    seed=0,
+    max_attempts=3,
+    max_episode_steps=500,
+    migration_layers=(
+        "program",
+        "skill_adapter",
+        "controller_primitive",
+        "contact_primitive",
+        "base_arm_coordination",
+    ),
+    required_evidence=(
+        "Panda source task stack succeeds in real ManiSkill simulation.",
+        "Fetch target execution uses the observed 9D action layout.",
+        "Rear-side reachability and push-contact evidence are measured independently.",
+        "Final success or failure is evaluated on held-out seeds with the official success state.",
+    ),
+    notes=(
+        "Official Panda/Fetch contact task used to test whether learned contact-side "
+        "selection generalizes from pulling to pushing without changing the high-level program."
+    ),
+    seed_adapter_path="maniskill_backend/seed_adapters/case05_fetch_push_cube.py",
+    support_status="official_supported",
+    support_source_url=(
+        "https://maniskill.readthedocs.io/en/latest/api/mani_skill/envs/tasks/"
+        "tabletop/push_cube/index.html"
+    ),
+)
+
+CASE06_STACK_PYRAMID_FETCH = FullMigrationCase(
+    case_id="case06_stack_pyramid_panda_to_fetch",
+    case_number=6,
+    title="StackPyramid Panda to Fetch",
+    task_id="stack_pyramid",
+    source_robot="panda",
+    target_robot="fetch",
+    source_control_mode="pd_ee_delta_pos",
+    target_control_mode="pd_ee_delta_pos",
+    target_program_path="maniskill_backend/case_programs/case06_stack_pyramid.py",
+    target_adapter_module="maniskill_backend.generated_adapters.case06_fetch_stack_pyramid",
+    target_adapter_path="maniskill_backend/generated_adapters/case06_fetch_stack_pyramid.py",
+    seed_adapter_path="maniskill_backend/seed_adapters/case06_fetch_stack_pyramid.py",
+    seed=0,
+    max_attempts=3,
+    max_episode_steps=800,
+    migration_layers=("skill_adapter", "contact_geometry", "infeasibility"),
+    required_evidence=(
+        "Panda completes the frozen multi-object program before target generation.",
+        "Log base placement, top transport, release and stability stages with measured object states.",
+        "Final success is checked by the runner against official StackPyramid evaluate().",
+        "Neutral seed/source scaffold is not counted as an LLM-generated solution.",
+    ),
+    notes="Exploratory integration, not a measured success. No structured probe or online LLM policy yet. The 800-step source/target budget is an explicit override of the official default 250.",
+    support_status="official_supported",
+    support_source_url="https://maniskill.readthedocs.io/en/latest/_modules/mani_skill/envs/tasks/tabletop/stack_pyramid.html",
+    benchmark_enabled=False,
 )
 
 FULL_MIGRATION_CASES: Dict[str, FullMigrationCase] = {
     CASE01_PULL_CUBE.case_id: CASE01_PULL_CUBE,
     CASE02_PULL_CUBE_XARM6.case_id: CASE02_PULL_CUBE_XARM6,
     CASE03_PICK_CUBE_XARM6.case_id: CASE03_PICK_CUBE_XARM6,
+    CASE04_PICK_CUBE_FETCH.case_id: CASE04_PICK_CUBE_FETCH,
+    CASE05_PUSH_CUBE_FETCH.case_id: CASE05_PUSH_CUBE_FETCH,
+    CASE06_STACK_PYRAMID_FETCH.case_id: CASE06_STACK_PYRAMID_FETCH,
 }
 
 PRIMARY_FULL_MIGRATION_CASE_ID = CASE03_PICK_CUBE_XARM6.case_id
@@ -182,12 +312,19 @@ def find_full_migration_case(task_id: str, source_robot: str, target_robot: str)
 def _normalize_task_id(value: str) -> str:
     text = str(value or "").strip().lower().replace("-", "_")
     aliases = {
+        "stack": "stack_pyramid",
+        "stackpyramid": "stack_pyramid",
+        "stackpyramid_v1": "stack_pyramid",
+        "stack_pyramid_v1": "stack_pyramid",
         "pullcube": "pull_cube",
         "pullcube_v1": "pull_cube",
         "pull_cube_v1": "pull_cube",
         "pickcube": "pick_cube",
         "pickcube_v1": "pick_cube",
         "pick_cube_v1": "pick_cube",
+        "pushcube": "push_cube",
+        "pushcube_v1": "push_cube",
+        "push_cube_v1": "push_cube",
     }
     return aliases.get(text, text)
 

@@ -1,6 +1,9 @@
 # Reproducible Experiment Evidence
 
 Accepted CEGIS runs are copied to `evidence/runs/<run_name>/`.
+Frozen baseline, ablation, Ours, and Oracle runs from `paper.py` are copied to
+`evidence/paper_runs/<run_id>/`, including unsuccessful runs needed for paper
+tables.
 
 Each bundle contains:
 

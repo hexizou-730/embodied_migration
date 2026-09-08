@@ -30,8 +30,10 @@ if str(REPO_ROOT) not in sys.path:
 
 from maniskill_backend.active_probe import select_active_probe_plan, write_active_probe_plan
 from maniskill_backend.cases import get_full_migration_case
+from maniskill_backend.tasks import get_task_spec
 from maniskill_backend.structured_probe import (
     build_probe_feedback,
+    fixed_grid_probe_batch,
     get_probe_spec,
     probe_grid,
     suggest_next_probe_cases,
@@ -56,6 +58,41 @@ def _load_json(text_or_path: str) -> Dict[str, Any]:
     return json.loads(stripped)
 
 
+def _summarize_measured_batch(
+    spec: Any,
+    task_payload: Mapping[str, Any],
+    *,
+    adaptive_source: Mapping[str, Any],
+    diagnosis: Mapping[str, Any],
+    seed: int,
+    top_k: int,
+) -> Dict[str, Any]:
+    """Merge prior probe evidence while counting only the new batch."""
+
+    previous_rows = [
+        dict(item)
+        for item in (
+            adaptive_source.get("all_probe_cases")
+            or adaptive_source.get("results")
+            or []
+        )
+    ]
+    new_rows = [dict(item) for item in (task_payload.get("results") or [])]
+    for item in new_rows:
+        item["probe_seed"] = int(seed)
+    payload = summarize_probe_results(
+        spec,
+        previous_rows + new_rows,
+        diagnosis=diagnosis,
+        top_k=top_k,
+        dry_run=False,
+    )
+    payload["num_previous_cases"] = len(previous_rows)
+    payload["num_new_cases"] = len(new_rows)
+    payload["new_probe_cases"] = new_rows
+    return payload
+
+
 def _pick_cube_xarm6_args(args: argparse.Namespace, spec: Any, *, probe_plan: Optional[Any] = None) -> Namespace:
     grid = spec.parameter_grid
     return Namespace(
@@ -70,6 +107,51 @@ def _pick_cube_xarm6_args(args: argparse.Namespace, spec: Any, *, probe_plan: Op
         close_steps=args.close_steps or _join_grid_values(grid["close_steps"]),
         close_commands=args.close_commands or _join_grid_values(grid["close_command"]),
         settle_steps=args.settle_steps or _join_grid_values(grid["settle_steps"]),
+        open_steps=args.open_steps,
+        move_steps=args.move_steps,
+        descend_steps=args.descend_steps,
+        lift_steps=args.lift_steps,
+        approach_height=args.approach_height,
+        lift_height=args.lift_height,
+        max_delta_m=args.max_delta_m,
+        descend_max_delta_m=args.descend_max_delta_m,
+        preclose_tolerance=args.preclose_tolerance,
+        move_xy_clip=args.move_xy_clip,
+        move_z_clip=args.move_z_clip,
+        descend_xy_clip=args.descend_xy_clip,
+        descend_z_clip=args.descend_z_clip,
+        gripper_open=args.gripper_open,
+        staged_close=args.staged_close,
+        stop_on_grasp=args.stop_on_grasp,
+        max_cases=args.max_cases,
+        top_k=args.top_k,
+        probe_plan=probe_plan or [],
+        probe_plan_json="",
+        robot_uid="xarm6_robotiq",
+        base_speeds="0.0",
+        base_steps="0",
+        stop_base_steps=args.stop_base_steps,
+    )
+
+
+def _pick_cube_fetch_args(args: argparse.Namespace, spec: Any, *, probe_plan: Optional[Any] = None) -> Namespace:
+    grid = spec.parameter_grid
+    return Namespace(
+        seed=args.seed,
+        robot_uid="fetch",
+        obs_mode=args.obs_mode,
+        control_mode=args.control_mode,
+        sim_backend=args.sim_backend,
+        render_backend=args.render_backend,
+        max_episode_steps=args.max_episode_steps,
+        output_dir=args.legacy_output_dir,
+        grasp_z_offsets=args.grasp_z_offsets or _join_grid_values(grid["grasp_z_offset"]),
+        close_steps=args.close_steps or _join_grid_values(grid["close_steps"]),
+        close_commands=args.close_commands or _join_grid_values(grid["close_command"]),
+        settle_steps=args.settle_steps or _join_grid_values(grid["settle_steps"]),
+        base_speeds=args.base_speeds or _join_grid_values(grid["base_speed"]),
+        base_steps=args.base_steps or _join_grid_values(grid["base_steps"]),
+        stop_base_steps=args.stop_base_steps,
         open_steps=args.open_steps,
         move_steps=args.move_steps,
         descend_steps=args.descend_steps,
@@ -127,6 +209,45 @@ def _pull_cube_xarm6_args(args: argparse.Namespace, spec: Any, *, probe_plan: Op
     )
 
 
+def _pull_cube_fetch_args(args: argparse.Namespace, spec: Any, *, probe_plan: Optional[Any] = None) -> Namespace:
+    grid = spec.parameter_grid
+    return Namespace(
+        env_id=get_task_spec(spec.task_id).maniskill_env_id,
+        output_slug=spec.output_slug,
+        seed=args.seed,
+        obs_mode=args.obs_mode,
+        control_mode=args.control_mode,
+        sim_backend=args.sim_backend,
+        render_backend=args.render_backend,
+        max_episode_steps=args.max_episode_steps,
+        output_dir=args.legacy_output_dir,
+        base_speeds=args.base_speeds or _join_grid_values(grid["base_speed"]),
+        base_steps=args.base_steps or _join_grid_values(grid["base_steps"]),
+        contact_x_offsets=args.contact_x_offsets or _join_grid_values(grid["contact_x_offset"]),
+        contact_z_offsets=args.contact_z_offsets or _join_grid_values(grid["contact_z_offset"]),
+        drag_strengths=args.drag_strengths or _join_grid_values(grid["drag_strength"]),
+        down_biases=args.down_biases or _join_grid_values(grid["down_bias"]),
+        stages=args.stages or _join_grid_values(grid["stages"]),
+        approach_height=args.fetch_approach_height,
+        stop_base_steps=args.stop_base_steps,
+        approach_steps=args.approach_steps,
+        descent_steps=args.descend_steps,
+        contact_steps=args.contact_steps,
+        drag_steps=args.drag_steps,
+        drag_pulse_steps=args.drag_pulse_steps,
+        settle_steps=args.pull_settle_steps,
+        drag_extra=args.drag_extra,
+        max_delta_m=args.max_delta_m,
+        descent_z_clip=args.descent_z_clip,
+        gripper_close=args.gripper_close,
+        stop_on_success=args.stop_on_success,
+        max_cases=args.max_cases,
+        top_k=args.top_k,
+        probe_plan=probe_plan or [],
+        probe_plan_json="",
+    )
+
+
 def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
     case = get_full_migration_case(args.case)
     diagnosis = _load_json(args.failure_diagnosis_json) if args.failure_diagnosis_json else {}
@@ -139,9 +260,20 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
     )
     if counterexample.get("selected"):
         counterexample = dict(counterexample["selected"])
+    selection = args.probe_selection
+    if selection == "auto":
+        if counterexample:
+            selection = "active"
+        elif adaptive_source:
+            selection = "score_guided"
+        else:
+            selection = "fixed_grid"
     adaptive_plan = []
     active_plan: Dict[str, Any] = {}
-    if counterexample:
+    fixed_plan = []
+    if selection == "active":
+        if not counterexample:
+            raise ValueError("Active probe selection requires --active-counterexample-json.")
         active_plan = select_active_probe_plan(
             case,
             spec,
@@ -150,16 +282,32 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
             budget=args.suggestion_budget,
         )
         adaptive_plan = list(active_plan.get("candidates") or [])
-    elif adaptive_source:
+    elif selection == "score_guided":
+        if not adaptive_source:
+            raise ValueError("Score-guided probe selection requires --adaptive-from.")
         adaptive_plan = suggest_next_probe_cases(
             spec,
             adaptive_source.get("all_probe_cases") or adaptive_source.get("results") or [],
             budget=args.suggestion_budget,
         )
+    elif selection == "fixed_grid":
+        total_budget = max(
+            int(args.fixed_grid_total_budget or args.max_cases),
+            int(args.fixed_grid_offset + args.max_cases),
+        )
+        fixed_plan = fixed_grid_probe_batch(
+            spec,
+            total_budget=total_budget,
+            offset=args.fixed_grid_offset,
+            batch_size=args.max_cases or total_budget,
+        )
+    else:
+        raise ValueError(f"Unsupported probe selection strategy {selection!r}.")
+    execution_plan = adaptive_plan or fixed_plan
 
     if args.dry_run or args.suggest_only:
         payload = summarize_probe_results(spec, [], diagnosis=diagnosis, top_k=args.top_k, dry_run=True)
-        planned = adaptive_plan or probe_grid(spec, max_cases=args.max_cases)
+        planned = execution_plan or probe_grid(spec)
         payload["num_planned_cases"] = len(planned)
         payload["planned_probe_cases"] = planned
         payload["next_probe_suggestions"] = planned
@@ -168,17 +316,20 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
             payload["learning_guided_mode"] = "suggest_only" if args.suggest_only else "dry_run_adaptive_plan"
         if active_plan:
             payload["active_probe_plan"] = active_plan
+        if fixed_plan:
+            payload["fixed_probe_plan"] = fixed_plan
         payload["prompt_feedback"] = build_probe_feedback(payload, top_k=args.top_k)
     elif spec.probe_id == "pick_cube_xarm6_close_envelope":
         from scripts import xarm6_pick_grasp_probe
 
-        task_payload = xarm6_pick_grasp_probe.run(_pick_cube_xarm6_args(args, spec, probe_plan=adaptive_plan))
-        payload = summarize_probe_results(
+        task_payload = xarm6_pick_grasp_probe.run(_pick_cube_xarm6_args(args, spec, probe_plan=execution_plan))
+        payload = _summarize_measured_batch(
             spec,
-            task_payload.get("results") or [],
+            task_payload,
+            adaptive_source=adaptive_source,
             diagnosis=diagnosis,
+            seed=args.seed,
             top_k=args.top_k,
-            dry_run=False,
         )
         if adaptive_plan:
             payload["learning_guided_source"] = args.adaptive_from
@@ -191,13 +342,14 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
     elif spec.probe_id == "pull_cube_xarm6_contact_geometry":
         from scripts import xarm6_pull_contact_probe
 
-        task_payload = xarm6_pull_contact_probe.run(_pull_cube_xarm6_args(args, spec, probe_plan=adaptive_plan))
-        payload = summarize_probe_results(
+        task_payload = xarm6_pull_contact_probe.run(_pull_cube_xarm6_args(args, spec, probe_plan=execution_plan))
+        payload = _summarize_measured_batch(
             spec,
-            task_payload.get("results") or [],
+            task_payload,
+            adaptive_source=adaptive_source,
             diagnosis=diagnosis,
+            seed=args.seed,
             top_k=args.top_k,
-            dry_run=False,
         )
         if adaptive_plan:
             payload["learning_guided_source"] = args.adaptive_from
@@ -207,8 +359,64 @@ def run_structured_probe(args: argparse.Namespace) -> Dict[str, Any]:
         payload["legacy_probe_wrote"] = task_payload.get("wrote", {})
         payload["controller_summary"] = task_payload.get("controller_summary", {})
         payload["initial"] = task_payload.get("initial", {})
+    elif spec.probe_id == "pick_cube_fetch_base_close_envelope":
+        from scripts import xarm6_pick_grasp_probe
+
+        task_payload = xarm6_pick_grasp_probe.run(_pick_cube_fetch_args(args, spec, probe_plan=execution_plan))
+        payload = _summarize_measured_batch(
+            spec,
+            task_payload,
+            adaptive_source=adaptive_source,
+            diagnosis=diagnosis,
+            seed=args.seed,
+            top_k=args.top_k,
+        )
+        if adaptive_plan:
+            payload["learning_guided_source"] = args.adaptive_from
+            payload["learning_guided_probe_plan"] = adaptive_plan
+        if fixed_plan:
+            payload["fixed_probe_plan"] = fixed_plan
+        if active_plan:
+            payload["active_probe_plan"] = active_plan
+        payload["legacy_probe_wrote"] = task_payload.get("wrote", {})
+        payload["controller_summary"] = task_payload.get("controller_summary", {})
+        payload["initial"] = task_payload.get("initial", {})
+    elif spec.probe_id in {"pull_cube_fetch_base_contact", "push_cube_fetch_base_contact"}:
+        from scripts import fetch_pull_contact_probe
+
+        task_payload = fetch_pull_contact_probe.run(_pull_cube_fetch_args(args, spec, probe_plan=execution_plan))
+        payload = _summarize_measured_batch(
+            spec,
+            task_payload,
+            adaptive_source=adaptive_source,
+            diagnosis=diagnosis,
+            seed=args.seed,
+            top_k=args.top_k,
+        )
+        if adaptive_plan:
+            payload["learning_guided_source"] = args.adaptive_from
+            payload["learning_guided_probe_plan"] = adaptive_plan
+        if fixed_plan:
+            payload["fixed_probe_plan"] = fixed_plan
+        if active_plan:
+            payload["active_probe_plan"] = active_plan
+        payload["legacy_probe_wrote"] = task_payload.get("wrote", {})
+        payload["controller_summary"] = task_payload.get("controller_summary", {})
+        payload["initial"] = task_payload.get("initial", {})
     else:
         raise RuntimeError(f"No executable probe backend for {spec.probe_id!r}.")
+
+    payload["probe_selection"] = selection
+    if adaptive_source:
+        payload["probe_history_source"] = args.adaptive_from
+    if fixed_plan:
+        payload["fixed_probe_plan"] = fixed_plan
+        payload["fixed_grid_total_budget"] = int(
+            args.fixed_grid_total_budget or args.max_cases
+        )
+        payload["fixed_grid_offset"] = int(args.fixed_grid_offset)
+    if counterexample:
+        payload["probe_counterexample"] = counterexample
 
     output_dir = Path(args.output_dir) / case.case_id
     if active_plan:
@@ -242,6 +450,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Optional counterexample JSON string/path. When provided, only "
             "parameters connected to its violated constraint are actively probed."
         ),
+    )
+    parser.add_argument(
+        "--probe-selection",
+        choices=("auto", "active", "fixed_grid", "score_guided"),
+        default="auto",
+        help="Probe case selector. 'auto' preserves the legacy context-dependent behavior.",
+    )
+    parser.add_argument(
+        "--fixed-grid-total-budget",
+        type=int,
+        default=0,
+        help="Total deterministic fixed-grid design size shared across repair cycles.",
+    )
+    parser.add_argument(
+        "--fixed-grid-offset",
+        type=int,
+        default=0,
+        help="Start offset into the deterministic fixed-grid design.",
     )
     parser.add_argument(
         "--suggest-only",
@@ -296,6 +522,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--drag-extra", type=float, default=0.03)
     parser.add_argument("--gripper-close", type=float, default=-1.0)
     parser.add_argument("--stop-on-success", action="store_true")
+
+    # Optional overrides for the Fetch PullCube base/contact backend.
+    parser.add_argument("--base-speeds", default="")
+    parser.add_argument("--base-steps", default="")
+    parser.add_argument("--fetch-approach-height", type=float, default=0.06)
+    parser.add_argument("--stop-base-steps", type=int, default=4)
 
     parser.add_argument("--max-cases", type=int, default=0)
     parser.add_argument("--top-k", type=int, default=8)

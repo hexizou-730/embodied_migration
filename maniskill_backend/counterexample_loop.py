@@ -29,6 +29,9 @@ from maniskill_backend.structured_probe import get_probe_spec
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PROBE_BUDGET_SCOPE = "per_run_total"
+HELD_OUT_FEEDBACK_POLICY = "evaluation_only_no_repair"
+PROBE_STRATEGIES = {"active", "fixed_grid"}
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,8 @@ class CEGISConfig:
     max_cycles: int = 3
     attempts_per_cycle: int = 1
     probe_budget: int = 8
+    probe_strategy: str = "active"
+    prompt_policy: str = "full"
     success_threshold: float = 0.8
     min_trials_for_accept: int = 5
     obs_mode: str = "state"
@@ -202,6 +207,10 @@ def _module_generation_command(
         "--md",
         str(cycle_dir / "module_generation.md"),
         "--no-analysis",
+        "--no-implicit-probe-feedback",
+        "--force-regeneration",
+        "--prompt-policy",
+        config.prompt_policy,
     ]
     if not config.source_check or cycle > 1:
         command.append("--no-source-check")
@@ -266,6 +275,8 @@ def _probe_command(
     counterexample_path: Path,
     previous_probe_path: Path | None,
     seed: int,
+    budget: int,
+    fixed_grid_offset: int = 0,
 ) -> List[str]:
     command = [
         sys.executable,
@@ -276,10 +287,12 @@ def _probe_command(
         str(seed),
         "--active-counterexample-json",
         str(counterexample_path),
+        "--probe-selection",
+        config.probe_strategy,
         "--suggestion-budget",
-        str(config.probe_budget),
+        str(budget),
         "--max-cases",
-        str(config.probe_budget),
+        str(budget),
         "--obs-mode",
         config.obs_mode,
         "--sim-backend",
@@ -291,6 +304,15 @@ def _probe_command(
         "--output-dir",
         str(cycle_dir / "structured_probe"),
     ]
+    if config.probe_strategy == "fixed_grid":
+        command.extend(
+            [
+                "--fixed-grid-total-budget",
+                str(config.probe_budget),
+                "--fixed-grid-offset",
+                str(fixed_grid_offset),
+            ]
+        )
     if previous_probe_path:
         command.extend(["--adaptive-from", str(previous_probe_path)])
     if config.dry_run:
@@ -309,6 +331,97 @@ def _probe_result_path(case: FullMigrationCase, cycle_dir: Path) -> Path | None:
         / case.case_id
         / f"{spec.probe_id}.json"
     )
+
+
+def _probe_case_count(path: Path | None) -> int:
+    if path is None or not path.exists():
+        return 0
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    if payload.get("num_new_cases") is not None:
+        return max(0, int(payload.get("num_new_cases") or 0))
+    rows = payload.get("all_probe_cases") or payload.get("results") or []
+    return max(0, int(payload.get("num_cases") or len(rows)))
+
+
+def _probe_batch_budget(remaining: int, repair_opportunities: int) -> int:
+    """Reserve a fair share of the total budget for later repair cycles."""
+
+    if remaining <= 0 or repair_opportunities <= 0:
+        return 0
+    return min(remaining, max(1, (remaining + repair_opportunities - 1) // repair_opportunities))
+
+
+def _dry_run_nested_command_preview(
+    case: FullMigrationCase,
+    config: CEGISConfig,
+    cycle_dir: Path,
+) -> Dict[str, Any]:
+    """Preview the first repair path without inventing measured evidence."""
+
+    counterexample_path = cycle_dir / "counterexamples.json"
+    later_cycles = max(0, config.max_cycles - 1)
+    allocated_probe_budget = _probe_batch_budget(config.probe_budget, later_cycles)
+    probe_path = _probe_result_path(case, cycle_dir)
+    probe_command: List[str] = []
+    if _has_probe(case) and allocated_probe_budget > 0:
+        probe_command = _probe_command(
+            case,
+            config,
+            cycle_dir,
+            counterexample_path=counterexample_path,
+            previous_probe_path=None,
+            seed=case.seed,
+            budget=allocated_probe_budget,
+            fixed_grid_offset=0,
+        )
+
+    repair_generation_command: List[str] = []
+    if later_cycles > 0:
+        repair_generation_command = _module_generation_command(
+            case,
+            config,
+            cycle_dir.parent / "cycle_02",
+            seed=case.seed,
+            counterexample_path=counterexample_path,
+            probe_path=probe_path if probe_command else None,
+            cycle=2,
+        )
+
+    return {
+        "schema": "cegis_nested_command_preview.v1",
+        "assumption": (
+            "Static preview assumes the development split yields one counterexample. "
+            "No outcome or measurement is fabricated."
+        ),
+        "counterexample_selection": {
+            "source": "development_only",
+            "output_path": str(counterexample_path),
+            "held_out_used": False,
+        },
+        "structured_probe": {
+            "strategy": config.probe_strategy,
+            "budget_allocated": allocated_probe_budget,
+            "expected_result_path": str(probe_path) if probe_path else "",
+            "command": probe_command,
+        },
+        "repair_generation": {
+            "prompt_policy": config.prompt_policy,
+            "command": repair_generation_command,
+        },
+        "held_out_evaluation": {
+            "usage": "acceptance_only_no_repair",
+            "command": _multiseed_command(
+                case,
+                config,
+                cycle_dir.parent / "cycle_02",
+                seeds=config.held_out_seeds,
+                name="held_out",
+            ),
+        },
+    }
 
 
 def _adapter_provenance_from_cycles(run_dir: Path, *, from_zero: bool) -> str:
@@ -344,6 +457,11 @@ def run_counterexample_loop(
     output_root: Path | str = "results/cegis",
     run_name: str = "",
 ) -> Dict[str, Any]:
+    if config.probe_strategy not in PROBE_STRATEGIES:
+        raise ValueError(
+            f"Unknown probe strategy {config.probe_strategy!r}; "
+            f"expected one of {sorted(PROBE_STRATEGIES)!r}."
+        )
     case = get_full_migration_case(config.case_id)
     name = run_name or f"{case.case_id}_{_timestamp()}"
     root = Path(output_root)
@@ -364,9 +482,12 @@ def run_counterexample_loop(
     cycles: List[Dict[str, Any]] = []
     selected_counterexample_path: Path | None = None
     latest_probe_path: Path | None = None
+    counterexample_history: List[Dict[str, Any]] = []
     status = "cycle_budget_exhausted"
     held_out: Dict[str, Any] = {}
     final_cycle_dir: Path | None = None
+    remaining_probe_budget = max(0, int(config.probe_budget))
+    probe_cases_used = 0
 
     for cycle in range(1, config.max_cycles + 1):
         cycle_dir = run_dir / f"cycle_{cycle:02d}"
@@ -396,6 +517,20 @@ def run_counterexample_loop(
         cycle_record: Dict[str, Any] = {
             "cycle": cycle,
             "repair_seed": repair_seed,
+            "repair_feedback": {
+                "source_split": (
+                    "development_counterexample"
+                    if selected_counterexample_path
+                    else "initial_case_seed"
+                ),
+                "counterexample_path": (
+                    str(selected_counterexample_path)
+                    if selected_counterexample_path
+                    else ""
+                ),
+                "probe_path": str(latest_probe_path) if latest_probe_path else "",
+                "held_out_used": False,
+            },
             "generation": generation,
             "adapter_sha256_after_generation": _file_sha256(target_adapter),
         }
@@ -409,6 +544,11 @@ def run_counterexample_loop(
                     name="development",
                 )
             }
+            cycle_record["nested_command_preview"] = _dry_run_nested_command_preview(
+                case,
+                config,
+                cycle_dir,
+            )
             cycle_record["status"] = "dry_run_planned"
             cycles.append(cycle_record)
             status = "dry_run_planned"
@@ -458,6 +598,7 @@ def run_counterexample_loop(
                 "summary": held_out_summary,
                 "used_for_repair": False,
             }
+            cycle_record["held_out_evaluation"] = held_out
             if held_out_run["returncode"] != 0:
                 cycle_record["status"] = "held_out_evaluation_failed"
                 status = "command_failed"
@@ -476,6 +617,7 @@ def run_counterexample_loop(
             case,
             development_summary.get("rows") or [],
             repo_root=REPO_ROOT,
+            selection_history=counterexample_history,
         )
         selected = counterexample_set.get("selected") or {}
         cycle_record["selected_counterexample"] = selected
@@ -485,8 +627,21 @@ def run_counterexample_loop(
             cycles.append(cycle_record)
             status = "diagnosis_failed"
             break
+        counterexample_history.append(
+            {
+                "seed": selected.get("seed"),
+                "failure_reason": selected.get("failure_reason"),
+                "stage": selected.get("stage"),
+                "selection_score": selected.get("selection_score"),
+            }
+        )
 
-        if _has_probe(case):
+        repair_opportunities = max(0, config.max_cycles - cycle)
+        allocated_probe_budget = _probe_batch_budget(
+            remaining_probe_budget,
+            repair_opportunities,
+        )
+        if _has_probe(case) and allocated_probe_budget > 0:
             probe_run = _run_command(
                 _probe_command(
                     case,
@@ -495,6 +650,8 @@ def run_counterexample_loop(
                     counterexample_path=selected_counterexample_path,
                     previous_probe_path=latest_probe_path,
                     seed=int(selected.get("seed", case.seed)),
+                    budget=allocated_probe_budget,
+                    fixed_grid_offset=probe_cases_used,
                 ),
                 log_path=command_log,
                 dry_run=False,
@@ -502,17 +659,46 @@ def run_counterexample_loop(
             candidate_probe_path = _probe_result_path(case, cycle_dir)
             if candidate_probe_path and candidate_probe_path.exists():
                 latest_probe_path = candidate_probe_path
-            cycle_record["active_probe"] = {
+            measured_probe_cases = min(
+                remaining_probe_budget,
+                _probe_case_count(candidate_probe_path),
+            )
+            probe_cases_used += measured_probe_cases
+            remaining_probe_budget -= measured_probe_cases
+            probe_record = {
                 "run": probe_run,
                 "result_path": str(latest_probe_path) if latest_probe_path else "",
+                "strategy": config.probe_strategy,
+                "budget_scope": PROBE_BUDGET_SCOPE,
+                "budget_allocated": allocated_probe_budget,
+                "cases_measured": measured_probe_cases,
+                "budget_remaining": remaining_probe_budget,
             }
+            cycle_record["structured_probe"] = probe_record
+            cycle_record[
+                "active_probe" if config.probe_strategy == "active" else "fixed_grid_probe"
+            ] = probe_record
             if probe_run["returncode"] != 0:
-                cycle_record["status"] = "active_probe_failed"
+                cycle_record["status"] = "structured_probe_failed"
                 cycles.append(cycle_record)
                 status = "command_failed"
                 break
+        elif _has_probe(case) and remaining_probe_budget <= 0:
+            cycle_record["structured_probe"] = {
+                "skipped": True,
+                "reason": "Per-run probe budget exhausted; reuse prior measurements.",
+                "budget_scope": PROBE_BUDGET_SCOPE,
+                "budget_remaining": 0,
+            }
+        elif _has_probe(case):
+            cycle_record["structured_probe"] = {
+                "skipped": True,
+                "reason": "No later repair cycle remains; do not spend unused probe budget.",
+                "budget_scope": PROBE_BUDGET_SCOPE,
+                "budget_remaining": remaining_probe_budget,
+            }
         else:
-            cycle_record["active_probe"] = {
+            cycle_record["structured_probe"] = {
                 "skipped": True,
                 "reason": "No executable structured probe is registered for this case.",
             }
@@ -521,7 +707,11 @@ def run_counterexample_loop(
 
     payload = {
         "schema": "counterexample_guided_adapter_synthesis.v1",
-        "method": "counterexample_guided_embodiment_adapter_synthesis",
+        "method": (
+            "counterexample_guided_embodiment_adapter_synthesis"
+            if config.probe_strategy == "active"
+            else "fixed_grid_counterexample_guided_adapter_synthesis"
+        ),
         "case_id": case.case_id,
         "task_id": case.task_id,
         "source_robot": case.source_robot,
@@ -538,11 +728,27 @@ def run_counterexample_loop(
         "status": status,
         "success": status == "accepted",
         "cycles": cycles,
+        "nested_command_preview": (
+            cycles[0].get("nested_command_preview", {}) if cycles else {}
+        ),
+        "counterexample_history": counterexample_history,
         "held_out": held_out,
+        "probe_budget": {
+            "scope": PROBE_BUDGET_SCOPE,
+            "total": int(config.probe_budget),
+            "cases_used": probe_cases_used,
+            "remaining": remaining_probe_budget,
+        },
         "final_adapter_sha256": _file_sha256(target_adapter),
         "evidence_policy": {
             "development_seeds_used_for_repair": True,
             "held_out_seeds_used_for_repair": False,
+            "held_out_feedback_policy": HELD_OUT_FEEDBACK_POLICY,
+            "allowed_repair_feedback": [
+                "initial_case_seed",
+                "development_counterexample",
+                f"{config.probe_strategy}_probe_on_development_counterexample",
+            ],
             "success_requires_held_out_threshold": True,
         },
     }
@@ -583,6 +789,8 @@ def counterexample_loop_markdown(payload: Mapping[str, Any]) -> str:
         f"- success: `{payload.get('success')}`",
         f"- development seeds: `{config.get('development_seeds')}`",
         f"- held-out seeds: `{config.get('held_out_seeds')}`",
+        f"- probe budget: `{(payload.get('probe_budget') or {}).get('cases_used')}/"
+        f"{(payload.get('probe_budget') or {}).get('total')}` cases, scope=`{PROBE_BUDGET_SCOPE}`",
         "",
         "## Cycles",
         "",
@@ -592,7 +800,7 @@ def counterexample_loop_markdown(payload: Mapping[str, Any]) -> str:
     for item in payload.get("cycles") or []:
         development = item.get("development_summary") or {}
         counterexample = item.get("selected_counterexample") or {}
-        probe = item.get("active_probe") or {}
+        probe = item.get("structured_probe") or item.get("active_probe") or {}
         lines.append(
             f"| {item.get('cycle')} | {development.get('success_rate', '')} | "
             f"{counterexample.get('failure_reason', '')}@seed={counterexample.get('seed', '')} | "

@@ -230,15 +230,49 @@ def counterexample_prompt(counterexample: Mapping[str, Any] | Counterexample | N
     if isinstance(counterexample, Counterexample):
         return counterexample.to_prompt_section()
     payload = dict(counterexample)
+    supporting = payload.get("supporting_counterexamples") or []
     return "\n".join(
         [
             "# Selected simulation counterexample",
             "This is a failed physical execution, not a hand-written answer.",
+            (
+                "The primary failure is accompanied by distinct development-seed failures. "
+                "Repair the shared constraint and preserve guarded branches; do not overfit one seed."
+                if supporting
+                else "Repair this measured failure without changing frozen interfaces."
+            ),
             "```json",
             json.dumps(payload, indent=2, ensure_ascii=False, default=repr),
             "```",
         ]
     )
+
+
+def _selection_novelty(
+    item: Counterexample,
+    history: Sequence[Mapping[str, Any]],
+) -> float:
+    if not history:
+        return 0.0
+    reasons = {str(previous.get("failure_reason") or "") for previous in history}
+    seeds = {int(previous.get("seed", -1)) for previous in history}
+    signatures = {
+        (
+            int(previous.get("seed", -1)),
+            str(previous.get("failure_reason") or ""),
+            str(previous.get("stage") or ""),
+        )
+        for previous in history
+    }
+    signature = (item.seed, item.failure_reason, item.stage)
+    bonus = 0.0
+    if item.failure_reason not in reasons:
+        bonus += 2.0
+    if item.seed not in seeds:
+        bonus += 1.0
+    if signature in signatures:
+        bonus -= 4.0
+    return bonus
 
 
 def write_counterexample_set(
@@ -247,14 +281,68 @@ def write_counterexample_set(
     trials: Sequence[Mapping[str, Any]],
     *,
     repo_root: Path | None = None,
+    selection_history: Sequence[Mapping[str, Any]] = (),
 ) -> Dict[str, Any]:
     ranked = rank_counterexamples(case, trials, repo_root=repo_root)
+    scored = []
+    for item in ranked:
+        row = item.to_dict()
+        novelty = _selection_novelty(item, selection_history)
+        row["novelty_bonus"] = novelty
+        row["selection_score"] = round(item.information_score + novelty, 4)
+        scored.append(row)
+    scored.sort(
+        key=lambda item: (
+            float(item.get("selection_score") or 0.0),
+            float(item.get("information_score") or 0.0),
+            -int(item.get("seed") or 0),
+        ),
+        reverse=True,
+    )
+    selected = dict(scored[0]) if scored else None
+    supporting = []
+    if selected:
+        primary_signature = (
+            str(selected.get("failure_reason") or ""),
+            str(selected.get("stage") or ""),
+        )
+        seen_signatures = {primary_signature}
+        for item in scored[1:]:
+            signature = (
+                str(item.get("failure_reason") or ""),
+                str(item.get("stage") or ""),
+            )
+            if signature in seen_signatures:
+                continue
+            seen_signatures.add(signature)
+            supporting.append(
+                {
+                    key: item.get(key)
+                    for key in (
+                        "seed",
+                        "failure_layer",
+                        "failure_reason",
+                        "stage",
+                        "confidence",
+                        "violated_constraints",
+                        "evidence",
+                        "information_score",
+                    )
+                }
+            )
+            if len(supporting) >= 3:
+                break
+        selected["portfolio_policy"] = "primary_plus_distinct_reason_stage_representatives"
+        selected["supporting_counterexamples"] = supporting
     payload = {
         "schema": "embodiment_counterexample_set.v1",
         "case_id": case.case_id,
         "num_failures": len(ranked),
-        "selected": ranked[0].to_dict() if ranked else None,
-        "counterexamples": [item.to_dict() for item in ranked],
+        "selection_policy": "information_score_plus_history_novelty",
+        "selection_history_size": len(selection_history),
+        "selected": selected,
+        "portfolio_size": (1 + len(supporting)) if selected else 0,
+        "counterexamples": scored,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(

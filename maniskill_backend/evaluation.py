@@ -101,7 +101,13 @@ def classify_failure(
         or "cube_distance" in text
     ):
         return "tool-use execution failure"
-    if "not pulled" in text or "pull" in text and "target" in text or "contact" in text:
+    if (
+        "not pulled" in text
+        or "not pushed" in text
+        or "pull" in text and "target" in text
+        or "push" in text and "target" in text
+        or "contact" in text
+    ):
         return "contact execution failure"
     if "grasp" in text or "gripper" in text or "force" in text or "slip" in text:
         return "gripper/force failure"

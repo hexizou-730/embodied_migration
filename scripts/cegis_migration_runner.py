@@ -26,6 +26,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-cycles", type=int, default=3)
     parser.add_argument("--attempts-per-cycle", type=int, default=1)
     parser.add_argument("--probe-budget", type=int, default=8)
+    parser.add_argument("--probe-strategy", choices=("active", "fixed_grid"), default="active")
+    parser.add_argument("--prompt-policy", default="full")
     parser.add_argument("--success-threshold", type=float, default=0.8)
     parser.add_argument("--min-trials-for-accept", type=int, default=5)
     parser.add_argument("--obs-mode", default="state")
@@ -57,6 +59,8 @@ def main() -> None:
         max_cycles=args.max_cycles,
         attempts_per_cycle=args.attempts_per_cycle,
         probe_budget=args.probe_budget,
+        probe_strategy=args.probe_strategy,
+        prompt_policy=args.prompt_policy,
         success_threshold=args.success_threshold,
         min_trials_for_accept=args.min_trials_for_accept,
         obs_mode=args.obs_mode,

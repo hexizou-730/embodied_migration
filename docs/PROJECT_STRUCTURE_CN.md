@@ -56,6 +56,30 @@ controller = 底层怎么把 action 变成关节运动
 
 ### 0. 最短入口
 
+未注册任务可以直接给 ManiSkill 环境名，不再先修改 `cases.py`：
+
+```bash
+python migrate.py \
+  --env-id TurnFaucet-v1 \
+  --source panda \
+  --target fetch \
+  --mode agent
+```
+
+运行时会自动生成 `case_manifest.json`，发现源端和目标端动作空间，让 LLM
+先写源程序和源 Adapter。源端通过官方成功判定后冻结程序，再循环生成和修复
+目标 Adapter。这里的“未注册”不等于环境可以不存在，任务和机器人仍需已经安装
+在 ManiSkill 中。
+
+动态运行目录会保存两端 observation、每轮 prompt、候选代码、仿真结果和 SHA-256。
+因此探索成功后可以准确复现“哪份输入产生了哪份 Adapter”，再把该组合注册为正式
+benchmark case，而不是直接把一次临时成功写进论文主结果。
+
+```text
+注册 case：用于固定论文实验和复现
+动态 manifest：用于新任务的自动发现和迁移
+```
+
 如果想按“任务 + 源机器人 + 目标机器人”的形式发起迁移请求，用：
 
 ```bash
@@ -102,8 +126,7 @@ python migrate.py \
   --task pull_cube \
   --source panda \
   --target xarm6_robotiq \
-  --mode online \
-  --max-online-steps 240
+  --mode online
 ```
 
 它不是等整局结束后才看失败，而是在同一个 episode 里循环：
@@ -116,7 +139,20 @@ python migrate.py \
 -> 再决定下一步
 ```
 
-当前 online harness 先支持 `PullCube`。它展示的是实时闭环控制机制；`PickCube` 之后需要补抓取专用 primitive。
+`PickCube` 使用同一条命令，只替换任务名：
+
+```bash
+python migrate.py \
+  --task pick_cube \
+  --source panda \
+  --target xarm6_robotiq \
+  --mode online
+```
+
+当前 online harness 已支持 `PullCube`、`PickCube` 和 `PushCube` 的任务专用 observation；
+Pull/Push 共用目标方向驱动的短时接触 primitive，Pick 使用抓取专用 primitive。
+默认由 LLM 在每个短动作段前选择下一步；`--online-planner fallback` 用于无
+API 的确定性调试。当前观察来自结构化仿真状态，RGB/多模态视觉尚未接入。
 
 如果只想用旧的 PullCube 专用自动实验闭环，用根目录短命令：
 

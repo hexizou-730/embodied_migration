@@ -109,7 +109,7 @@ def tool_inventory(
             command_template="tail -n 120 results/pullcube_xarm6_multiseed.md",
         ),
     ]
-    if case.task_id == "pull_cube":
+    if case.task_id in {"pull_cube", "push_cube"}:
         tools.insert(
             1,
             HarnessTool(
@@ -607,6 +607,8 @@ def _machine_constraints(case: FullMigrationCase) -> Dict[str, Any]:
         constraints["fixed_program_call"] = "robot.pull(cube, goal)"
     if case.task_id == "pick_cube":
         constraints["fixed_program_call"] = "robot.grasp(cube); robot.place(cube, goal)"
+    if case.task_id == "push_cube":
+        constraints["fixed_program_call"] = "robot.push(cube, goal)"
     return constraints
 
 
@@ -622,7 +624,7 @@ def _low_level_interface(case: FullMigrationCase) -> Dict[str, Any]:
             "robot._tcp_pos()",
             "robot._actor_pos(name)",
             "robot._region_pos(name)",
-            "robot._pull_cube_success() / robot._is_grasping(name) when provided by adapter base",
+            "robot._pull_cube_success() / robot._push_cube_success() / robot._is_grasping(name)",
         ],
         "observable_diagnostics": [
             "success",
@@ -691,6 +693,8 @@ def _fixed_constraints(case: FullMigrationCase) -> List[str]:
         constraints.append("PullCube 的高层调用保持 robot.pull(cube, goal)。")
     if case.task_id == "pick_cube":
         constraints.append("PickCube 的高层调用保持 robot.grasp(cube); robot.place(cube, goal)。")
+    if case.task_id == "push_cube":
+        constraints.append("PushCube 的高层调用保持 robot.push(cube, goal)。")
     return constraints
 
 

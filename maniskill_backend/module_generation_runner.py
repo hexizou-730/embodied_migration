@@ -14,6 +14,7 @@ import json
 import re
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -38,6 +39,8 @@ ALLOWED_IMPORT_PREFIXES = (
     "sapien",
     "mani_skill",
     "maniskill_backend.skill_adapter",
+    "maniskill_backend.dynamic_adapter",
+    "maniskill_backend.stack_pyramid",
 )
 FORBIDDEN_CALLS = {"eval", "exec", "compile", "input", "open", "__import__"}
 FORBIDDEN_TEXT = (
@@ -54,6 +57,57 @@ FORBIDDEN_TEXT_PATTERNS = tuple(
     (snippet, re.compile(rf"(?<![A-Za-z0-9_]){re.escape(snippet)}"))
     for snippet in FORBIDDEN_TEXT
 )
+
+PROMPT_POLICIES: Dict[str, Dict[str, bool]] = {
+    "one_shot": {
+        "contract": False,
+        "diagnosis": False,
+        "counterexample": False,
+        "probe": False,
+        "target_guidance": False,
+        "guarded_adapter": False,
+    },
+    "raw_failure": {
+        "contract": False,
+        "diagnosis": False,
+        "counterexample": False,
+        "probe": False,
+        "target_guidance": False,
+        "guarded_adapter": False,
+    },
+    "diagnosis": {
+        "contract": False,
+        "diagnosis": True,
+        "counterexample": False,
+        "probe": False,
+        "target_guidance": False,
+        "guarded_adapter": False,
+    },
+    "fixed_probe": {
+        "contract": False,
+        "diagnosis": True,
+        "counterexample": False,
+        "probe": True,
+        "target_guidance": False,
+        "guarded_adapter": False,
+    },
+    "full": {
+        "contract": True,
+        "diagnosis": True,
+        "counterexample": True,
+        "probe": True,
+        "target_guidance": True,
+        "guarded_adapter": True,
+    },
+}
+
+
+def _prompt_policy(name: str) -> Dict[str, bool]:
+    try:
+        return PROMPT_POLICIES[name]
+    except KeyError as exc:
+        allowed = ", ".join(PROMPT_POLICIES)
+        raise ValueError(f"Unknown prompt policy {name!r}. Allowed: {allowed}") from exc
 
 
 def extract_python_module(text: str) -> str:
@@ -98,6 +152,66 @@ def validate_generated_adapter_module(code: str) -> None:
             func = node.func
             if isinstance(func, ast.Name) and func.id in FORBIDDEN_CALLS:
                 raise ValueError(f"Generated adapter module calls forbidden function: {func.id}")
+
+
+def guarded_adapter_validation_error(code: str, case: FullMigrationCase) -> str | None:
+    """Return a structural error when a full-method candidate is not guarded."""
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        return f"guarded adapter is not valid Python: {exc}"
+    if case.task_id == "stack_pyramid":
+        methods = {node.name: node for cls in tree.body if isinstance(cls, ast.ClassDef)
+                   for node in cls.body if isinstance(node, ast.FunctionDef)}
+        if not {"prepare_base", "stack_on"}.issubset(methods):
+            return "guarded StackPyramid adapter must override prepare_base() and stack_on()"
+        for name in ("prepare_base", "stack_on"):
+            nodes = list(ast.walk(methods[name]))
+            calls = {n.func.attr if isinstance(n.func, ast.Attribute) else n.func.id
+                     for n in nodes if isinstance(n, ast.Call) and isinstance(n.func, (ast.Attribute, ast.Name))}
+            if not ({"stack_observation", "_actor_pos"} & calls) or "_early_stop" not in calls:
+                return f"{name}() must read multi-object state and check _early_stop()"
+            if not any(isinstance(n, ast.If) for n in nodes):
+                return f"{name}() must guard stage transitions with measured state"
+        return None
+    skill_names = {"pull_cube": "pull", "pick_cube": "grasp", "push_cube": "push"}
+    try:
+        skill_name = skill_names[case.task_id]
+    except KeyError:
+        return f"no guarded adapter contract is registered for task {case.task_id!r}"
+    methods = [
+        node
+        for class_node in tree.body
+        if isinstance(class_node, ast.ClassDef)
+        for node in class_node.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == skill_name
+    ]
+    if not methods:
+        return f"guarded adapter must override {skill_name}() instead of inheriting one fixed source strategy"
+    method = methods[0]
+    call_names = {
+        node.func.attr
+        for node in ast.walk(method)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    required_state_calls = {
+        "pull_cube": {"_tcp_pos", "_actor_pos", "_pull_cube_success"},
+        "pick_cube": {"_tcp_pos", "_actor_pos", "_is_grasping"},
+        "push_cube": {"_tcp_pos", "_actor_pos", "_push_cube_success"},
+    }[case.task_id]
+    missing = sorted(required_state_calls - call_names)
+    if missing:
+        return "guarded adapter must read runtime physical state; missing calls: " + ", ".join(missing)
+    if "_early_stop" not in call_names:
+        return "guarded adapter must check _early_stop() inside bounded execution"
+    if not ({"_fail", "_log"} & call_names):
+        return "guarded adapter must return through a real _fail(...) or _log(...) result path"
+    if not any(isinstance(node, ast.If) for node in ast.walk(method)):
+        return "guarded adapter must contain at least one runtime conditional branch"
+    if not any(isinstance(node, ast.Compare) for node in ast.walk(method)):
+        return "guarded adapter must compare measured state against a progress/reachability threshold"
+    return None
 
 
 def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: Dict[str, Any]) -> str | None:
@@ -153,28 +267,39 @@ def pick_cube_runtime_diagnostic_error(case: FullMigrationCase, target_result: D
     )
 
 
-def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
-    """Return compact target-specific constraints.
+def _common_generation_lines() -> List[str]:
+    """Return safety and interface rules shared by every prompt baseline."""
 
-    Keep this section stable and short. Case-specific failure evidence should
-    come from ``failure_diagnosis`` in the latest target result, not from a long
-    hand-written history of prior experiments.
-    """
-
-    common = [
+    return [
         "# Mandatory target adapter constraints",
         "- Do not return an empty pass-through subclass.",
         "- Preserve action clipping against env.action_space.low/high.",
         "- Do not import os, pathlib, subprocess, requests, urllib, socket, or shutil. Do not read environment variables.",
         "- Keep using real ManiSkill env.step(action) execution and real evaluate()/success signals.",
         "- Keep the low-level ManiSkill controller frozen; migrate only target-side adapter behavior.",
-        "- Generate guarded behavior: branch on measured reachability/contact/progress state instead of encoding one fixed seed trajectory.",
-        "- Every fallback branch must either make measurable progress or return an evidence-backed failure/infeasibility result.",
         "",
     ]
+
+
+def _guarded_generation_lines() -> List[str]:
+    return [
+        "# Guarded adapter requirement",
+        "- Generate guarded behavior: branch on measured reachability/contact/progress state instead of encoding one fixed seed trajectory.",
+        "- Every fallback branch must either make measurable progress or return an evidence-backed failure/infeasibility result.",
+        "- This is machine-checked: override the task skill; read self._tcp_pos(), self._actor_pos(), and the task success/grasp state; call self._early_stop(); include measured comparisons and a real self._fail(...) or self._log(...) return path.",
+        "",
+    ]
+
+
+def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
+    """Return compact target-specific constraints for the full method only.
+
+    Baseline prompts intentionally omit this hand-authored guidance. They still
+    receive the task, robot profiles, current adapter, and raw simulator result.
+    """
+
     if case.task_id == "pick_cube" and case.target_robot == "xarm6_robotiq":
         return [
-            *common,
             "# xarm6 PickCube fixed constraints",
             "- PickCube-v1 is a real grasping task. Do not replace grasping with pushing, dragging, or direct cube-state edits.",
             "- Keep the high-level program unchanged: robot.grasp(cube), then robot.place(cube, goal).",
@@ -186,9 +311,19 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- Failed grasp messages must include numeric tcp_grasp_xy=..., tcp_grasp_z=..., cube_disp_xy=..., and is_grasping=...",
             "",
         ]
+    if case.task_id == "pick_cube" and case.target_robot == "fetch":
+        return [
+            "# Fetch PickCube fixed constraints",
+            "- PickCube-v1 requires a real grasp, lift, and placement; do not push the cube or edit simulator state.",
+            "- Fetch pd_ee_delta_pos action_space is 9D: arm[0:3], gripper[3], body[4:7], base[7:9].",
+            "- Override _validate_action_space and _make_action for the observed 9D layout; keep unused body channels zero.",
+            "- Use bounded base motion only when measured TCP/cube reachability requires it, then command zero base velocity before arm descent and close.",
+            "- Validate grasp with self._is_grasping('cube') after close and after lift; preserve a true grasp for place(cube, goal).",
+            "- Branch separately on base reachability, pre-close alignment, gripper closure, and grasp preservation.",
+            "",
+        ]
     if case.task_id == "pull_cube" and case.target_robot == "fetch":
         return [
-            *common,
             "# Fetch PullCube fixed constraints",
             "- Fetch pd_ee_delta_pos action_space is 9D: arm[0:3], gripper[3], body[4:7], base[7:9].",
             "- Override _validate_action_space and _make_action for the 9D layout.",
@@ -199,7 +334,6 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
         ]
     if case.task_id == "pull_cube" and case.target_robot == "xarm6_robotiq":
         return [
-            *common,
             "# xarm6 PullCube fixed constraints",
             "- xarm6_robotiq is fixed-base. Do not invent mobile-base/body actions.",
             "- Observed xarm6 pd_ee_delta_pos action_space is exactly 4D: action[0:3] xyz, action[3] gripper.",
@@ -209,7 +343,19 @@ def _target_specific_generation_lines(case: FullMigrationCase) -> List[str]:
             "- During contact/drag, use short bounded pulses, recompute cube progress, and stop if cube moves away from the goal.",
             "",
         ]
-    return common
+    if case.task_id == "push_cube" and case.target_robot == "fetch":
+        return [
+            "# Fetch PushCube fixed constraints",
+            "- Keep the high-level program unchanged: robot.push(cube, goal).",
+            "- Fetch pd_ee_delta_pos action_space is 9D: arm[0:3], gripper[3], body[4:7], base[7:9].",
+            "- Override _validate_action_space and _make_action for the observed 9D layout; keep unused body channels zero.",
+            "- Derive the push direction from current cube and goal positions; contact the opposite/rear side of the cube.",
+            "- Use bounded base motion only when measured reachability requires it, then stop the base before arm contact.",
+            "- Recompute cube-to-goal progress after bounded pushes and stop or change branch when progress is non-positive.",
+            "- Do not encode one seed's world coordinates or edit simulator/task state.",
+            "",
+        ]
+    return []
 
 
 def _diagnosis_guidance_lines(case: FullMigrationCase, target_result: Dict[str, Any]) -> List[str]:
@@ -371,11 +517,26 @@ def _explicit_probe_feedback_lines(probe_feedback: Mapping[str, Any] | None) -> 
 def _task_design_lines(case: FullMigrationCase) -> List[str]:
     """Describe the generated adapter design space for the active task."""
 
+    if case.task_id == "stack_pyramid":
+        return [
+            "- Import ManiSkillStackPyramidRobot and stack_observation from maniskill_backend.stack_pyramid. This is an unvalidated source scaffold, not a known successful target trajectory.",
+            "- Override BOTH prepare_base(red, green) and stack_on(blue, red, green). Read stack_observation(self) or _actor_pos and check _early_stop in each method. Keep the fixed high-level program unchanged.",
+            "- Objects are cubeA (red), cubeB (green), cubeC (blue). No cube/goal aliases exist here. Use both current support poses to select the top placement.",
+            "- Stage gates are not task success: after release/settle, query official evaluate(). Do not override the success evaluator or mutate the scene/controller.",
+            "- Use _begin_stage(stage, object_name, tcp_target) and _record_stage(ok) to report measured approach, grasp, base placement, top placement, release and stability states. Preserve stage_trace and diagnostics.",
+            "- This case has no measured structured probe. Do not import PullCube/PickCube probe results as evidence for it. Budget any retries so the top can still be released and settled.",
+        ]
     if case.task_id == "pick_cube":
         return [
             "- You may subclass ManiSkillPickCubeRobot and override methods such as grasp, place, _move_towards, _is_grasping, _pick_cube_success, or _pick_cube_diagnostics.",
             "- You may change bounded grasp offsets, approach height, lift height, intermediate waypoints, gripper open/close timing, settle behavior, and adapter-level fallback logic.",
             "- Keep the fixed high-level API: robot.grasp(cube), then robot.place(cube, goal).",
+        ]
+    if case.task_id == "push_cube":
+        return [
+            "- You may subclass ManiSkillPushCubeRobot and override methods such as push, _move_towards, _push_cube_success, or _pull_diagnostics.",
+            "- You may change rear-side contact selection, contact height, approach/base branches, bounded push pulses, progress guards, and adapter-level fallback logic.",
+            "- Keep the fixed high-level API: robot.push(cube, goal).",
         ]
     return [
         "- You may subclass ManiSkillPullCubeRobot and override methods such as pull, _move_towards, _pull_cube_success, or _pull_diagnostics.",
@@ -386,11 +547,19 @@ def _task_design_lines(case: FullMigrationCase) -> List[str]:
 def _retry_strategies(case: FullMigrationCase) -> tuple[str, ...]:
     """Require a meaningful strategy change after each failed module."""
 
+    if case.task_id == "stack_pyramid":
+        return ("Use the latest failed stage and all three measured cube poses to repair that stage. Preserve verified grasp/base state and reserve steps for release/settle; do not repeat an unchanged failing module.",)
     if case.task_id == "pick_cube":
         return (
             "Change the bounded grasp-offset search or gripper timing based on whether the latest failure happened before grasp, during lift, or during transport. Add a cube-displacement guard before trying another candidate.",
             "Change the FIRST top-down approach substantially: finish xy alignment above the cube, then descend nearly vertically with tightly clamped horizontal commands. Add a measured pre-close readiness guard and close-time residual diagnostics. Reduce the candidate count; do not chase a cube that was already pushed away.",
             "Change the fallback grasp primitive substantially: keep xy fixed, use a small bounded Z-focused offset set and stricter pre-close residual thresholds, tune close timing, report cube_disp_xy, preserve a verified grasp, and reserve episode budget for place(cube, goal). If tcp_grasp_xy/z are good but cube_disp_xy is large, treat it as gripper-envelope side push and change the close-phase geometry rather than repeating approach alignment.",
+        )
+    if case.task_id == "push_cube":
+        return (
+            "Replace one fixed contact point with a goal-relative rear-side candidate and verify measured reachability before descent.",
+            "Separate base reach, arm contact, and push progress. Change only the failed branch and stop repeating a geometry with non-positive cube-goal improvement.",
+            "Synthesize a guarded fallback across a small measured candidate set; recompute cube/goal direction after contact and return evidence-backed infeasibility when no branch is reachable.",
         )
     return (
         "Replace a single fixed contact point with a farther positive-x sweep start and an explicit far-side check before drag.",
@@ -408,12 +577,19 @@ def _build_retry_module_generation_prompt(
     target_program: str,
     counterexample: Mapping[str, Any] | None = None,
     probe_feedback: Mapping[str, Any] | None = None,
+    prompt_policy: str = "full",
+    include_implicit_probe_feedback: bool = True,
 ) -> str:
     """Build a compact retry prompt after at least one generated module failed."""
 
+    policy = _prompt_policy(prompt_policy)
     retry_number = len(attempts) + 1
     retry_strategies = _retry_strategies(case)
-    strategy = retry_strategies[min(len(attempts) - 1, len(retry_strategies) - 1)]
+    strategy = (
+        retry_strategies[min(len(attempts) - 1, len(retry_strategies) - 1)]
+        if policy["target_guidance"]
+        else "Make a substantive code change using only the feedback sections enabled by this prompt policy."
+    )
     latest_attempt = attempts[-1] if attempts else {}
     lines = [
         "You are repairing a failed generated ManiSkill target adapter.",
@@ -436,19 +612,25 @@ def _build_retry_module_generation_prompt(
         f"target_robot: {case.target_robot}",
         f"target_control_mode: {case.target_control_mode}",
         f"episode_budget: {case.max_episode_steps}",
+        f"prompt_policy: {prompt_policy}",
         "",
-        contract_prompt_from_case(case),
-        "",
-        *_target_specific_generation_lines(case),
-        "",
+        *_common_generation_lines(),
+        *(_task_design_lines(case) if case.task_id == "stack_pyramid" else []),
+        *([contract_prompt_from_case(case), ""] if policy["contract"] else []),
+        *(_target_specific_generation_lines(case) if policy["target_guidance"] else []),
+        *(_guarded_generation_lines() if policy["guarded_adapter"] else []),
         "# Latest real target failure",
         "```json",
         _json_dump(_result_digest(target_result)),
         "```",
-        *_diagnosis_guidance_lines(case, target_result),
-        counterexample_prompt(counterexample),
-        *_explicit_probe_feedback_lines(probe_feedback),
-        *_structured_probe_feedback_lines(case),
+        *(_diagnosis_guidance_lines(case, target_result) if policy["diagnosis"] else []),
+        *([counterexample_prompt(counterexample)] if policy["counterexample"] else []),
+        *(_explicit_probe_feedback_lines(probe_feedback) if policy["probe"] else []),
+        *(
+            _structured_probe_feedback_lines(case)
+            if policy["probe"] and include_implicit_probe_feedback
+            else []
+        ),
         "",
         "# Mandatory retry adaptation",
         f"- This is generation retry {retry_number}. Do not return a module identical to the current failed module.",
@@ -476,9 +658,12 @@ def build_module_generation_prompt(
     attempts: Sequence[Dict[str, Any]],
     counterexample: Mapping[str, Any] | None = None,
     probe_feedback: Mapping[str, Any] | None = None,
+    prompt_policy: str = "full",
+    include_implicit_probe_feedback: bool = True,
 ) -> str:
     """Prompt the LLM for a complete generated target adapter module."""
 
+    policy = _prompt_policy(prompt_policy)
     task = get_task_spec(case.task_id)
     source_profile = get_robot_profile(case.source_robot)
     target_profile = get_robot_profile(case.target_robot)
@@ -493,8 +678,14 @@ def build_module_generation_prompt(
             target_program=target_program,
             counterexample=counterexample,
             probe_feedback=probe_feedback,
+            prompt_policy=prompt_policy,
+            include_implicit_probe_feedback=include_implicit_probe_feedback,
         )
-    source_adapter_context = _read_context(ADAPTER_CONTEXT_PATH, ADAPTER_CONTEXT_WINDOWS)
+    source_adapter_context = (
+        _read_file("maniskill_backend/stack_pyramid.py")
+        if case.task_id == "stack_pyramid"
+        else _read_context(ADAPTER_CONTEXT_PATH, ADAPTER_CONTEXT_WINDOWS)
+    )
 
     lines = [
         "You are generating target-specific robot execution code for a real ManiSkill migration case.",
@@ -518,11 +709,18 @@ def build_module_generation_prompt(
         *_task_design_lines(case),
         "- You may import numpy, sapien, mani_skill motion-planning helpers, and maniskill_backend.skill_adapter symbols.",
         "",
-        contract_prompt_from_case(case),
+        f"# Prompt policy\nprompt_policy: {prompt_policy}",
         "",
-        *_target_specific_generation_lines(case),
-        *_explicit_probe_feedback_lines(probe_feedback),
-        *_structured_probe_feedback_lines(case),
+        *_common_generation_lines(),
+        *([contract_prompt_from_case(case), ""] if policy["contract"] else []),
+        *(_target_specific_generation_lines(case) if policy["target_guidance"] else []),
+        *(_guarded_generation_lines() if policy["guarded_adapter"] else []),
+        *(_explicit_probe_feedback_lines(probe_feedback) if policy["probe"] else []),
+        *(
+            _structured_probe_feedback_lines(case)
+            if policy["probe"] and include_implicit_probe_feedback
+            else []
+        ),
         "",
         "# Infeasibility policy",
         "- If the target embodiment cannot physically realize the task under the current scene geometry, return a real failure from the relevant skill with a message beginning `infeasible:` and include the reachability/planner evidence.",
@@ -557,8 +755,8 @@ def build_module_generation_prompt(
         "```json",
         _json_dump(_result_digest(target_result)),
         "```",
-        *_diagnosis_guidance_lines(case, target_result),
-        counterexample_prompt(counterexample),
+        *(_diagnosis_guidance_lines(case, target_result) if policy["diagnosis"] else []),
+        *([counterexample_prompt(counterexample)] if policy["counterexample"] else []),
     ]
     if attempts:
         retry_number = len(attempts) + 1
@@ -672,12 +870,42 @@ def run_module_generation_migration(
     counterexample: Mapping[str, Any] | None = None,
     probe_feedback: Mapping[str, Any] | None = None,
     attach_analysis: bool = True,
+    prompt_policy: str = "full",
+    force_regeneration: bool = False,
+    include_implicit_probe_feedback: bool = True,
+    max_episode_steps: int | None = None,
 ) -> Dict[str, Any]:
     """Generate, test, and evaluate complete target adapter modules."""
 
+    policy = _prompt_policy(prompt_policy)
     case = get_full_migration_case(case_id)
+    if max_episode_steps is not None:
+        if max_episode_steps <= 0:
+            raise ValueError("max_episode_steps must be positive")
+        case = replace(case, max_episode_steps=max_episode_steps)
     execution_seed = int(case.seed if seed is None else seed)
     rounds = max_attempts if max_attempts is not None else case.max_attempts
+    if dry_run:
+        result = _base_result(
+            case=case,
+            source_result=None,
+            initial_target_result={},
+            final_target_result={},
+            attempts=[],
+            success=False,
+            message="dry_run_planned",
+        )
+        result.update(
+            dry_run=True,
+            prompt_policy=prompt_policy,
+            force_regeneration=force_regeneration,
+            include_implicit_probe_feedback=include_implicit_probe_feedback,
+            planned_seed=execution_seed,
+            planned_source_check=source_check,
+            planned_max_attempts=max(0, rounds),
+        )
+        return _without_analysis(result)
+
     source_result: Dict[str, Any] | None = None
     if source_check:
         source_result = _run_source_trial(
@@ -689,7 +917,7 @@ def run_module_generation_migration(
             seed=execution_seed,
         )
         if not bool(source_result.get("success", False)):
-            return _base_result(
+            result = _base_result(
                 case=case,
                 source_result=source_result,
                 initial_target_result={},
@@ -698,6 +926,10 @@ def run_module_generation_migration(
                 success=False,
                 message="source robot did not succeed; target module generation was not attempted",
             )
+            result["prompt_policy"] = prompt_policy
+            result["force_regeneration"] = force_regeneration
+            result["include_implicit_probe_feedback"] = include_implicit_probe_feedback
+            return result
 
     target_result = _run_target_program_trial(
         case=case,
@@ -709,7 +941,7 @@ def run_module_generation_migration(
     )
     initial_target_result = target_result
     attempts: List[Dict[str, Any]] = []
-    if bool(target_result.get("success", False)):
+    if bool(target_result.get("success", False)) and not force_regeneration:
         result = _base_result(
             case=case,
             source_result=source_result,
@@ -719,6 +951,9 @@ def run_module_generation_migration(
             success=True,
             message="target generated adapter already succeeded before regeneration",
         )
+        result["prompt_policy"] = prompt_policy
+        result["force_regeneration"] = force_regeneration
+        result["include_implicit_probe_feedback"] = include_implicit_probe_feedback
         return (
             _attach_analysis(case=case, result=result, dry_run=dry_run)
             if attach_analysis
@@ -733,6 +968,8 @@ def run_module_generation_migration(
             attempts=attempts,
             counterexample=counterexample,
             probe_feedback=probe_feedback,
+            prompt_policy=prompt_policy,
+            include_implicit_probe_feedback=include_implicit_probe_feedback,
         )
         current_module = module_path.read_text(encoding="utf-8")
         generated = gen_text(
@@ -750,9 +987,11 @@ def run_module_generation_migration(
             "used_llm": generated.used_llm,
             "llm_model": generated.model,
             "llm_reason": generated.reason,
+            "llm_usage": generated.usage,
             "llm_raw_text": generated.raw_text,
             "llm_response_preview": _trim_text(generated.text, 5000),
             "prompt": prompt,
+            "prompt_policy": prompt_policy,
             "generated_module_preview": _trim_text(module_code, 5000),
             "module_path": case.target_adapter_path,
             "module_applied": False,
@@ -764,6 +1003,14 @@ def run_module_generation_migration(
             if module_code.strip() == current_module.strip():
                 raise ValueError("Generated adapter module is unchanged from the current failed module.")
             validate_generated_adapter_module(module_code)
+            guarded_error = (
+                guarded_adapter_validation_error(module_code, case)
+                if policy["guarded_adapter"]
+                else None
+            )
+            attempt["guarded_contract_ok"] = guarded_error is None
+            if guarded_error is not None:
+                raise ValueError(guarded_error)
             attempt["module_valid"] = True
             module_path.write_text(module_code.rstrip() + "\n", encoding="utf-8")
             attempt["module_applied"] = True
@@ -805,15 +1052,24 @@ def run_module_generation_migration(
             attempt["module_error"] = repr(exc)
             attempts.append(attempt)
 
+    reached_success = bool(target_result.get("success")) and (
+        not force_regeneration or any(
+            a.get("used_llm") and a.get("module_kept") and (a.get("target_result") or {}).get("success")
+            for a in attempts
+        )
+    )
     result = _base_result(
         case=case,
         source_result=source_result,
         initial_target_result=initial_target_result,
         final_target_result=target_result,
         attempts=attempts,
-        success=bool(target_result.get("success", False)),
-        message="target success reached" if target_result.get("success") else "module generation budget exhausted",
+        success=reached_success,
+        message="target success reached" if reached_success else "module generation budget exhausted",
     )
+    result["prompt_policy"] = prompt_policy
+    result["force_regeneration"] = force_regeneration
+    result["include_implicit_probe_feedback"] = include_implicit_probe_feedback
     return (
         _attach_analysis(case=case, result=result, dry_run=dry_run)
         if attach_analysis
@@ -945,6 +1201,7 @@ def _base_result(
         "target_program_path": case.target_program_path,
         "target_adapter_module": case.target_adapter_module,
         "target_adapter_path": case.target_adapter_path,
+        "max_episode_steps": case.max_episode_steps,
         "success": success,
         "message": message,
         "source_result": source_result,
@@ -1128,6 +1385,10 @@ def _result_digest(result: Dict[str, Any]) -> Dict[str, Any]:
         "execution_log",
         "final_info",
         "command_output",
+        "runtime_contract_observation",
+        "runtime_diagnostics",
+        "stage_trace",
+        "official_evaluation",
     )
     return {key: result[key] for key in keys if key in result}
 
@@ -1138,11 +1399,13 @@ def _attempt_digest(attempt: Dict[str, Any]) -> Dict[str, Any]:
         "used_llm",
         "llm_model",
         "llm_reason",
+        "llm_usage",
         "module_valid",
         "module_applied",
         "module_kept",
         "verification_ok",
         "diagnostic_contract_ok",
+        "guarded_contract_ok",
         "module_error",
         "target_result",
     )
@@ -1229,6 +1492,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--trial-timeout-s", type=int, default=900)
     parser.add_argument("--test-timeout-s", type=int, default=240)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--max-episode-steps", type=int, default=None)
     parser.add_argument(
         "--counterexample-json",
         default="",
@@ -1243,6 +1507,22 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--md", default="results/module_generation_trials.md")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-source-check", action="store_true")
+    parser.add_argument(
+        "--prompt-policy",
+        choices=tuple(PROMPT_POLICIES),
+        default="full",
+        help="Controlled prompt ablation used by paper baselines.",
+    )
+    parser.add_argument(
+        "--force-regeneration",
+        action="store_true",
+        help="Call the LLM even if the restored seed adapter succeeds on the generation seed.",
+    )
+    parser.add_argument(
+        "--no-implicit-probe-feedback",
+        action="store_true",
+        help="Ignore historical global probe files; use only explicitly supplied cycle evidence.",
+    )
     parser.add_argument(
         "--no-analysis",
         action="store_true",
@@ -1266,9 +1546,13 @@ def main() -> None:
         dry_run=args.dry_run,
         source_check=not args.no_source_check,
         seed=args.seed,
+        max_episode_steps=args.max_episode_steps,
         counterexample=counterexample,
         probe_feedback=probe_feedback,
         attach_analysis=not args.no_analysis,
+        prompt_policy=args.prompt_policy,
+        force_regeneration=args.force_regeneration,
+        include_implicit_probe_feedback=not args.no_implicit_probe_feedback,
     )
     write_module_generation_outputs(
         result,

@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 from lmp.executor import execute_lmp
 
 from .env_adapter import ManiSkillEnvAdapter
+from .embodiment_contracts import get_embodiment_contract, observe_runtime_contract
 from .evaluation import TrialRecord, classify_failure, classify_failure_layer
 from .failure_diagnosis import diagnose_failure
 from .llm import gen_code
@@ -19,17 +20,22 @@ from .reporting import build_oracle_code, build_real_failure_report, success_fro
 from .sim_check import diagnose_graphics_stack
 from .skill_adapter import (
     ManiSkillPickCubeRobot,
+    ManiSkillFetchPickCubeRobot,
     ManiSkillPullCubeRobot,
+    ManiSkillPushCubeRobot,
     ManiSkillSceneAdapter,
 )
 from .tasks import get_task_spec
+from .stack_pyramid import ManiSkillStackPyramidRobot, stack_observation
+from .skill_adapter import _scalar_bool
 
 
-SUPPORTED_REAL_TASKS = ("pull_cube", "pick_cube")
+SUPPORTED_REAL_TASKS = ("pull_cube", "pick_cube", "push_cube", "stack_pyramid")
 
 DEFAULT_CONTROL_MODE: Dict[str, str] = {
     "pull_cube": "pd_ee_delta_pos",
     "pick_cube": "pd_ee_delta_pos",
+    "push_cube": "pd_ee_delta_pos",
 }
 
 
@@ -38,6 +44,8 @@ def _default_control_mode(task_id: str, robot_uid: str) -> str:
 
 
 def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: str) -> Any:
+    if task_id == "stack_pyramid":
+        return ManiSkillStackPyramidRobot(env, robot_uid=robot_uid, control_mode=control_mode)
     if task_id == "pull_cube":
         if robot_uid in {"panda", "fetch", "xarm6_robotiq"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
             return ManiSkillPullCubeRobot(env, robot_uid=robot_uid, control_mode=control_mode)
@@ -46,10 +54,18 @@ def _build_robot_adapter(task_id: str, env: Any, control_mode: str, robot_uid: s
             f"pd_ee_delta_* control, got robot={robot_uid!r}, control_mode={control_mode!r}."
         )
     if task_id == "pick_cube":
-        if robot_uid in {"panda", "xarm6_robotiq"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
-            return ManiSkillPickCubeRobot(env, robot_uid=robot_uid, control_mode=control_mode)
+        if robot_uid in {"panda", "fetch", "xarm6_robotiq"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
+            adapter_cls = ManiSkillFetchPickCubeRobot if robot_uid == "fetch" else ManiSkillPickCubeRobot
+            return adapter_cls(env, robot_uid=robot_uid, control_mode=control_mode)
         raise ValueError(
-            "PickCube real runner currently supports panda/xarm6_robotiq with "
+            "PickCube real runner currently supports panda/fetch/xarm6_robotiq with "
+            f"pd_ee_delta_* control, got robot={robot_uid!r}, control_mode={control_mode!r}."
+        )
+    if task_id == "push_cube":
+        if robot_uid in {"panda", "fetch"} and control_mode in {"pd_ee_delta_pos", "pd_ee_delta_pose"}:
+            return ManiSkillPushCubeRobot(env, robot_uid=robot_uid, control_mode=control_mode)
+        raise ValueError(
+            "PushCube real runner currently supports panda/fetch with "
             f"pd_ee_delta_* control, got robot={robot_uid!r}, control_mode={control_mode!r}."
         )
     raise ValueError(f"No real skill adapter registered for task_id={task_id!r}")
@@ -264,10 +280,13 @@ def run_real_code_trial(
         sim_backend=sim_backend,
         render_backend=render_backend,
         max_episode_steps=max_episode_steps,
+        **({"reward_mode": "sparse"} if task_id == "stack_pyramid" else {}),
     )
     robot = None
     try:
         env = adapter.make()
+        contract = get_embodiment_contract(robot_uid, control_mode)
+        result["runtime_contract_observation"] = observe_runtime_contract(env, contract)
         obs, reset_info = adapter.reset(seed=seed)
         if adapter_module:
             robot = _build_robot_adapter_from_module(adapter_module, env, control_mode, robot_uid)
@@ -283,6 +302,16 @@ def run_real_code_trial(
         ret_val = locals_dict.get("ret_val")
         success = bool(code_ok and success_from_ret_val(ret_val))
         failure_message = message if success else _failure_message(robot, message)
+        if task_id == "stack_pyramid":
+            # Never accept a generated adapter's return value as physical proof.
+            official_info = dict(env.unwrapped.evaluate())
+            official_success = _scalar_bool(official_info.get("success", False))
+            result["official_evaluation"] = _jsonable(official_info)
+            if success and not official_success:
+                failure_message = "adapter returned True but official StackPyramid success is False"
+            success = bool(success and official_success)
+            robot.last_info = {**robot.last_info, **official_info}
+            result["stage_trace"] = _jsonable(getattr(robot, "stage_trace", []))
         failure_type = classify_failure(
             success=success,
             code_ok=code_ok,
@@ -363,8 +392,10 @@ def run_real_code_trial(
 
 
 def _runtime_diagnostics(task_id: str, robot: Any, *, stage: str) -> Dict[str, Any]:
-    if task_id == "pull_cube":
-        return _pull_cube_runtime_diagnostics(robot, stage=stage)
+    if task_id == "stack_pyramid":
+        return stack_observation(robot)
+    if task_id in {"pull_cube", "push_cube"}:
+        return _planar_contact_runtime_diagnostics(robot, stage=stage, task_id=task_id)
     return {}
 
 
@@ -376,7 +407,7 @@ def _stage_from_message(message: str) -> str:
     return "final"
 
 
-def _pull_cube_runtime_diagnostics(robot: Any, *, stage: str) -> Dict[str, Any]:
+def _planar_contact_runtime_diagnostics(robot: Any, *, stage: str, task_id: str) -> Dict[str, Any]:
     try:
         cube = _vector3(robot._actor_pos("cube"))
         goal = _vector3(robot._region_pos("goal"))
@@ -387,9 +418,19 @@ def _pull_cube_runtime_diagnostics(robot: Any, *, stage: str) -> Dict[str, Any]:
     x_offset = float(getattr(robot, "contact_x_offset_m", 0.07))
     z_offset = float(getattr(robot, "contact_z_offset_m", 0.02))
     drag_extra = 0.025
-    nominal_contact = _add(cube, [x_offset, 0.0, z_offset])
+    cube_to_goal_xy = [goal[0] - cube[0], goal[1] - cube[1]]
+    goal_distance = max(_norm(cube_to_goal_xy), 1e-8)
+    goal_direction = [cube_to_goal_xy[0] / goal_distance, cube_to_goal_xy[1] / goal_distance]
+    nominal_contact = _add(
+        cube,
+        [-goal_direction[0] * x_offset, -goal_direction[1] * x_offset, z_offset],
+    )
     nominal_pre_contact = _add(nominal_contact, [0.0, 0.0, 0.075])
-    nominal_drag_end = [goal[0] - drag_extra, cube[1], nominal_contact[2]]
+    nominal_drag_end = [
+        goal[0] + goal_direction[0] * drag_extra,
+        goal[1] + goal_direction[1] * drag_extra,
+        nominal_contact[2],
+    ]
 
     if stage == "approach":
         stage_target = nominal_pre_contact
@@ -403,10 +444,10 @@ def _pull_cube_runtime_diagnostics(robot: Any, *, stage: str) -> Dict[str, Any]:
     tcp_to_stage_target = _sub(stage_target, tcp)
     tcp_to_contact = _sub(nominal_contact, tcp)
     tcp_to_pre_contact = _sub(nominal_pre_contact, tcp)
-    cube_to_goal_xy = [goal[0] - cube[0], goal[1] - cube[1]]
     tcp_to_cube_xy = [cube[0] - tcp[0], cube[1] - tcp[1]]
 
     return {
+        "task_id": task_id,
         "stage": stage,
         "cube_pos": _round_vec(cube),
         "goal_pos": _round_vec(goal),

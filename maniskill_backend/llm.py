@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
 
-from llm_client import api_key_env, chat, current_provider, default_model, has_api_key, make_client
+from llm_client import (
+    api_key_env,
+    chat_with_metadata,
+    current_provider,
+    default_model,
+    generation_temperature,
+    has_api_key,
+    make_client,
+)
 from lmp.extractor import extract_code_or_text
 
 
@@ -20,6 +27,7 @@ class LLMResult:
     model: str
     raw_text: str = ""
     reason: str = ""
+    usage: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -29,6 +37,7 @@ class LLMTextResult:
     model: str
     raw_text: str = ""
     reason: str = ""
+    usage: dict = field(default_factory=dict)
 
 
 def has_llm_key() -> bool:
@@ -68,18 +77,19 @@ def gen_code(
         "You adapt robot LMP Python code across robot embodiments. "
         "Return only executable Python code. Do not include Markdown."
     )
-    raw_text = chat(
+    response = chat_with_metadata(
         client=make_client(provider),
         system=system,
         user=prompt,
         model=chosen_model,
-        temperature=0.0,
+        temperature=generation_temperature(),
     )
     return LLMResult(
-        code=extract_code_or_text(raw_text),
+        code=extract_code_or_text(response.content),
         used_llm=True,
-        model=chosen_model,
-        raw_text=raw_text,
+        model=response.model,
+        raw_text=response.content,
+        usage=response.usage,
     )
 
 
@@ -111,16 +121,17 @@ def gen_text(
             reason=f"missing_{api_key_env(provider).lower()}",
         )
 
-    raw_text = chat(
+    response = chat_with_metadata(
         client=make_client(provider),
         system=system,
         user=prompt,
         model=chosen_model,
-        temperature=0.0,
+        temperature=generation_temperature(),
     )
     return LLMTextResult(
-        text=raw_text.strip(),
+        text=response.content.strip(),
         used_llm=True,
-        model=chosen_model,
-        raw_text=raw_text,
+        model=response.model,
+        raw_text=response.content,
+        usage=response.usage,
     )

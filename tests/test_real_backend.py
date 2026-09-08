@@ -34,8 +34,12 @@ from maniskill_backend.module_generation_runner import (
     validate_generated_adapter_module,
 )
 from maniskill_backend.online_harness import (
+    build_online_planner_prompt,
+    build_pick_cube_online_observation,
     build_pull_cube_online_observation,
+    fallback_online_pick_action,
     fallback_online_pull_action,
+    run_online_case,
     validate_online_action,
 )
 from maniskill_backend.profiles import get_robot_profile, iter_robot_profiles
@@ -46,7 +50,12 @@ from maniskill_backend.real_runner import (
 )
 from maniskill_backend.reporting import build_oracle_code, build_real_failure_report, success_from_ret_val
 from maniskill_backend.results import append_jsonl, summarize_records
-from maniskill_backend.skill_adapter import ManiSkillPickCubeRobot, ManiSkillPullCubeRobot, ManiSkillSceneAdapter
+from maniskill_backend.skill_adapter import (
+    ManiSkillPickCubeRobot,
+    ManiSkillPullCubeRobot,
+    ManiSkillPushCubeRobot,
+    ManiSkillSceneAdapter,
+)
 from maniskill_backend.structured_probe import (
     get_probe_spec,
     probe_grid,
@@ -59,9 +68,9 @@ from llm_client import api_key_env, current_provider, deepseek_thinking_mode, de
 
 
 class RealBackendTest(unittest.TestCase):
-    def test_current_scope_includes_pull_and_pick_cube(self):
+    def test_current_scope_includes_pull_pick_and_push_cube(self):
         self.assertEqual([profile.name for profile in iter_robot_profiles()], ["panda", "fetch", "xarm6_robotiq"])
-        self.assertEqual([task.task_id for task in iter_task_specs()], ["pull_cube", "pick_cube"])
+        self.assertEqual({task.task_id for task in iter_task_specs()}, {"pull_cube", "pick_cube", "push_cube", "stack_pyramid"})
         task = get_task_spec("PullCube-v1")
         self.assertEqual(task.task_id, "pull_cube")
         self.assertEqual(task.maniskill_env_id, "PullCube-v1")
@@ -71,9 +80,13 @@ class RealBackendTest(unittest.TestCase):
         pick = get_task_spec("PickCube-v1")
         self.assertEqual(pick.task_id, "pick_cube")
         self.assertEqual(pick.maniskill_env_id, "PickCube-v1")
-        self.assertEqual(pick.target_robots, ("panda", "xarm6_robotiq"))
+        self.assertEqual(pick.target_robots, ("panda", "xarm6_robotiq", "fetch"))
         self.assertIn("robot.grasp", pick.source_program)
         self.assertIn("robot.place", pick.source_program)
+        push = get_task_spec("PushCube-v1")
+        self.assertEqual(push.task_id, "push_cube")
+        self.assertEqual(push.target_robots, ("panda", "fetch"))
+        self.assertIn("robot.push", push.source_program)
 
     def test_primary_case_is_xarm6_pick_cube(self):
         case = get_full_migration_case(PRIMARY_FULL_MIGRATION_CASE_ID)
@@ -92,12 +105,29 @@ class RealBackendTest(unittest.TestCase):
         case = get_full_migration_case("case01_pull_cube_panda_to_fetch")
         self.assertEqual(case.target_robot, "fetch")
         self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case01_fetch_pull_cube")
+        self.assertEqual(case.support_status, "official_supported")
 
     def test_case02_remains_xarm6_pull_registered_case(self):
         case = get_full_migration_case("case02_pull_cube_panda_to_xarm6")
         self.assertEqual(case.task_id, "pull_cube")
         self.assertEqual(case.target_robot, "xarm6_robotiq")
         self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case02_xarm6_pull_cube")
+        self.assertEqual(case.support_status, "stress_test_override")
+
+    def test_case04_registers_official_fetch_pick_cube_target(self):
+        case = get_full_migration_case("case04_pick_cube_panda_to_fetch")
+        self.assertEqual(case.task_id, "pick_cube")
+        self.assertEqual(case.target_robot, "fetch")
+        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case04_fetch_pick_cube")
+        self.assertEqual(case.max_episode_steps, 500)
+        self.assertEqual(case.support_status, "official_supported")
+
+    def test_case05_registers_official_fetch_push_cube_target(self):
+        case = get_full_migration_case("case05_push_cube_panda_to_fetch")
+        self.assertEqual(case.task_id, "push_cube")
+        self.assertEqual(case.target_robot, "fetch")
+        self.assertEqual(case.target_adapter_module, "maniskill_backend.generated_adapters.case05_fetch_push_cube")
+        self.assertEqual(case.support_status, "official_supported")
 
     def test_profiles_are_promptable(self):
         panda = get_robot_profile("panda").to_prompt_section()
@@ -216,6 +246,24 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("cube_disp_xy=...", prompt)
         self.assertNotIn("cube_pos.z=-0.8996", prompt)
         self.assertNotIn("farther positive-x sweep start", prompt)
+
+    def test_module_generation_prompt_requests_fetch_push_adapter(self):
+        case = get_full_migration_case("case05_push_cube_panda_to_fetch")
+        prompt = build_module_generation_prompt(
+            case=case,
+            target_result={
+                "success": False,
+                "failure_layer": "contact_geometry",
+                "message": "Episode ended during contact.",
+            },
+            attempts=[],
+            prompt_policy="full",
+        )
+        self.assertIn("ManiSkillPushCubeRobot", prompt)
+        self.assertIn("robot.push(cube, goal)", prompt)
+        self.assertIn("Fetch PushCube fixed constraints", prompt)
+        self.assertIn("opposite/rear side", prompt)
+        self.assertIn("_push_cube_success", prompt)
 
     def test_module_generation_prompt_includes_pick_probe_feedback(self):
         case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
@@ -420,6 +468,31 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("tcp_contact_xy", spec.primary_metrics)
         self.assertIn("task_success", spec.success_keys)
 
+    def test_structured_probe_spec_registers_fetch_base_contact_backend(self):
+        case = get_full_migration_case("case01_pull_cube_panda_to_fetch")
+        spec = get_probe_spec(case, diagnosis={"reason": "contact_side_reachability_failure"})
+        self.assertEqual(spec.probe_id, "pull_cube_fetch_base_contact")
+        self.assertEqual(spec.robot_uid, "fetch")
+        self.assertIn("base_speed", spec.parameter_grid)
+        self.assertIn("base_reach_improvement", spec.primary_metrics)
+        self.assertEqual(len(probe_grid(spec)), 48)
+
+    def test_structured_probe_spec_registers_fetch_pick_backend(self):
+        case = get_full_migration_case("case04_pick_cube_panda_to_fetch")
+        spec = get_probe_spec(case, diagnosis={"reason": "approach_descent_alignment_failure"})
+        self.assertEqual(spec.probe_id, "pick_cube_fetch_base_close_envelope")
+        self.assertIn("base_speed", spec.parameter_grid)
+        self.assertIn("grasp_z_offset", spec.parameter_grid)
+        self.assertEqual(len(probe_grid(spec)), 72)
+
+    def test_structured_probe_spec_registers_fetch_push_backend(self):
+        case = get_full_migration_case("case05_push_cube_panda_to_fetch")
+        spec = get_probe_spec(case, diagnosis={"reason": "contact_side_reachability_failure"})
+        self.assertEqual(spec.probe_id, "push_cube_fetch_base_contact")
+        self.assertIn("base_speed", spec.parameter_grid)
+        self.assertIn("cube_delta_along_goal", spec.primary_metrics)
+        self.assertEqual(len(probe_grid(spec)), 48)
+
     def test_structured_probe_summary_builds_prompt_feedback(self):
         case = get_full_migration_case("case03_pick_cube_panda_to_xarm6")
         spec = get_probe_spec(case)
@@ -523,6 +596,9 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIn("pick_cube_xarm6_close_envelope", script)
         self.assertIn("pull_cube_xarm6_contact_geometry", script)
         self.assertIn("xarm6_pull_contact_probe", script)
+        self.assertIn("pull_cube_fetch_base_contact", script)
+        self.assertIn("pick_cube_fetch_base_close_envelope", script)
+        self.assertTrue(Path("scripts/fetch_pull_contact_probe.py").exists())
 
     def test_xarm6_pick_probe_accepts_explicit_probe_plan(self):
         script = Path("scripts/xarm6_pick_grasp_probe.py").read_text(encoding="utf-8")
@@ -677,6 +753,21 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertIsInstance(pick_robot, ManiSkillPickCubeRobot)
         self.assertEqual(pick_robot.robot_uid, "panda")
 
+        class FetchSpace:
+            shape = (9,)
+            dtype = np.float32
+            low = -np.ones(9, dtype=np.float32)
+            high = np.ones(9, dtype=np.float32)
+
+        class FetchEnv:
+            action_space = FetchSpace()
+
+        fetch_pick = _build_robot_adapter("pick_cube", FetchEnv(), "pd_ee_delta_pos", "fetch")
+        self.assertIsInstance(fetch_pick, ManiSkillPickCubeRobot)
+        self.assertEqual(fetch_pick.robot_uid, "fetch")
+        push = _build_robot_adapter("push_cube", Env(), "pd_ee_delta_pos", "panda")
+        self.assertIsInstance(push, ManiSkillPushCubeRobot)
+
     def test_generated_target_adapter_module_loads(self):
         class Space:
             shape = (4,)
@@ -711,6 +802,38 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         )
         self.assertIsInstance(pick_robot, ManiSkillPickCubeRobot)
         self.assertEqual(pick_robot.robot_uid, "xarm6_robotiq")
+
+        class FetchSpace:
+            shape = (9,)
+            dtype = np.float32
+            low = -np.ones(9, dtype=np.float32)
+            high = np.ones(9, dtype=np.float32)
+
+        class FetchEnv:
+            action_space = FetchSpace()
+
+        fetch_pick_robot = _build_robot_adapter_from_module(
+            "maniskill_backend.generated_adapters.case04_fetch_pick_cube",
+            FetchEnv(),
+            "pd_ee_delta_pos",
+            "fetch",
+        )
+        self.assertIsInstance(fetch_pick_robot, ManiSkillPickCubeRobot)
+        self.assertEqual(fetch_pick_robot.robot_uid, "fetch")
+        fetch_push_robot = _build_robot_adapter_from_module(
+            "maniskill_backend.generated_adapters.case05_fetch_push_cube",
+            Env(),
+            "pd_ee_delta_pos",
+            "fetch",
+        )
+        self.assertIsInstance(fetch_push_robot, ManiSkillPushCubeRobot)
+        with self.assertRaisesRegex(RuntimeError, "action_space last dim"):
+            _build_robot_adapter_from_module(
+                "maniskill_backend.generated_adapters.case05_fetch_push_cube",
+                FetchEnv(),
+                "pd_ee_delta_pos",
+                "fetch",
+            )
 
     def test_pull_cube_robot_action_shape(self):
         class Space:
@@ -749,6 +872,18 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
 
         ok, message, locals_dict = execute_lmp(
             get_task_spec("pick_cube").source_program,
+            {"scene": ManiSkillSceneAdapter(), "robot": Robot()},
+        )
+        self.assertTrue(ok, message)
+        self.assertTrue(locals_dict["ret_val"])
+
+    def test_lmp_executor_supports_push_program(self):
+        class Robot:
+            def push(self, obj, target):
+                return obj.name == "cube" and target.name == "goal"
+
+        ok, message, locals_dict = execute_lmp(
+            get_task_spec("push_cube").source_program,
             {"scene": ManiSkillSceneAdapter(), "robot": Robot()},
         )
         self.assertTrue(ok, message)
@@ -1163,6 +1298,17 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         )
         self.assertEqual(fallback_online_pull_action(contact_observation)["primitive"], "drag_toward_goal")
 
+    def test_online_push_observation_reverses_contact_side(self):
+        observation = build_pull_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[0.2, 0.05, 0.001],
+            tcp_pos=[0.0, 0.0, 0.16],
+            task_id="push_cube",
+        )
+        self.assertEqual(observation["schema"], "online_push_cube_observation.v1")
+        self.assertAlmostEqual(observation["targets"]["contact"][0], -0.12, places=4)
+        self.assertEqual(observation["metrics"]["goal_dir_xy"], [1.0, 0.0])
+
     def test_online_action_validation_rejects_unsafe_primitive(self):
         observation = build_pull_cube_online_observation(
             cube_pos=[0.0, 0.05, 0.02],
@@ -1171,6 +1317,81 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         )
         validated = validate_online_action({"primitive": "teleport_cube", "args": {}}, observation)
         self.assertEqual(validated["primitive"], "move_to_pre_contact")
+
+    def test_online_pick_observation_and_fallback_use_live_grasp_state(self):
+        far_observation = build_pick_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[0.03, 0.0, 0.29],
+            tcp_pos=[0.0, 0.0, 0.16],
+            is_grasping=False,
+        )
+        self.assertEqual(far_observation["task_id"], "pick_cube")
+        self.assertIn("is_grasping", far_observation["metrics"])
+        self.assertEqual(
+            fallback_online_pick_action(far_observation)["primitive"],
+            "move_to_pre_grasp",
+        )
+
+        grasp_observation = build_pick_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[0.03, 0.0, 0.29],
+            tcp_pos=[0.0, 0.05, 0.02],
+            is_grasping=False,
+            phase="at_grasp",
+        )
+        self.assertEqual(
+            fallback_online_pick_action(grasp_observation)["primitive"],
+            "close_gripper",
+        )
+
+        held_observation = build_pick_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.10],
+            goal_pos=[0.03, 0.0, 0.29],
+            tcp_pos=[0.0, 0.05, 0.10],
+            is_grasping=True,
+            initial_cube_z=0.02,
+            phase="lifted",
+        )
+        self.assertEqual(
+            fallback_online_pick_action(held_observation)["primitive"],
+            "move_to_goal",
+        )
+
+    def test_online_pick_plan_is_bounded_and_prompt_is_stepwise(self):
+        observation = build_pick_cube_online_observation(
+            cube_pos=[0.0, 0.05, 0.02],
+            goal_pos=[0.03, 0.0, 0.29],
+            tcp_pos=[0.0, 0.05, 0.02],
+            is_grasping=False,
+        )
+        validated = validate_online_action(
+            {
+                "primitive": "close_gripper",
+                "args": {"close_command": -9.0, "steps": 999},
+            },
+            observation,
+        )
+        self.assertEqual(validated["primitive"], "close_gripper")
+        self.assertEqual(validated["args"]["close_command"], -1.0)
+        self.assertEqual(validated["args"]["steps"], 32)
+        prompt = build_online_planner_prompt(observation)
+        self.assertIn("one live ManiSkill episode", prompt)
+        self.assertIn("execute only a short segment", prompt)
+        self.assertIn("close_gripper", prompt)
+
+    def test_online_harness_dry_run_supports_pick_cube(self):
+        result = run_online_case(
+            case_id="case03_pick_cube_panda_to_xarm6",
+            planner="llm",
+            dry_run=True,
+        )
+        self.assertTrue(result["dry_run"])
+        self.assertEqual(result["task_id"], "pick_cube")
+        self.assertEqual(result["initial_observation"]["task_id"], "pick_cube")
+        self.assertIn(
+            result["first_action"]["primitive"],
+            result["initial_observation"]["allowed_primitives"],
+        )
 
     def test_short_auto_pull_entrypoint_dry_run(self):
         with tempfile.TemporaryDirectory() as tmpdir:

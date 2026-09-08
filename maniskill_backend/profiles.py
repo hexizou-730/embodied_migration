@@ -85,6 +85,7 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
             recommended_alignment_tolerance_m=0.01,
             available_skills=[
                 "pull",
+                "push",
                 "move_to_contact",
                 "drag_contact",
                 "grasp",
@@ -110,9 +111,13 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
             recommended_alignment_tolerance_m=0.02,
             available_skills=[
                 "pull",
+                "push",
                 "move_to_contact",
                 "drag_contact",
                 "base_aware_contact",
+                "grasp",
+                "place",
+                "base_aware_grasp",
             ],
         ),
     ),
@@ -137,6 +142,7 @@ ROBOT_PROFILES: Dict[str, RobotProfile] = {
             recommended_alignment_tolerance_m=0.015,
             available_skills=[
                 "pull",
+                "push",
                 "move_to_contact",
                 "drag_contact",
                 "grasp",

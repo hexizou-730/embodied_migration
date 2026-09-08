@@ -48,6 +48,7 @@ def build_iterative_prompt(
         "- scene.get_object(name)",
         "- scene.get_region(name)",
         "- robot.pull(obj, target)",
+        "- robot.push(obj, target)",
         "- robot.grasp(obj)",
         "- robot.place(obj, target)",
         "",
@@ -89,6 +90,15 @@ def build_iterative_prompt(
                 "- robot.place(cube, goal)",
                 "- PickCube-v1 requires real gripper grasp validation before lift and transport.",
                 "- Do not replace grasping with pushing or directly modify simulator state.",
+            ]
+        )
+    if task.task_id == "push_cube":
+        lines.extend(
+            [
+                "",
+                "# Extra API for this task",
+                "- robot.push(cube, goal)",
+                "- Derive contact/push geometry from live cube and goal state in the target adapter.",
             ]
         )
 

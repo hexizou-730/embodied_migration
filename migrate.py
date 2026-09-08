@@ -21,6 +21,11 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from maniskill_backend.cases import find_full_migration_case, iter_full_migration_cases
+from maniskill_backend.dynamic_harness import (
+    DynamicMigrationSpec,
+    looks_like_env_id,
+    run_dynamic_agent_migration,
+)
 from maniskill_backend.real_runner import run_real_code_trial
 
 
@@ -83,6 +88,14 @@ def _run_generate(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
         case.case_id,
         "--max-attempts",
         str(args.max_attempts),
+        "--seed",
+        str(args.seed),
+        "--max-episode-steps",
+        str(args.max_episode_steps or case.max_episode_steps),
+        "--obs-mode",
+        args.obs_mode,
+        "--force-regeneration",
+        "--no-analysis",
         "--sim-backend",
         args.sim_backend,
         "--render-backend",
@@ -109,12 +122,18 @@ def _run_generate(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
         check=False,
     )
     stdout_path.write_text(process.stdout or "", encoding="utf-8")
+    generation_path = run_dir / "module_generation.jsonl"
+    generation = {}
+    if generation_path.exists():
+        lines = [line for line in generation_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        if lines:
+            generation = json.loads(lines[-1])
     return {
         "dry_run": False,
-        "success": process.returncode == 0,
+        "success": process.returncode == 0 and bool(generation.get("success")),
         "returncode": int(process.returncode),
         "stdout": str(stdout_path.relative_to(run_dir)),
-        "message": "LLM adapter generation finished" if process.returncode == 0 else "LLM adapter generation failed",
+        "message": generation.get("message", "LLM adapter generation failed or produced no result"),
     }
 
 
@@ -175,6 +194,8 @@ def _run_agent(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
         str(args.attempts_per_cycle),
         "--seed",
         str(args.seed),
+        "--obs-mode",
+        args.obs_mode,
         "--sim-backend",
         args.sim_backend,
         "--render-backend",
@@ -208,18 +229,48 @@ def _run_agent(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
         agent_summary = json.loads(summary_path.read_text(encoding="utf-8"))
     return {
         "dry_run": bool(args.dry_run),
-        "success": bool(agent_summary.get("success")) if agent_summary else process.returncode == 0,
+        "success": None if args.dry_run else bool(agent_summary.get("success")),
         "returncode": int(process.returncode),
         "stdout": str(stdout_path.relative_to(run_dir)),
         "agent_summary": str(summary_path.relative_to(run_dir)) if summary_path.exists() else "",
         "message": (
-            "agent migration loop reached success"
+            "dry run: source baseline and LLM migration planned; no simulation or API call"
+            if args.dry_run
+            else "agent migration loop reached success"
             if agent_summary.get("success")
             else "agent migration loop finished without success"
             if process.returncode == 0
             else "agent migration loop failed"
         ),
     }
+
+
+def _run_dynamic_agent(args: argparse.Namespace, run_dir: Path, env_id: str) -> dict[str, Any]:
+    spec = DynamicMigrationSpec(
+        env_id=env_id,
+        task_label=env_id,
+        source_robot=_normalize_dynamic_robot(args.source),
+        target_robot=_normalize_dynamic_robot(args.target),
+        source_control_mode=args.source_control_mode,
+        target_control_mode=args.target_control_mode,
+        seed=args.seed,
+        max_episode_steps=args.max_episode_steps or 500,
+        max_source_cycles=args.source_max_cycles,
+        max_target_cycles=args.max_cycles,
+        obs_mode=args.obs_mode,
+        sim_backend=args.sim_backend,
+        render_backend=args.render_backend,
+    )
+    return run_dynamic_agent_migration(spec=spec, run_dir=run_dir, dry_run=args.dry_run)
+
+
+def _normalize_dynamic_robot(value: str) -> str:
+    text = str(value or "").strip().lower().replace("-", "_")
+    return {
+        "franka": "panda",
+        "franka_panda": "panda",
+        "xarm6": "xarm6_robotiq",
+    }.get(text, text)
 
 
 def _run_online(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
@@ -253,15 +304,21 @@ def _run_online(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
     if args.dry_run:
         command.append("--dry-run")
     stdout_path = run_dir / "online_stdout.txt"
-    process = subprocess.run(
+    process = subprocess.Popen(
         command,
         cwd=REPO_ROOT,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        check=False,
     )
-    stdout_path.write_text(process.stdout or "", encoding="utf-8")
+    with stdout_path.open("w", encoding="utf-8") as stream:
+        assert process.stdout is not None
+        for line in process.stdout:
+            stream.write(line)
+            stream.flush()
+            if '"online_event"' in line:
+                print(line.rstrip(), flush=True)
+    returncode = int(process.wait())
     summary_path = run_dir / "online_loop" / "summary.json"
     online_summary: dict[str, Any] = {}
     if summary_path.exists():
@@ -270,18 +327,18 @@ def _run_online(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
         success: bool | None = None
         message = "dry run: online harness would observe and act in short closed-loop segments"
     else:
-        success = bool(online_summary.get("success")) if online_summary else process.returncode == 0
+        success = bool(online_summary.get("success")) if online_summary else returncode == 0
         message = (
             "online harness reached success"
             if online_summary.get("success")
             else "online harness finished without success"
-            if process.returncode == 0
+            if returncode == 0
             else "online harness failed"
         )
     return {
         "dry_run": bool(args.dry_run),
         "success": success,
-        "returncode": int(process.returncode),
+        "returncode": returncode,
         "stdout": str(stdout_path.relative_to(run_dir)),
         "online_summary": str(summary_path.relative_to(run_dir)) if summary_path.exists() else "",
         "online_trace": "online_loop/online_trace.jsonl" if summary_path.exists() else "",
@@ -410,7 +467,7 @@ def _write_readme(run_dir: Path, payload: Mapping[str, Any]) -> None:
         "task + source robot + target robot",
         "```",
         "",
-        "The harness resolves the registered migration case and executes the selected mode.",
+        "Registered tasks use a frozen benchmark case. Unregistered ManiSkill envs use runtime discovery and a generated case manifest.",
     ]
     (run_dir / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -423,8 +480,15 @@ def _list_cases() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a user-facing robot code migration request.")
     parser.add_argument("--task", default="pull_cube", help="Task id, e.g. pull_cube or PullCube-v1.")
+    parser.add_argument(
+        "--env-id",
+        default="",
+        help="ManiSkill environment id for discovery-first migration. Supplying it bypasses the registered case table.",
+    )
     parser.add_argument("--source", default="panda", help="Source robot, e.g. panda.")
     parser.add_argument("--target", default="xarm6_robotiq", help="Target robot, e.g. xarm6_robotiq or xarm6.")
+    parser.add_argument("--source-control-mode", default="pd_ee_delta_pos")
+    parser.add_argument("--target-control-mode", default="pd_ee_delta_pos")
     parser.add_argument(
         "--mode",
         choices=("evaluate", "generate", "auto", "agent", "online", "cegis"),
@@ -433,11 +497,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seeds", default="0-9")
     parser.add_argument("--max-cycles", type=int, default=3)
+    parser.add_argument("--source-max-cycles", type=int, default=2)
     parser.add_argument("--max-attempts", type=int, default=1)
     parser.add_argument("--attempts-per-cycle", type=int, default=1)
-    parser.add_argument("--online-planner", choices=("fallback", "llm"), default="fallback")
+    parser.add_argument("--online-planner", choices=("fallback", "llm"), default="llm")
     parser.add_argument("--segment-steps", type=int, default=8)
-    parser.add_argument("--max-online-steps", type=int, default=240)
+    parser.add_argument("--max-online-steps", type=int, default=360)
     parser.add_argument("--development-seeds", default="0-4")
     parser.add_argument("--held-out-seeds", default="100-109")
     parser.add_argument("--probe-budget", type=int, default=8)
@@ -459,15 +524,37 @@ def main() -> None:
         _list_cases()
         return
 
-    case = find_full_migration_case(args.task, args.source, args.target)
-    run_name = args.run_name or f"{_safe_name(case.task_id)}_{_safe_name(case.source_robot)}_to_{_safe_name(case.target_robot)}_{_timestamp()}"
+    dynamic_env_id = str(args.env_id or "").strip()
+    case = None
+    if not dynamic_env_id:
+        try:
+            case = find_full_migration_case(args.task, args.source, args.target)
+        except KeyError as exc:
+            if args.mode == "agent" and looks_like_env_id(args.task):
+                dynamic_env_id = args.task
+            else:
+                parser.error(
+                    f"{exc} For an unregistered task, use --env-id <ManiSkillEnv-v1> with --mode agent."
+                )
+
+    if dynamic_env_id and args.mode != "agent":
+        parser.error("Discovery-first unregistered tasks currently use --mode agent.")
+    if case is not None and case.task_id == "stack_pyramid" and args.mode not in {"evaluate", "generate", "agent"}:
+        parser.error("StackPyramid currently supports evaluate/generate/agent. Online tools and structured probes are not implemented for this task yet.")
+
+    run_task_name = dynamic_env_id or (case.task_id if case is not None else args.task)
+    run_source = _normalize_dynamic_robot(args.source) if dynamic_env_id else case.source_robot
+    run_target = _normalize_dynamic_robot(args.target) if dynamic_env_id else case.target_robot
+    run_name = args.run_name or f"{_safe_name(run_task_name)}_{_safe_name(run_source)}_to_{_safe_name(run_target)}_{_timestamp()}"
     run_dir = REPO_ROOT / args.output_root / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
     latest_path = REPO_ROOT / args.output_root / "latest.txt"
     latest_path.parent.mkdir(parents=True, exist_ok=True)
     latest_path.write_text(str(run_dir), encoding="utf-8")
 
-    if args.mode == "cegis":
+    if dynamic_env_id:
+        result = _run_dynamic_agent(args, run_dir, dynamic_env_id)
+    elif args.mode == "cegis":
         result = _run_cegis(args, run_dir)
     elif args.mode == "agent":
         result = _run_agent(args, run_dir)
@@ -487,14 +574,27 @@ def main() -> None:
         "target": args.target,
         "mode": args.mode,
         "run_dir": str(run_dir),
-        "case": {
-            "case_id": case.case_id,
-            "task_id": case.task_id,
-            "source_robot": case.source_robot,
-            "target_robot": case.target_robot,
-            "target_adapter_module": case.target_adapter_module,
-            "target_program_path": case.target_program_path,
-        },
+        "case": (
+            {
+                "case_id": case.case_id,
+                "task_id": case.task_id,
+                "source_robot": case.source_robot,
+                "target_robot": case.target_robot,
+                "target_adapter_module": case.target_adapter_module,
+                "target_program_path": case.target_program_path,
+                "registered": True,
+            }
+            if case is not None
+            else {
+                "case_id": "dynamic",
+                "task_id": args.task,
+                "env_id": dynamic_env_id,
+                "source_robot": run_source,
+                "target_robot": run_target,
+                "manifest": result.get("manifest"),
+                "registered": False,
+            }
+        ),
         "result": result,
     }
     _write_json(run_dir / "summary.json", payload)

@@ -65,8 +65,11 @@ def build_migration_prompt(request: MigrationRequest) -> str:
         "- scene.get_object(name)",
         "- scene.get_region(name)",
         "- robot.pull(obj, target)",
+        "- robot.push(obj, target)",
         "- robot.grasp(obj)",
         "- robot.place(obj, target)",
+        *(["- robot.prepare_base(red, green)", "- robot.stack_on(blue, red, green)"]
+          if request.task.task_id == "stack_pyramid" else []),
         "",
         "# Safety constraints",
         "- Do not fake success, bypass task outcomes, or directly modify simulator state.",
@@ -107,6 +110,17 @@ def build_migration_prompt(request: MigrationRequest) -> str:
                 "- PickCube-v1 requires a real gripper grasp, lift, and transport to a 3D goal.",
                 "- Do not replace grasping with contact pushing or directly modify cube state.",
                 "- If the target cannot establish a stable grasp, set ret_val to `infeasible: ...` rather than faking success.",
+            ]
+        )
+
+    if request.task.task_id == "push_cube":
+        lines.extend(
+            [
+                "",
+                "# Task-specific API note",
+                "- For PushCube-v1, use robot.push(cube, goal).",
+                "- PushCube-v1 requires rear-side contact followed by motion toward the live goal direction.",
+                "- Do not invent grasp/place APIs or directly modify cube state.",
             ]
         )
 

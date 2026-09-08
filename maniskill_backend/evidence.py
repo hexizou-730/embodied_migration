@@ -76,7 +76,9 @@ def _tracked_evidence_bundles(
     tracked_set = set(tracked)
     bundles = []
     for relative_path in tracked_set:
-        if not relative_path.startswith("evidence/runs/") or not relative_path.endswith("/manifest.json"):
+        if not relative_path.endswith("/manifest.json") or not relative_path.startswith(
+            ("evidence/runs/", "evidence/paper_runs/")
+        ):
             continue
         path = repo_root / relative_path
         try:
@@ -86,26 +88,39 @@ def _tracked_evidence_bundles(
         if payload.get("case_id") != case.case_id:
             continue
         artifacts = payload.get("artifacts") or {}
-        required = (
-            "adapter",
-            "module_generation_jsonl",
-            "development_jsonl",
-            "held_out_jsonl",
-        )
+        if payload.get("schema") == "paper_run_evidence.v1":
+            required = ["final_adapter", "development_jsonl", "held_out_jsonl"]
+            if str(payload.get("method_id")) in {"B2", "B3", "B4", "B5", "Ours"}:
+                required.append("module_generation_jsonl")
+            adapter_key = "final_adapter"
+        else:
+            required = [
+                "adapter",
+                "module_generation_jsonl",
+                "development_jsonl",
+                "held_out_jsonl",
+            ]
+            adapter_key = "adapter"
         complete = all(
             artifacts.get(key) in tracked_set
             for key in required
         )
-        adapter_snapshot = repo_root / str(artifacts.get("adapter") or "")
+        adapter_snapshot = repo_root / str(artifacts.get(adapter_key) or "")
         hash_matches = (
             adapter_snapshot.is_file()
             and _sha256(adapter_snapshot) == payload.get("adapter_sha256")
         )
+        verified_success = bool(payload.get("success")) and complete and hash_matches
+        llm_provenance = str(payload.get("adapter_provenance") or "").startswith(
+            "llm_generated"
+        )
         bundles.append(
             {
                 "manifest": relative_path,
+                "method_id": payload.get("method_id"),
                 "status": payload.get("status"),
-                "success": bool(payload.get("success")) and complete and hash_matches,
+                "success": verified_success,
+                "llm_migration_success": verified_success and llm_provenance,
                 "bundle_complete": complete,
                 "adapter_hash_matches": hash_matches,
                 "adapter_sha256": payload.get("adapter_sha256"),
@@ -126,13 +141,16 @@ def build_evidence_ledger(repo_root: Path = REPO_ROOT) -> Dict[str, Any]:
         artifacts = _tracked_result_artifacts(case, tracked)
         bundles = _tracked_evidence_bundles(case, tracked, repo_root)
         provenance = detect_adapter_provenance(adapter_path, seed_path=seed_path)
-        reproducible_success = any(bool(item.get("success")) for item in bundles)
+        reproducible_any_success = any(bool(item.get("success")) for item in bundles)
+        reproducible_success = any(bool(item.get("llm_migration_success")) for item in bundles)
         cases.append(
             {
                 "case_id": case.case_id,
                 "task_id": case.task_id,
                 "source_robot": case.source_robot,
                 "target_robot": case.target_robot,
+                "support_status": case.support_status,
+                "support_source_url": case.support_source_url,
                 "adapter_path": case.target_adapter_path,
                 "adapter_sha256": _sha256(adapter_path),
                 "seed_adapter_path": case.seed_adapter_path,
@@ -140,12 +158,14 @@ def build_evidence_ledger(repo_root: Path = REPO_ROOT) -> Dict[str, Any]:
                 "adapter_provenance": provenance,
                 "tracked_result_artifacts": artifacts,
                 "tracked_evidence_bundles": bundles,
+                "reproducible_success_any_method": reproducible_any_success,
                 "reproducible_success_in_tracked_artifacts": reproducible_success,
                 "evidence_status": (
                     "tracked_accepted_evidence"
                     if reproducible_success
-                    else
-                    "oracle_upper_bound_without_tracked_run"
+                    else "tracked_non_llm_success_evidence"
+                    if reproducible_any_success
+                    else "oracle_upper_bound_without_tracked_run"
                     if provenance == "hand_written_oracle" and not artifacts
                     else "no_tracked_success_evidence"
                     if not artifacts
@@ -270,14 +290,15 @@ def evidence_ledger_markdown(payload: Mapping[str, Any]) -> str:
         "",
         "## 当前状态",
         "",
-        "| Case | 迁移 | 当前 adapter 来源 | 已跟踪结果 | 可复现成功证据 | 状态 |",
-        "|---|---|---|---:|---|---|",
+        "| Case | 迁移 | 支持范围 | 当前 adapter 来源 | 已跟踪结果 | 可复现成功证据 | 状态 |",
+        "|---|---|---|---|---:|---|---|",
     ]
     for item in payload.get("cases") or []:
         artifacts = item.get("tracked_result_artifacts") or []
         lines.append(
             f"| `{item.get('case_id')}` | {item.get('source_robot')} -> {item.get('target_robot')} "
-            f"({item.get('task_id')}) | `{item.get('adapter_provenance')}` | {len(artifacts)} | "
+            f"({item.get('task_id')}) | `{item.get('support_status')}` | "
+            f"`{item.get('adapter_provenance')}` | {len(artifacts)} | "
             f"`{item.get('reproducible_success_in_tracked_artifacts')}` | "
             f"`{item.get('evidence_status')}` |"
         )
@@ -286,7 +307,9 @@ def evidence_ledger_markdown(payload: Mapping[str, Any]) -> str:
             "",
             "## 解释",
             "",
-            "- Fetch 当前 adapter 明确标注为 hand-written oracle，只能作为性能上界。",
+            "- Case 01 的 Fetch PullCube adapter 明确标注为 hand-written oracle，只能作为性能上界。",
+            "- Case 04 的 Fetch PickCube adapter 是 neutral seed，不是 oracle，也不代表已迁移成功。",
+            "- B0、B1 和 Oracle 即使 held-out 成功，也不会计为 LLM adapter 迁移成功。",
             "- xArm6 当前提交文件若与 seed adapter 相同，只代表中性起点，不代表 LLM 成功代码。",
             "- 远程产生的新成功结果必须把运行 summary、adapter snapshot 和 SHA 一起带回仓库，才能升级本账本状态。",
             "",

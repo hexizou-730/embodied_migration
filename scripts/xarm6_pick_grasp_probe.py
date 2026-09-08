@@ -1,4 +1,4 @@
-"""Probe xarm6_robotiq PickCube close-envelope parameters.
+"""Probe PickCube close-envelope parameters for xarm6 or Fetch.
 
 This script is intentionally independent of the LLM generation loop. It runs a
 small fixed-XY sweep over grasp height and gripper close parameters, then writes
@@ -28,6 +28,9 @@ from maniskill_backend.skill_adapter import _scalar_bool, _to_numpy
 
 
 ArmCommand = Tuple[float, float, float]
+
+# Keep the original xArm6 artifact name as a stable compatibility contract.
+LEGACY_XARM6_PROMPT_FILENAME = "xarm6_pick_grasp_probe_prompt.txt"
 
 
 def parse_float_list(text: str) -> List[float]:
@@ -59,18 +62,32 @@ def load_probe_plan(text_or_path: str) -> List[Dict[str, Any]]:
     return [dict(item) for item in data]
 
 
-def make_action(env: Any, arm: ArmCommand = (0.0, 0.0, 0.0), *, gripper: float = -1.0) -> Any:
+def make_action(
+    env: Any,
+    arm: ArmCommand = (0.0, 0.0, 0.0),
+    *,
+    gripper: float = -1.0,
+    base: Tuple[float, float] = (0.0, 0.0),
+) -> Any:
     space = env.action_space
     action = np.zeros(space.shape, dtype=getattr(space, "dtype", np.float32))
     flat = action.reshape(-1)
     flat[:3] = np.asarray(arm, dtype=np.float32)
     if flat.size > 3:
         flat[3] = float(gripper)
+    if flat.size == 9:
+        flat[7:9] = np.asarray(base, dtype=np.float32)
     return np.clip(action, space.low, space.high)
 
 
-def step(env: Any, arm: ArmCommand = (0.0, 0.0, 0.0), *, gripper: float = -1.0) -> Dict[str, Any]:
-    _, _, terminated, truncated, info = env.step(make_action(env, arm, gripper=gripper))
+def step(
+    env: Any,
+    arm: ArmCommand = (0.0, 0.0, 0.0),
+    *,
+    gripper: float = -1.0,
+    base: Tuple[float, float] = (0.0, 0.0),
+) -> Dict[str, Any]:
+    _, _, terminated, truncated, info = env.step(make_action(env, arm, gripper=gripper, base=base))
     return {
         "terminated": _scalar_bool(terminated),
         "truncated": _scalar_bool(truncated),
@@ -78,10 +95,17 @@ def step(env: Any, arm: ArmCommand = (0.0, 0.0, 0.0), *, gripper: float = -1.0) 
     }
 
 
-def run_steps(env: Any, arm: ArmCommand, count: int, *, gripper: float) -> Dict[str, Any]:
+def run_steps(
+    env: Any,
+    arm: ArmCommand,
+    count: int,
+    *,
+    gripper: float,
+    base: Tuple[float, float] = (0.0, 0.0),
+) -> Dict[str, Any]:
     last: Dict[str, Any] = {"terminated": False, "truncated": False, "info": {}}
     for _ in range(max(0, count)):
-        last = step(env, arm, gripper=gripper)
+        last = step(env, arm, gripper=gripper, base=base)
         if last["terminated"] or last["truncated"]:
             break
     return last
@@ -157,7 +181,7 @@ def move_towards(
 def make_env(args: argparse.Namespace) -> ManiSkillEnvAdapter:
     return ManiSkillEnvAdapter(
         "PickCube-v1",
-        robot_uid="xarm6_robotiq",
+        robot_uid=args.robot_uid,
         obs_mode=args.obs_mode,
         control_mode=args.control_mode,
         sim_backend=args.sim_backend,
@@ -177,6 +201,7 @@ def controller_summary(env: Any) -> Dict[str, Any]:
 
 def score_result(result: Dict[str, Any]) -> float:
     score = 0.0
+    score += float(result.get("base_reach_improvement") or 0.0) * 200.0
     if result.get("is_grasping_after_close"):
         score += 100.0
     if result.get("is_grasping_after_lift"):
@@ -199,18 +224,38 @@ def run_probe_case(
     close_steps: int,
     close_command: float,
     settle_steps: int,
+    base_speed: float = 0.0,
+    base_steps: int = 0,
 ) -> Dict[str, Any]:
     adapter = make_env(args)
     env = adapter.make()
     try:
         env.reset(seed=args.seed)
         initial = poses(env)
-        cube_start = initial["cube"]
+        initial_tcp_cube_xy = float(np.linalg.norm((initial["tcp"] - initial["cube"])[:2]))
+        last: Dict[str, Any] = {"terminated": False, "truncated": False, "info": {}}
+        last = run_steps(env, (0.0, 0.0, 0.0), args.open_steps, gripper=args.gripper_open)
+        if base_steps > 0 and not (last["terminated"] or last["truncated"]):
+            last = run_steps(
+                env,
+                (0.0, 0.0, 0.0),
+                base_steps,
+                gripper=args.gripper_open,
+                base=(base_speed, 0.0),
+            )
+            if not (last["terminated"] or last["truncated"]):
+                last = run_steps(
+                    env,
+                    (0.0, 0.0, 0.0),
+                    args.stop_base_steps,
+                    gripper=args.gripper_open,
+                )
+        after_base = poses(env)
+        cube_start = after_base["cube"]
+        tcp_cube_xy_after_base = float(np.linalg.norm((after_base["tcp"] - cube_start)[:2]))
         grasp_pos = cube_start + np.array([0.0, 0.0, grasp_z_offset], dtype=np.float32)
         high = grasp_pos + np.array([0.0, 0.0, args.approach_height], dtype=np.float32)
 
-        last: Dict[str, Any] = {"terminated": False, "truncated": False, "info": {}}
-        last = run_steps(env, (0.0, 0.0, 0.0), args.open_steps, gripper=args.gripper_open)
         if not (last["terminated"] or last["truncated"]):
             last = move_towards(
                 env,
@@ -283,6 +328,11 @@ def run_probe_case(
             "close_steps": int(close_steps),
             "close_command": round(float(close_command), 4),
             "settle_steps": int(settle_steps),
+            "base_speed": round(float(base_speed), 5),
+            "base_steps": int(base_steps),
+            "tcp_cube_xy_initial": round(initial_tcp_cube_xy, 5),
+            "tcp_cube_xy_after_base": round(tcp_cube_xy_after_base, 5),
+            "base_reach_improvement": round(initial_tcp_cube_xy - tcp_cube_xy_after_base, 5),
             "staged_close": bool(args.staged_close),
             "tcp_grasp_xy": round(tcp_grasp_xy, 5),
             "tcp_grasp_z": round(tcp_grasp_z, 5),
@@ -308,7 +358,7 @@ def build_prompt_feedback(results: Sequence[Dict[str, Any]], *, top_k: int = 8) 
     ranked = sorted(results, key=lambda item: float(item.get("score") or 0.0), reverse=True)
     successes = [item for item in ranked if item.get("is_grasping_after_lift") or item.get("is_grasping_after_close")]
     lines = [
-        "Structured xarm6 PickCube grasp probe results.",
+        "Structured PickCube grasp probe results.",
         "Use these real simulation measurements instead of guessing close-envelope parameters.",
         "",
         f"total_probe_cases={len(results)}",
@@ -321,7 +371,8 @@ def build_prompt_feedback(results: Sequence[Dict[str, Any]], *, top_k: int = 8) 
                 "",
                 "best_probe_case:",
                 (
-                    f"  grasp_z_offset={best['grasp_z_offset']}, close_steps={best['close_steps']}, "
+                    f"  base_speed={best.get('base_speed')}, base_steps={best.get('base_steps')}, "
+                    f"grasp_z_offset={best['grasp_z_offset']}, close_steps={best['close_steps']}, "
                     f"close_command={best['close_command']}, settle_steps={best['settle_steps']}, "
                     f"tcp_grasp_xy={best['tcp_grasp_xy']}, tcp_grasp_z={best['tcp_grasp_z']}, "
                     f"cube_disp_xy={best['cube_disp_xy']}, "
@@ -335,7 +386,8 @@ def build_prompt_feedback(results: Sequence[Dict[str, Any]], *, top_k: int = 8) 
     for item in ranked[:top_k]:
         lines.append(
             (
-                f"- z={item['grasp_z_offset']}, close_steps={item['close_steps']}, "
+                f"- base={item.get('base_speed')}x{item.get('base_steps')}, "
+                f"z={item['grasp_z_offset']}, close_steps={item['close_steps']}, "
                 f"close={item['close_command']}, settle={item['settle_steps']}, "
                 f"grasp_close={item['is_grasping_after_close']}, "
                 f"grasp_lift={item['is_grasping_after_lift']}, "
@@ -399,6 +451,8 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     close_steps = parse_int_list(args.close_steps)
     close_commands = parse_float_list(args.close_commands)
     settle_steps = parse_int_list(args.settle_steps)
+    base_speeds = parse_float_list(args.base_speeds)
+    base_steps_values = parse_int_list(args.base_steps)
     explicit_plan = list(getattr(args, "probe_plan", None) or [])
     if not explicit_plan:
         explicit_plan = load_probe_plan(getattr(args, "probe_plan_json", ""))
@@ -408,7 +462,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     env.reset(seed=args.seed)
     summary = {
         "env_id": "PickCube-v1",
-        "robot_uid": "xarm6_robotiq",
+        "robot_uid": args.robot_uid,
         "seed": args.seed,
         "control_mode": args.control_mode,
         "obs_mode": args.obs_mode,
@@ -422,6 +476,8 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
             "close_steps": close_steps,
             "close_commands": close_commands,
             "settle_steps": settle_steps,
+            "base_speeds": base_speeds,
+            "base_steps": base_steps_values,
         },
         "probe_plan_mode": "explicit" if explicit_plan else "grid",
     }
@@ -431,24 +487,28 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
 
     results: List[Dict[str, Any]] = []
     if explicit_plan:
-        grid: Iterable[Tuple[float, int, float, int]] = (
+        grid: Iterable[Tuple[float, int, float, int, float, int]] = (
             (
                 float(item["grasp_z_offset"]),
                 int(item["close_steps"]),
                 float(item["close_command"]),
                 int(item["settle_steps"]),
+                float(item.get("base_speed", 0.0)),
+                int(item.get("base_steps", 0)),
             )
             for item in explicit_plan
         )
     else:
         grid = (
-            (z, steps, command, settle)
+            (z, steps, command, settle, base_speed, base_steps)
             for z in z_offsets
             for steps in close_steps
             for command in close_commands
             for settle in settle_steps
+            for base_speed in base_speeds
+            for base_steps in base_steps_values
         )
-    for idx, (z, steps, command, settle) in enumerate(grid, start=1):
+    for idx, (z, steps, command, settle, base_speed, base_steps) in enumerate(grid, start=1):
         if args.max_cases and idx > args.max_cases:
             break
         result = run_probe_case(
@@ -457,6 +517,8 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
             close_steps=steps,
             close_command=command,
             settle_steps=settle,
+            base_speed=base_speed,
+            base_steps=base_steps,
         )
         result["case_index"] = idx
         results.append(result)
@@ -472,9 +534,15 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    json_path = output_dir / "xarm6_pick_grasp_probe.json"
-    md_path = output_dir / "xarm6_pick_grasp_probe.md"
-    prompt_path = output_dir / "xarm6_pick_grasp_probe_prompt.txt"
+    slug = "xarm6_pick_grasp_probe" if args.robot_uid == "xarm6_robotiq" else f"{args.robot_uid}_pick_grasp_probe"
+    json_path = output_dir / f"{slug}.json"
+    md_path = output_dir / f"{slug}.md"
+    prompt_filename = (
+        LEGACY_XARM6_PROMPT_FILENAME
+        if args.robot_uid == "xarm6_robotiq"
+        else f"{slug}_prompt.txt"
+    )
+    prompt_path = output_dir / prompt_filename
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     write_markdown(md_path, payload)
     prompt_path.write_text(prompt_feedback + "\n", encoding="utf-8")
@@ -489,6 +557,7 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--robot-uid", default="xarm6_robotiq")
     parser.add_argument("--obs-mode", default="state")
     parser.add_argument("--control-mode", default="pd_ee_delta_pos")
     parser.add_argument("--sim-backend", default="auto")
@@ -499,6 +568,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--close-steps", default="12,24")
     parser.add_argument("--close-commands", default="-0.6,-1.0")
     parser.add_argument("--settle-steps", default="8,16")
+    parser.add_argument("--base-speeds", default="0.0")
+    parser.add_argument("--base-steps", default="0")
+    parser.add_argument("--stop-base-steps", type=int, default=4)
     parser.add_argument("--open-steps", type=int, default=8)
     parser.add_argument("--move-steps", type=int, default=34)
     parser.add_argument("--descend-steps", type=int, default=42)

@@ -14,6 +14,32 @@ constraints，只主动 probe 相关参数，再让 LLM 生成 guarded adapter�
 
 详细方法见 `METHOD_CEGIS_ADAPTER_SYNTHESIS_CN.md`。
 
+## 未注册任务入口
+
+新任务不需要先写进 `cases.py`。只要 ManiSkill 已经安装对应环境和机器人，就可以
+用环境名启动 discovery-first agent：
+
+```bash
+python migrate.py --env-id TurnFaucet-v1 --source panda --target fetch --mode agent
+```
+
+Harness 会初始化源端和目标端，读取动作空间、控制器、可见任务物体、环境源码和
+官方 `evaluate()` 字段，并生成本次运行专用的 `case_manifest.json`。LLM 先生成
+源程序和源 Adapter；源端成功后冻结程序，再只修改目标 Adapter。这个动态入口用于
+探索新任务，注册 case 仍用于冻结论文对照和精确复现。
+
+每一轮还会分别保存 system prompt、user prompt、LLM 原始输出、候选 Adapter、真实
+仿真结果和 SHA-256。最终 manifest 绑定冻结 Program、源 Adapter、目标 Adapter 与
+运行结果，避免只保留一份无法追溯来源的“成功代码”。
+
+远程运行结束后只看简表：
+
+```bash
+cat "$(cat results/migrations/latest.txt)/dynamic_summary.md"
+```
+
+需要复核时，再进入同一目录查看各轮的 `cycle_record.json` 和 `trial_result.json`。
+
 ## 一句话定义
 
 这里的 Harness Engineering 不是让 LLM 直接操作 ManiSkill 的内部对象，而是把仿真环境封装成一组安全、可复现、可记录的工具接口：
@@ -45,7 +71,10 @@ observe current simulator state
 -> choose the next primitive
 ```
 
-当前 online harness 先落在 `PullCube` 上，状态包括：
+当前 online harness 已接入 `PullCube`、`PickCube` 和 `PushCube`。三者都在同一个
+ManiSkill episode 内反复执行“观察一小步、决定一小步、执行一小步”。
+
+`PullCube` 的状态包括：
 
 ```text
 cube_pos
@@ -66,7 +95,31 @@ hold
 stop
 ```
 
-运行方式：
+`PickCube` 额外观察：
+
+```text
+is_grasping
+gripper_command
+tcp_grasp_error
+cube_lift_delta_z
+pre_grasp / grasp / transport target
+```
+
+可选 primitive 包括：
+
+```text
+open_gripper
+move_to_pre_grasp
+move_to_grasp
+close_gripper
+lift_cube
+move_to_goal
+release_gripper
+hold
+stop
+```
+
+PullCube 运行方式：
 
 ```bash
 python migrate.py \
@@ -76,16 +129,22 @@ python migrate.py \
   --mode online
 ```
 
-如果想让 LLM 在每个小段之前选择 primitive，可以加：
+PickCube 使用相同入口：
 
 ```bash
 python migrate.py \
-  --task pull_cube \
+  --task pick_cube \
   --source panda \
   --target xarm6_robotiq \
-  --mode online \
-  --online-planner llm
+  --mode online
 ```
+
+`online` 默认使用 LLM planner。没有 API 或只想调试循环时，加
+`--online-planner fallback`。
+
+这个实现参考了 [GUAVA](https://guava-harness.github.io/) 的迭代式
+perception-reasoning-action 思路，但当前“看”指的是读取 ManiSkill 的结构化
+状态（TCP、物体、目标、抓取信号），还没有把 RGB 图像接入多模态模型。
 
 ## 现有项目中的 harness 工具
 
@@ -210,6 +269,13 @@ results/autonomous_harness/<case_id>/harness_bundle.json
 ```
 
 核心提升是：LLM 不再只看自然语言失败描述，而是看到真实仿真测得的物理约束证据；同时它不会被人类总结报告直接“喂答案”。
+
+任务级 online 模式又把反馈周期从“一整局”缩短到了“一个短动作段”：
+
+```text
+旧：固定 adapter 一次执行到底 -> 最后才知道成功或失败
+新：读取当前状态 -> LLM 选一个 primitive -> 执行几步 -> 立即读取新状态
+```
 
 ## 汇报时可以这样讲
 

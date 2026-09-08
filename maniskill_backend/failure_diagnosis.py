@@ -85,7 +85,30 @@ def diagnose_failure(
             evidence={"message": message, "failure_type": failure_type},
         )
 
-    if task_id == "pull_cube":
+    if task_id == "stack_pyramid":
+        state = dict(runtime_diagnostics or {})
+        stage = str(state.get("stage", "unknown"))
+        reason = "stack_stage_failed"
+        layer = "skill_adapter"
+        hint = "Inspect measured multi-object state and preserve the fixed base-then-top task order."
+        if state.get("episode_ended"):
+            reason = "stack_episode_budget_exhausted"
+            hint = "Use bounded stage attempts and reserve steps for release and stability verification. Timeout alone does not prove physical infeasibility."
+        elif stage.endswith((".approach", ".descent", ".transport", ".lower")):
+            reason, layer = "stack_motion_target_not_reached", "contact_geometry"
+            hint = "Inspect TCP target error, object poses and grasp state. Change the failed approach/transport, not all completed stages."
+        elif stage.endswith((".close", ".lift")):
+            reason, layer = "stack_grasp_or_lift_failed", "contact_geometry"
+            hint = "Check grasp state and object lift before transport. TCP alignment alone does not prove a grasp."
+        elif stage.startswith("base."):
+            reason, layer = "stack_base_not_ready", "contact_geometry"
+            hint = "Verify both base cubes are released, on the table, adjacent and stable before manipulating the top cube."
+        elif stage.startswith("top."):
+            reason, layer = "stack_release_or_stability_failed", "contact_geometry"
+            hint = "Re-read both support poses, preserve them during placement, release the top cube and wait for official evaluation."
+        return _diagnosis(layer=layer, reason=reason, repair_hint=hint, confidence=0.65,
+                          evidence={"message": message, **state})
+    if task_id in {"pull_cube", "push_cube"}:
         return _diagnose_pull_cube(
             message=message,
             failure_type=failure_type,

@@ -8,6 +8,8 @@ with ``EM_LLM_PROVIDER``:
 """
 
 import os
+from dataclasses import dataclass
+from typing import Any, Dict
 from openai import OpenAI
 
 
@@ -46,12 +48,28 @@ DEFAULT_MAX_TOKENS = 8192
 DEEPSEEK_THINKING_MODES = {"enabled", "disabled"}
 
 
+@dataclass(frozen=True)
+class ChatResponse:
+    content: str
+    model: str
+    usage: Dict[str, Any]
+
+
 def completion_token_limit() -> int:
     """Return a bounded output limit so providers do not reserve huge outputs."""
 
     value = int(os.environ.get("EM_MAX_TOKENS", DEFAULT_MAX_TOKENS))
     if value <= 0:
         raise ValueError("EM_MAX_TOKENS must be a positive integer.")
+    return value
+
+
+def generation_temperature() -> float:
+    """Return the recorded sampling temperature for independent paper runs."""
+
+    value = float(os.environ.get("EM_TEMPERATURE", "0.0"))
+    if value < 0.0 or value > 2.0:
+        raise ValueError("EM_TEMPERATURE must be between 0 and 2.")
     return value
 
 
@@ -95,6 +113,22 @@ def chat(
     model: str | None = None,
     temperature: float = 0.0,
 ) -> str:
+    return chat_with_metadata(
+        client=client,
+        system=system,
+        user=user,
+        model=model,
+        temperature=temperature,
+    ).content
+
+
+def chat_with_metadata(
+    client: OpenAI,
+    system: str,
+    user: str,
+    model: str | None = None,
+    temperature: float = 0.0,
+) -> ChatResponse:
     provider = current_provider()
     request = dict(
         model=model or default_model(),
@@ -108,4 +142,19 @@ def chat(
     if provider == PROVIDER_DEEPSEEK:
         request["extra_body"] = {"thinking": {"type": deepseek_thinking_mode()}}
     resp = client.chat.completions.create(**request)
-    return resp.choices[0].message.content or ""
+    usage_obj = getattr(resp, "usage", None)
+    if usage_obj is None:
+        usage: Dict[str, Any] = {}
+    elif hasattr(usage_obj, "model_dump"):
+        usage = dict(usage_obj.model_dump())
+    else:
+        usage = {
+            key: getattr(usage_obj, key)
+            for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+            if getattr(usage_obj, key, None) is not None
+        }
+    return ChatResponse(
+        content=resp.choices[0].message.content or "",
+        model=str(getattr(resp, "model", None) or model or default_model()),
+        usage=usage,
+    )

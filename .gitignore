@@ -4,8 +4,10 @@ __pycache__/
 .env
 .venv/
 venv/
+.tmp/
 .DS_Store
 *.log
+~$*.docx
 MUJOCO_LOG.TXT
 results/*
 !results/.gitkeep
