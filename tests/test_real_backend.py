@@ -822,18 +822,17 @@ def build_robot(env, *, control_mode: str, robot_uid: str):
         self.assertEqual(fetch_pick_robot.robot_uid, "fetch")
         fetch_push_robot = _build_robot_adapter_from_module(
             "maniskill_backend.generated_adapters.case05_fetch_push_cube",
-            Env(),
+            FetchEnv(),
             "pd_ee_delta_pos",
             "fetch",
         )
         self.assertIsInstance(fetch_push_robot, ManiSkillPushCubeRobot)
-        with self.assertRaisesRegex(RuntimeError, "action_space last dim"):
-            _build_robot_adapter_from_module(
-                "maniskill_backend.generated_adapters.case05_fetch_push_cube",
-                FetchEnv(),
-                "pd_ee_delta_pos",
-                "fetch",
-            )
+        fetch_push_action = fetch_push_robot._make_action(
+            np.array([0.25, -0.5, 0.75], dtype=np.float32),
+            gripper=-1.0,
+        )
+        np.testing.assert_allclose(fetch_push_action[:4], [0.25, -0.5, 0.75, -1.0])
+        np.testing.assert_allclose(fetch_push_action[4:], 0.0)
 
     def test_pull_cube_robot_action_shape(self):
         class Space:
