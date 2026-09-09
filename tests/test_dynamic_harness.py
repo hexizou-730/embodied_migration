@@ -111,6 +111,52 @@ class DynamicHarnessTests(unittest.TestCase):
             require_program_constant=False,
         )
 
+    def test_validate_accepts_trusted_inherited_action_helpers(self) -> None:
+        code = '''
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def solve_task(self):
+        state = self._snapshot()
+        if state:
+            self._move_towards(np.zeros(3), gripper=0.0, steps=2)
+        return self._official_success()
+
+def build_robot(env, *, control_mode, robot_uid):
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+'''
+        validate_dynamic_adapter(
+            code,
+            task_program="ret_val = robot.solve_task()",
+            require_program_constant=False,
+        )
+
+    def test_overridden_helper_does_not_bypass_action_validation(self) -> None:
+        code = '''
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def _move_towards(self, target, *, gripper, steps):
+        return None
+
+    def solve_task(self):
+        state = self._snapshot()
+        if state:
+            self._move_towards(np.zeros(3), gripper=0.0, steps=2)
+        return self._official_success()
+
+def build_robot(env, *, control_mode, robot_uid):
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+'''
+        with self.assertRaisesRegex(ValueError, "execute actions"):
+            validate_dynamic_adapter(
+                code,
+                task_program="ret_val = robot.solve_task()",
+                require_program_constant=False,
+            )
+
     def test_rejects_direct_pose_mutation(self) -> None:
         dangerous = TARGET_CODE.replace(
             "state = self._snapshot()",

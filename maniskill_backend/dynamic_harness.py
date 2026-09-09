@@ -44,6 +44,7 @@ _STATE_CALLS = {
     "_official_success",
     "_snapshot",
 }
+_TRUSTED_ACTION_HELPERS = {"_move_towards", "_repeat_action"}
 
 
 @dataclass(frozen=True)
@@ -218,10 +219,19 @@ def validate_dynamic_adapter(code: str, *, task_program: str, require_program_co
     dangerous = sorted(name for name in calls if name in _DANGEROUS_CALLS or name.startswith("set_"))
     if dangerous:
         raise ValueError("Generated adapter calls simulator-state mutation methods: " + ", ".join(dangerous))
-    if "_step" not in calls:
-        raise ValueError("Generated adapter must execute real actions through self._step(action).")
-    if "_early_stop" not in calls:
-        raise ValueError("Generated adapter must check self._early_stop() during bounded execution.")
+    inherited_action_helpers = {
+        name for name in _TRUSTED_ACTION_HELPERS if name in calls and name not in methods
+    }
+    if "_step" not in calls and not inherited_action_helpers:
+        raise ValueError(
+            "Generated adapter must execute actions through self._step(action) or a trusted "
+            "inherited action helper."
+        )
+    if "_early_stop" not in calls and not inherited_action_helpers:
+        raise ValueError(
+            "Generated adapter must check self._early_stop() directly or use a trusted "
+            "inherited action helper that checks it."
+        )
     if not (_STATE_CALLS & calls):
         raise ValueError("Generated adapter must read physical state before deciding actions.")
     if not any(isinstance(node, ast.If) for node in ast.walk(tree)):
@@ -365,9 +375,15 @@ def run_dynamic_trial(
             "truncated": recorded.truncated,
         }
         if robot is not None:
+            cls = type(robot)
             result["implementation_context"] = {
-                f"{cls.__module__}.{cls.__name__}": _source_of(cls, 24000)
-                for cls in type(robot).__mro__ if cls is not object
+                "class_path": f"{cls.__module__}.{cls.__name__}",
+                "policy_source": _source_of(cls, 14000),
+                "inherited_action_helpers": {
+                    "_move_towards": "closed-loop TCP delta motion; checks _early_stop and calls _step",
+                    "_repeat_action": "bounded repeated action; checks _early_stop and calls _step",
+                    "_make_action": "maps xyz plus gripper command into the current action space",
+                },
             }
         result["failure_diagnosis"] = _dynamic_diagnosis(result)
         return result
@@ -656,10 +672,10 @@ def run_dynamic_agent_migration(
                 adapter_sha256=_sha256_text(candidate.rstrip() + "\n"),
             )
             previous_code = target_code
-            target_code = candidate
-            validate_dynamic_adapter(candidate, task_program=frozen_program, require_program_constant=False)
             if previous_code and candidate.strip() == previous_code.strip():
                 raise ValueError("Generated target adapter is unchanged from the failed adapter.")
+            target_code = candidate
+            validate_dynamic_adapter(candidate, task_program=frozen_program, require_program_constant=False)
             report(f"Target round {cycle}: running generated code ({generated.model})...")
             trial = run_dynamic_trial(
                 spec=spec,
@@ -745,7 +761,7 @@ Task request:
 {_pretty(asdict(spec))}
 
 Observed source environment:
-{_pretty(observation)}
+{_pretty(_prompt_observation(observation))}
 
 Required module contract:
 - Import ManiSkillDynamicRobot from maniskill_backend.dynamic_adapter.
@@ -764,7 +780,7 @@ Current failed source module, if any:
 ```
 
 Latest source execution result, if any:
-{_pretty(latest_result)}
+{_pretty(_prompt_trial(latest_result))}
 """
 
 
@@ -789,32 +805,35 @@ Frozen high-level program. Do not change it:
 ```
 
 Source environment observation:
-{_pretty(source_observation)}
+{_pretty(_prompt_observation(source_observation))}
 
 Target environment observation:
-{_pretty(target_observation)}
+{_pretty(_prompt_observation(target_observation))}
 
 Successful source adapter:
 ```python
 {_trim(source_code, 18000)}
 ```
 
-Source implementation dependencies (source robot only):
+Source action-policy reference. It may omit module-level imports; do not paste it verbatim:
 {json.dumps(source_result.get('implementation_context') or {}, ensure_ascii=False)}
 
 Source success evidence:
-{_pretty({key: value for key, value in source_result.items() if key != 'implementation_context'})}
+{_pretty(_prompt_trial(source_result))}
 
 Generic runtime API available to your adapter (contains no task policy):
 {_source_of(ManiSkillDynamicRobot, 16000)}
 
 Required target module contract:
 - Import ManiSkillDynamicRobot from maniskill_backend.dynamic_adapter.
+- Return a complete, self-contained module: every annotation and runtime name must be imported or defined.
+- Do not copy the source class verbatim and do not include TASK_PROGRAM or source metadata constants.
 - Implement every public robot skill used by the frozen program.
 - If the source defines run(env), implement run_source_actions() with the same action intent.
 - Define build_robot(env, *, control_mode, robot_uid).
 - Adapt action layout, reach, gripper/base channels, contact geometry, timing and state branches to the observed target.
-- Read measured state and check _early_stop() in bounded self._step(action) loops.
+- Execute actions through self._step(action), or inherited _move_towards/_repeat_action helpers.
+- Read measured state and use bounded loops; inherited action helpers already check _early_stop().
 - Do not modify TASK_PROGRAM, simulator state, object poses, controller internals, or official success.
 - Returning True is insufficient: the harness independently checks env.unwrapped.evaluate()['success'].
 
@@ -824,8 +843,71 @@ Current failed target adapter, if any:
 ```
 
 Latest target execution, including measured state_trace sampled during execution:
-{_pretty(latest_result)}
+{_pretty(_prompt_trial(latest_result))}
 """
+
+
+def _prompt_observation(observation: Mapping[str, Any]) -> Dict[str, Any]:
+    """Keep the robot contract and task state, not renderer bookkeeping."""
+
+    keys = (
+        "env_id", "robot_uid", "control_mode", "environment_class", "environment_doc",
+        "supported_robots", "action_space", "controller_summary", "controller_action_mapping",
+        "tcp", "reset_info", "official_evaluation", "evaluate_source",
+    )
+    compact = {key: observation.get(key) for key in keys if key in observation}
+    compact["pose_entities"] = _prompt_entities(observation.get("pose_entities"))
+    return compact
+
+
+def _prompt_trial(result: Mapping[str, Any]) -> Dict[str, Any]:
+    """Bound feedback size while retaining physical counterexamples."""
+
+    keys = (
+        "success", "message", "code_ok", "ret_val", "official_success",
+        "official_evaluation", "action_steps", "terminated", "truncated",
+        "failure_layer", "failure_diagnosis",
+    )
+    compact = {key: result.get(key) for key in keys if key in result}
+    snapshot = result.get("runtime_snapshot")
+    if isinstance(snapshot, Mapping):
+        compact["runtime_snapshot"] = _prompt_snapshot(snapshot)
+    execution_log = result.get("execution_log")
+    if isinstance(execution_log, list):
+        compact["execution_log_tail"] = execution_log[-8:]
+    trace = result.get("state_trace")
+    if isinstance(trace, list) and trace:
+        if len(trace) <= 12:
+            selected = trace
+        else:
+            indices = sorted({round(index * (len(trace) - 1) / 11) for index in range(12)})
+            selected = [trace[index] for index in indices]
+        compact["state_trace_sample"] = [
+            _prompt_snapshot(item) if isinstance(item, Mapping) else item for item in selected
+        ]
+    return compact
+
+
+def _prompt_snapshot(snapshot: Mapping[str, Any]) -> Dict[str, Any]:
+    compact = {
+        key: snapshot.get(key)
+        for key in ("step", "tcp", "action", "official_evaluation", "terminated", "truncated")
+        if key in snapshot
+    }
+    if "entities" in snapshot:
+        compact["entities"] = _prompt_entities(snapshot.get("entities"))
+    return compact
+
+
+def _prompt_entities(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    relevant = {
+        str(name): item
+        for name, item in value.items()
+        if not str(name).startswith("segmentation_id_map")
+    }
+    return dict(list(relevant.items())[:40])
 
 
 def _program_robot_methods(tree: ast.AST) -> set[str]:
