@@ -16,6 +16,7 @@ from maniskill_backend.dynamic_harness import (
     DynamicMigrationSpec,
     extract_task_program,
     looks_like_env_id,
+    read_source_actions,
     run_dynamic_agent_migration,
     validate_dynamic_adapter,
 )
@@ -81,6 +82,22 @@ class DynamicHarnessTests(unittest.TestCase):
         self.assertTrue(looks_like_env_id("TurnFaucet-v1"))
         self.assertTrue(looks_like_env_id("StackPyramid-v12"))
         self.assertFalse(looks_like_env_id("turn_faucet"))
+
+    def test_read_source_actions_accepts_plain_run_function(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "actions.py"
+            path.write_text(
+                'ENV_ID = "PushCube-v1"\n'
+                'SOURCE_ROBOT = "panda"\n'
+                'def run(env):\n'
+                '    env.step([0.0, 0.0, 0.0, -1.0])\n',
+                encoding="utf-8",
+            )
+            source = read_source_actions(path)
+        self.assertEqual(source.env_id, "PushCube-v1")
+        self.assertEqual(source.robot_uid, "panda")
+        self.assertEqual(source.entrypoint, "run")
+        self.assertEqual(source.program, "ret_val = robot.run_source_actions()")
 
     def test_extract_and_validate_source_module(self) -> None:
         program = extract_task_program(SOURCE_CODE)
@@ -202,6 +219,86 @@ class DynamicHarnessTests(unittest.TestCase):
             self.assertTrue(manifest["outcome"]["success"])
             self.assertTrue(all(result["artifact_sha256"].values()))
 
+    @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
+    @patch("maniskill_backend.dynamic_harness.discover_environment")
+    @patch("maniskill_backend.dynamic_harness.gen_text")
+    def test_supplied_source_actions_skip_source_generation(
+        self,
+        generate,
+        discover,
+        run_trial,
+    ) -> None:
+        generate.return_value = LLMTextResult(TARGET_CODE, True, "test-model", raw_text=TARGET_CODE)
+        discover.side_effect = [
+            {"robot_uid": "panda", "action_space": {"shape": [4]}},
+            {"robot_uid": "fetch", "action_space": {"shape": [9]}},
+        ]
+        run_trial.side_effect = [
+            {"success": True, "message": "supplied source success"},
+            {"success": True, "message": "target success"},
+        ]
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1", task_label="TurnFaucet-v1",
+            source_robot="panda", target_robot="fetch",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "source.py"
+            source_path.write_text(SOURCE_CODE, encoding="utf-8")
+            source = read_source_actions(source_path)
+            result = run_dynamic_agent_migration(
+                spec=spec, run_dir=Path(tmp) / "run", source_actions=source,
+            )
+        self.assertTrue(result["success"])
+        self.assertEqual(generate.call_count, 1)
+        self.assertEqual(run_trial.call_count, 2)
+        self.assertEqual(result["source_cycles"][0]["origin"], "user_supplied")
+
+    @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
+    @patch("maniskill_backend.dynamic_harness.discover_environment")
+    @patch("maniskill_backend.dynamic_harness.gen_text")
+    def test_failed_target_trace_is_fed_to_next_llm_round(
+        self,
+        generate,
+        discover,
+        run_trial,
+    ) -> None:
+        repaired = TARGET_CODE.replace("range(2)", "range(3)")
+        generate.side_effect = [
+            LLMTextResult(TARGET_CODE, True, "test-model", raw_text=TARGET_CODE),
+            LLMTextResult(repaired, True, "test-model", raw_text=repaired),
+        ]
+        discover.side_effect = [
+            {"robot_uid": "panda", "action_space": {"shape": [4]}},
+            {"robot_uid": "fetch", "action_space": {"shape": [9]}},
+        ]
+        run_trial.side_effect = [
+            {"success": True, "message": "supplied source success"},
+            {
+                "success": False,
+                "message": "contact missed",
+                "state_trace": [{"step": 10, "tcp": [0.1, 0.2, 0.3]}],
+            },
+            {"success": True, "message": "target success"},
+        ]
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1", task_label="TurnFaucet-v1",
+            source_robot="panda", target_robot="fetch", max_target_cycles=2,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "source.py"
+            source_path.write_text(SOURCE_CODE, encoding="utf-8")
+            result = run_dynamic_agent_migration(
+                spec=spec,
+                run_dir=Path(tmp) / "run",
+                source_actions=read_source_actions(source_path),
+            )
+        second_prompt = generate.call_args_list[1].kwargs["prompt"]
+        self.assertTrue(result["success"])
+        self.assertIn("contact missed", second_prompt)
+        self.assertIn('"step": 10', second_prompt)
+        self.assertIn("Current failed target adapter", second_prompt)
+        self.assertIn("class GeneratedRobot", second_prompt)
+
     def test_migrate_cli_accepts_unregistered_env_in_dry_run(self) -> None:
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as tmp:
@@ -233,6 +330,25 @@ class DynamicHarnessTests(unittest.TestCase):
             payload = json.loads((Path(tmp) / "dynamic_cli_test" / "summary.json").read_text(encoding="utf-8"))
             self.assertFalse(payload["case"]["registered"])
             self.assertIsNone(payload["result"]["success"])
+
+    def test_migrate_cli_accepts_source_file_without_registered_case(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "actions.py"
+            source_path.write_text(
+                'ENV_ID = "TurnFaucet-v1"\nSOURCE_ROBOT = "panda"\n'
+                'def run(env):\n    env.step([0.0, 0.0, 0.0, 0.0])\n',
+                encoding="utf-8",
+            )
+            process = subprocess.run(
+                [sys.executable, "migrate.py", str(source_path), "fetch",
+                 "--dry-run", "--output-root", tmp, "--run-name", "source_file_test"],
+                cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+            )
+            self.assertEqual(process.returncode, 0, process.stdout)
+            self.assertIn("status = dry_run_planned", process.stdout)
+            payload = json.loads((Path(tmp) / "source_file_test" / "dynamic_summary.json").read_text())
+            self.assertIsNone(payload["success"])
 
 
 if __name__ == "__main__":

@@ -10,13 +10,13 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Mapping, Sequence
+from typing import Any, Callable, Dict, Mapping, Sequence
 
 import numpy as np
 
 from lmp.executor import execute_lmp, is_safe
 
-from .dynamic_adapter import iter_pose_entities
+from .dynamic_adapter import ManiSkillDynamicRobot, iter_pose_entities
 from .env_adapter import ManiSkillEnvAdapter
 from .llm import gen_text
 from .module_generation_runner import extract_python_module, validate_generated_adapter_module
@@ -61,6 +61,45 @@ class DynamicMigrationSpec:
     obs_mode: str = "state"
     sim_backend: str = "auto"
     render_backend: str = "gpu"
+
+
+@dataclass(frozen=True)
+class SourceActions:
+    """An existing source action module, inspected without executing its imports."""
+
+    path: str
+    code: str
+    env_id: str
+    robot_uid: str
+    control_mode: str
+    program: str
+    entrypoint: str
+
+
+def read_source_actions(path: Path) -> SourceActions:
+    code = path.read_text(encoding="utf-8")
+    tree = ast.parse(code, filename=str(path))
+    constants = {}
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        constants[target.id] = node.value.value
+    functions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
+    if "run" in functions:
+        entrypoint, program = "run", "ret_val = robot.run_source_actions()"
+    elif "build_robot" in functions and constants.get(TASK_PROGRAM_NAME):
+        entrypoint, program = "build_robot", constants[TASK_PROGRAM_NAME].strip()
+    else:
+        raise ValueError("Source file needs run(env), or build_robot(...) and TASK_PROGRAM.")
+    return SourceActions(
+        path=str(path.resolve()), code=code, env_id=constants.get("ENV_ID", ""),
+        robot_uid=constants.get("SOURCE_ROBOT", ""),
+        control_mode=constants.get("CONTROL_MODE", "pd_ee_delta_pos"),
+        program=program, entrypoint=entrypoint,
+    )
 
 
 def looks_like_env_id(value: str) -> bool:
@@ -108,6 +147,7 @@ def discover_environment(spec: DynamicMigrationSpec, robot_uid: str, control_mod
             "action_space": _space_summary(getattr(env, "action_space", None)),
             "observation_shape": list(getattr(observation, "shape", ())) if hasattr(observation, "shape") else None,
             "controller_summary": _trim(repr(controller), 10000),
+            "controller_action_mapping": _jsonable(getattr(controller, "action_mapping", None)),
             "tcp": tcp,
             "pose_entities": entities,
             "reset_info": _jsonable(reset_info),
@@ -202,6 +242,45 @@ def validate_dynamic_adapter(code: str, *, task_program: str, require_program_co
         raise ValueError("Target adapter may not modify the frozen source TASK_PROGRAM.")
 
 
+class _RecordedEnv:
+    """Record actual simulator steps independently of generated logging code."""
+
+    def __init__(self, env: Any, max_steps: int) -> None:
+        self._env = env
+        self.max_steps = max_steps
+        self.steps = 0
+        self.done = False
+        self.terminated = False
+        self.truncated = False
+        self.trace: list[Dict[str, Any]] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._env, name)
+
+    def snapshot(self) -> Dict[str, Any]:
+        base = getattr(self._env, "unwrapped", self._env)
+        return {
+            "step": self.steps,
+            "tcp": _read_tcp(getattr(base, "agent", None)),
+            "entities": {
+                name: _jsonable(actor.pose.p) for name, actor in iter_pose_entities(base)
+            },
+            "official_evaluation": _safe_evaluate(base),
+        }
+
+    def step(self, action: Any) -> Any:
+        if self.done or self.steps >= self.max_steps:
+            raise RuntimeError("Episode ended; no more actions may be executed.")
+        result = self._env.step(action)
+        self.steps += 1
+        self.terminated = _scalar_bool(result[2])
+        self.truncated = _scalar_bool(result[3]) or self.steps >= self.max_steps
+        self.done = self.terminated or self.truncated
+        if self.steps == 1 or self.steps % 10 == 0 or self.done:
+            self.trace.append({**self.snapshot(), "action": _jsonable(action)})
+        return result
+
+
 def run_dynamic_trial(
     *,
     spec: DynamicMigrationSpec,
@@ -209,6 +288,7 @@ def run_dynamic_trial(
     control_mode: str,
     program: str,
     adapter_path: Path,
+    source_entrypoint: str = "build_robot",
 ) -> Dict[str, Any]:
     adapter = ManiSkillEnvAdapter(
         spec.env_id,
@@ -221,34 +301,49 @@ def run_dynamic_trial(
         reward_mode="sparse",
     )
     robot = None
+    recorded = None
     try:
         env = adapter.make()
         _, reset_info = adapter.reset(seed=spec.seed)
+        recorded = _RecordedEnv(env, spec.max_episode_steps)
+        recorded.trace.append(recorded.snapshot())
         module = _load_module(adapter_path)
-        build_robot = getattr(module, "build_robot", None)
-        if not callable(build_robot):
-            raise ValueError("Generated module must define callable build_robot(...).")
-        robot = build_robot(env, control_mode=control_mode, robot_uid=robot_uid)
-        scene = ManiSkillSceneAdapter()
-        code_ok, code_message, locals_dict = execute_lmp(
-            program,
-            {"scene": scene, "robot": robot},
-            verbose=False,
-        )
-        ret_val = locals_dict.get("ret_val")
+        if source_entrypoint == "run":
+            ret_val = module.run(recorded)
+            code_ok, code_message = True, "source run(env) completed"
+        else:
+            build_robot = getattr(module, "build_robot", None)
+            if not callable(build_robot):
+                raise ValueError("Generated module must define callable build_robot(...).")
+            robot = build_robot(recorded, control_mode=control_mode, robot_uid=robot_uid)
+            scene = ManiSkillSceneAdapter()
+            code_ok, code_message, locals_dict = execute_lmp(
+                program,
+                {"scene": scene, "robot": robot},
+                verbose=False,
+            )
+            ret_val = locals_dict.get("ret_val")
         official = _safe_evaluate(getattr(env, "unwrapped", env))
         official_success = _scalar_bool(official.get("success", False))
-        returned_success = bool(code_ok and success_from_ret_val(ret_val))
-        success = bool(returned_success and official_success)
+        returned_success = bool(code_ok and (source_entrypoint == "run" or success_from_ret_val(ret_val)))
+        success = bool(returned_success and official_success and recorded.steps > 0)
         if success:
-            message = "adapter returned success and official evaluate() returned success"
+            message = (
+                "source actions reached official success"
+                if source_entrypoint == "run"
+                else "adapter returned success and official evaluate() returned success"
+            )
+        elif recorded.steps == 0:
+            message = "No simulator actions executed; source or target was not tested."
         elif not code_ok:
             message = code_message
+        elif source_entrypoint == "run":
+            message = "source actions did not reach official environment success"
         elif returned_success and not official_success:
             message = "adapter returned success but official evaluate() success is false"
         else:
             message = _last_failure_message(robot) or "task program returned failure"
-        snapshot = _safe_snapshot(robot)
+        snapshot = _safe_snapshot(robot) if robot is not None else recorded.snapshot()
         result = {
             "success": success,
             "message": message,
@@ -262,12 +357,18 @@ def run_dynamic_trial(
             "official_success": bool(official_success),
             "official_evaluation": official,
             "reset_info": _jsonable(reset_info),
-            "execution_log": _jsonable(robot.execution_log()),
+            "execution_log": _jsonable(robot.execution_log()) if robot is not None else [],
             "runtime_snapshot": snapshot,
-            "action_steps": int(getattr(robot, "action_steps", 0)),
-            "terminated": bool(getattr(robot, "terminated", False)),
-            "truncated": bool(getattr(robot, "truncated", False)),
+            "action_steps": recorded.steps,
+            "state_trace": [*recorded.trace, recorded.snapshot()],
+            "terminated": recorded.terminated,
+            "truncated": recorded.truncated,
         }
+        if robot is not None:
+            result["implementation_context"] = {
+                f"{cls.__module__}.{cls.__name__}": _source_of(cls, 24000)
+                for cls in type(robot).__mro__ if cls is not object
+            }
         result["failure_diagnosis"] = _dynamic_diagnosis(result)
         return result
     except Exception as exc:
@@ -280,6 +381,13 @@ def run_dynamic_trial(
             "seed": spec.seed,
             "failure_layer": "runtime_setup",
         }
+        if recorded is not None:
+            result.update(
+                action_steps=recorded.steps,
+                state_trace=recorded.trace,
+                terminated=recorded.terminated,
+                truncated=recorded.truncated,
+            )
         result["failure_diagnosis"] = _dynamic_diagnosis(result)
         return result
     finally:
@@ -293,12 +401,18 @@ def run_dynamic_agent_migration(
     spec: DynamicMigrationSpec,
     run_dir: Path,
     dry_run: bool = False,
+    source_actions: SourceActions | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> Dict[str, Any]:
-    """Generate a source solution, freeze its program, then migrate its adapter."""
+    """Validate supplied source actions (or synthesize them), then migrate."""
 
+    report = progress or (lambda message: None)
     run_dir.mkdir(parents=True, exist_ok=True)
     artifacts = run_dir / "dynamic_artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
+    if source_actions is not None:
+        (artifacts / "source_adapter.py").write_text(source_actions.code, encoding="utf-8")
+        (artifacts / "task_program.py").write_text(source_actions.program + "\n", encoding="utf-8")
     manifest_path = run_dir / "case_manifest.json"
     manifest: Dict[str, Any] = {
         "schema": "dynamic_migration_manifest.v1",
@@ -308,10 +422,17 @@ def run_dynamic_agent_migration(
         "llm_may_modify": ["source task program before source success", "source adapter", "target adapter"],
         "llm_may_not_modify": ["environment", "controller", "simulator state", "official success"],
     }
+    if source_actions is not None:
+        manifest.update(
+            source_input={"path": source_actions.path, "sha256": _sha256_text(source_actions.code),
+                          "entrypoint": source_actions.entrypoint},
+            llm_may_modify=["target adapter"],
+        )
     if dry_run:
         manifest["planned_steps"] = [
             "discover source and target environments",
-            "generate and validate source program plus source adapter",
+            ("validate the supplied source actions without LLM edits" if source_actions is not None
+             else "generate and validate source program plus source adapter"),
             "freeze source program after official source success",
             "generate, execute and repair target adapter",
         ]
@@ -329,6 +450,7 @@ def run_dynamic_agent_migration(
         _write_dynamic_summary(run_dir, payload)
         return payload
 
+    report("Inspecting source and target simulator interfaces...")
     try:
         source_observation = discover_environment(spec, spec.source_robot, spec.source_control_mode)
         target_observation = discover_environment(spec, spec.target_robot, spec.target_control_mode)
@@ -365,7 +487,22 @@ def run_dynamic_agent_migration(
     source_code = ""
     source_result: Dict[str, Any] = {}
     frozen_program = ""
-    for cycle in range(1, spec.max_source_cycles + 1):
+    if source_actions is not None:
+        report("Checking the supplied source actions...")
+        source_code = source_actions.code
+        source_result = run_dynamic_trial(
+            spec=spec, robot_uid=spec.source_robot, control_mode=spec.source_control_mode,
+            program=source_actions.program, adapter_path=artifacts / "source_adapter.py",
+            source_entrypoint=source_actions.entrypoint,
+        )
+        _write_json(run_dir / "source_trial.json", source_result)
+        source_cycles.append({"cycle": 0, "used_llm": False, "origin": "user_supplied",
+                              "adapter_sha256": _sha256_text(source_code), "trial": source_result})
+        if source_result.get("success"):
+            frozen_program = source_actions.program
+        report(f"source_success = {bool(source_result.get('success'))}")
+
+    for cycle in range(1, (0 if source_actions is not None else spec.max_source_cycles) + 1):
         cycle_dir = run_dir / f"source_cycle_{cycle:02d}"
         cycle_dir.mkdir(parents=True, exist_ok=True)
         system_prompt = _dynamic_system_prompt(source=True)
@@ -437,15 +574,16 @@ def run_dynamic_agent_migration(
             break
 
     if not frozen_program:
+        source_status = "source_validation_failed" if source_actions is not None else "source_budget_exhausted"
         manifest["outcome"] = {
-            "status": "source_budget_exhausted",
+            "status": source_status,
             "success": False,
             "source_cycles": len(source_cycles),
         }
         _write_json(manifest_path, manifest)
         payload = {
             "schema": "dynamic_agent_migration_result.v1",
-            "status": "source_budget_exhausted",
+            "status": source_status,
             "success": False,
             "message": "source program and adapter did not reach official success",
             "manifest": str(manifest_path),
@@ -461,7 +599,9 @@ def run_dynamic_agent_migration(
     target_code = ""
     target_result: Dict[str, Any] = {}
     target_success = False
+    target_status = "target_budget_exhausted"
     for cycle in range(1, spec.max_target_cycles + 1):
+        report(f"Target round {cycle}/{spec.max_target_cycles}: requesting LLM code...")
         cycle_dir = run_dir / f"target_cycle_{cycle:02d}"
         cycle_dir.mkdir(parents=True, exist_ok=True)
         system_prompt = _dynamic_system_prompt(source=False)
@@ -479,11 +619,16 @@ def run_dynamic_agent_migration(
         user_prompt_path = cycle_dir / "user_prompt.txt"
         system_prompt_path.write_text(system_prompt, encoding="utf-8")
         user_prompt_path.write_text(user_prompt, encoding="utf-8")
-        generated = gen_text(
-            system=system_prompt,
-            prompt=user_prompt,
-            fallback_text="",
-        )
+        try:
+            generated = gen_text(system=system_prompt, prompt=user_prompt, fallback_text="")
+        except Exception as exc:
+            target_status = "llm_request_failed"
+            target_result = {"success": False, "message": f"LLM request failed: {type(exc).__name__}"}
+            record = {"cycle": cycle, "valid": False, "error": target_result["message"],
+                      "system_prompt": str(system_prompt_path), "user_prompt": str(user_prompt_path)}
+            _write_json(cycle_dir / "cycle_record.json", record)
+            target_cycles.append(record)
+            break
         record = {
             "cycle": cycle,
             "used_llm": generated.used_llm,
@@ -496,7 +641,9 @@ def run_dynamic_agent_migration(
         }
         (cycle_dir / "llm_response.txt").write_text(generated.raw_text or generated.text, encoding="utf-8")
         if not generated.used_llm:
+            target_status = "llm_unavailable"
             record["error"] = generated.reason or "LLM unavailable"
+            target_result = {"success": False, "message": record["error"]}
             _write_json(cycle_dir / "cycle_record.json", record)
             target_cycles.append(record)
             break
@@ -508,9 +655,12 @@ def run_dynamic_agent_migration(
                 adapter=str(candidate_path),
                 adapter_sha256=_sha256_text(candidate.rstrip() + "\n"),
             )
+            previous_code = target_code
+            target_code = candidate
             validate_dynamic_adapter(candidate, task_program=frozen_program, require_program_constant=False)
-            if target_code and candidate.strip() == target_code.strip():
+            if previous_code and candidate.strip() == previous_code.strip():
                 raise ValueError("Generated target adapter is unchanged from the failed adapter.")
+            report(f"Target round {cycle}: running generated code ({generated.model})...")
             trial = run_dynamic_trial(
                 spec=spec,
                 robot_uid=spec.target_robot,
@@ -522,6 +672,7 @@ def run_dynamic_agent_migration(
             _write_json(trial_path, trial)
             record.update(valid=True, trial_result=str(trial_path), trial=trial)
             target_code, target_result = candidate, trial
+            target_result.pop("implementation_context", None)
             (artifacts / "target_adapter.py").write_text(candidate.rstrip() + "\n", encoding="utf-8")
             if trial.get("success"):
                 target_success = True
@@ -530,6 +681,7 @@ def run_dynamic_agent_migration(
             target_result = {"success": False, "message": repr(exc)}
         _write_json(cycle_dir / "cycle_record.json", record)
         target_cycles.append(record)
+        report(f"Target round {cycle}: success={target_success}; {target_result.get('message', '')[:180]}")
         if target_success:
             break
 
@@ -539,7 +691,7 @@ def run_dynamic_agent_migration(
         "target_adapter": _sha256_file(artifacts / "target_adapter.py"),
     }
     manifest["outcome"] = {
-        "status": "success" if target_success else "target_budget_exhausted",
+        "status": "success" if target_success else target_status,
         "success": target_success,
         "source_cycles": len(source_cycles),
         "target_cycles": len(target_cycles),
@@ -548,19 +700,20 @@ def run_dynamic_agent_migration(
     _write_json(manifest_path, manifest)
     payload = {
         "schema": "dynamic_agent_migration_result.v1",
-        "status": "success" if target_success else "target_budget_exhausted",
+        "status": "success" if target_success else target_status,
         "success": target_success,
         "message": (
             "target adapter reached official environment success"
             if target_success
-            else "target adapter did not reach official success within the generation budget"
+            else target_result.get("message")
+            or "target adapter did not reach official success within the generation budget"
         ),
         "manifest": str(manifest_path),
         "run_dir": str(run_dir),
         "spec": asdict(spec),
         "frozen_program": str(artifacts / "task_program.py"),
         "source_adapter": str(artifacts / "source_adapter.py"),
-        "target_adapter": str(artifacts / "target_adapter.py") if target_code else "",
+        "target_adapter": str(artifacts / "target_adapter.py") if (artifacts / "target_adapter.py").is_file() else "",
         "artifact_sha256": artifact_hashes,
         "source_cycles": source_cycles,
         "target_cycles": target_cycles,
@@ -646,12 +799,19 @@ Successful source adapter:
 {_trim(source_code, 18000)}
 ```
 
+Source implementation dependencies (source robot only):
+{json.dumps(source_result.get('implementation_context') or {}, ensure_ascii=False)}
+
 Source success evidence:
-{_pretty(source_result)}
+{_pretty({key: value for key, value in source_result.items() if key != 'implementation_context'})}
+
+Generic runtime API available to your adapter (contains no task policy):
+{_source_of(ManiSkillDynamicRobot, 16000)}
 
 Required target module contract:
 - Import ManiSkillDynamicRobot from maniskill_backend.dynamic_adapter.
 - Implement every public robot skill used by the frozen program.
+- If the source defines run(env), implement run_source_actions() with the same action intent.
 - Define build_robot(env, *, control_mode, robot_uid).
 - Adapt action layout, reach, gripper/base channels, contact geometry, timing and state branches to the observed target.
 - Read measured state and check _early_stop() in bounded self._step(action) loops.
@@ -663,7 +823,7 @@ Current failed target adapter, if any:
 {_trim(current_code, 18000)}
 ```
 
-Latest target execution and automatic diagnosis, if any:
+Latest target execution, including measured state_trace sampled during execution:
 {_pretty(latest_result)}
 """
 

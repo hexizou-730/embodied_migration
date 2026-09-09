@@ -12,6 +12,7 @@ Dry-run without ManiSkill:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import shlex
 import subprocess
@@ -24,6 +25,7 @@ from maniskill_backend.cases import find_full_migration_case, iter_full_migratio
 from maniskill_backend.dynamic_harness import (
     DynamicMigrationSpec,
     looks_like_env_id,
+    read_source_actions,
     run_dynamic_agent_migration,
 )
 from maniskill_backend.real_runner import run_real_code_trial
@@ -273,6 +275,58 @@ def _normalize_dynamic_robot(value: str) -> str:
     }.get(text, text)
 
 
+def _run_source_file(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    try:
+        source = read_source_actions(Path(args.source_file).expanduser())
+    except (OSError, ValueError, SyntaxError) as exc:
+        parser.error(str(exc))
+    env_id = args.env_id or source.env_id
+    if not env_id:
+        parser.error("Specify ENV_ID in the source file, or use --env <ManiSkillEnv-v1>.")
+    if not args.source and not source.robot_uid:
+        parser.error("Specify SOURCE_ROBOT in the source file, or use --source <robot>.")
+    if args.mode not in (None, "agent"):
+        parser.error("Source-file migration generates target code; use no --mode or --mode agent.")
+    if args.no_source_check or args.keep_current_adapter:
+        parser.error("Source-file migration verifies the supplied source and generates a fresh target.")
+    spec = DynamicMigrationSpec(
+        env_id=env_id, task_label=env_id,
+        source_robot=_normalize_dynamic_robot(args.source or source.robot_uid),
+        target_robot=_normalize_dynamic_robot(args.target_robot or args.target),
+        source_control_mode=args.source_control_mode or source.control_mode,
+        target_control_mode=args.target_control_mode,
+        seed=args.seed, max_episode_steps=args.max_episode_steps or 500,
+        max_source_cycles=0, max_target_cycles=args.max_cycles,
+        obs_mode=args.obs_mode, sim_backend=args.sim_backend, render_backend=args.render_backend,
+    )
+    if spec.max_target_cycles < 1 or spec.max_episode_steps < 1:
+        parser.error("--max-cycles and --max-episode-steps must be positive.")
+    name = args.run_name or f"{Path(source.path).stem}_to_{spec.target_robot}_{_timestamp()}"
+    run_dir = REPO_ROOT / args.output_root / name
+    if run_dir.exists():
+        parser.error(f"Run directory already exists: {run_dir}. Choose a new --run-name.")
+    run_dir.mkdir(parents=True)
+    (run_dir.parent / "latest.txt").write_text(str(run_dir), encoding="utf-8")
+    console = sys.stdout
+    print(f"{spec.env_id}: {spec.source_robot} -> {spec.target_robot}", flush=True)
+    print(f"Log: {run_dir / 'run.log'}", flush=True)
+    with (run_dir / "run.log").open("w", encoding="utf-8") as log:
+        with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+            result = run_dynamic_agent_migration(
+                spec=spec, run_dir=run_dir, dry_run=args.dry_run, source_actions=source,
+                progress=lambda message: print(message, file=console, flush=True),
+            )
+    print(f"status = {result['status']}")
+    print(f"success = {result['success']}")
+    if result.get("message"):
+        print(f"message = {result['message']}")
+    if result.get("target_adapter"):
+        print(f"target_code = {result['target_adapter']}")
+    print(f"details = {run_dir / 'dynamic_summary.json'}")
+    if not args.dry_run and result.get("success") is not True:
+        sys.exit(1)
+
+
 def _run_online(args: argparse.Namespace, run_dir: Path) -> dict[str, Any]:
     case = find_full_migration_case(args.task, args.source, args.target)
     command = [
@@ -479,20 +533,22 @@ def _list_cases() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a user-facing robot code migration request.")
+    parser.add_argument("source_file", nargs="?", help="Existing source action file; skips case registration and generates the target.")
+    parser.add_argument("target_robot", nargs="?", help="Target robot for source-file migration, e.g. xarm6 or fetch.")
     parser.add_argument("--task", default="pull_cube", help="Task id, e.g. pull_cube or PullCube-v1.")
     parser.add_argument(
-        "--env-id",
+        "--env-id", "--env",
         default="",
         help="ManiSkill environment id for discovery-first migration. Supplying it bypasses the registered case table.",
     )
-    parser.add_argument("--source", default="panda", help="Source robot, e.g. panda.")
+    parser.add_argument("--source", default=None, help="Source robot; defaults to source file metadata, or panda in legacy modes.")
     parser.add_argument("--target", default="xarm6_robotiq", help="Target robot, e.g. xarm6_robotiq or xarm6.")
-    parser.add_argument("--source-control-mode", default="pd_ee_delta_pos")
+    parser.add_argument("--source-control-mode", default=None)
     parser.add_argument("--target-control-mode", default="pd_ee_delta_pos")
     parser.add_argument(
         "--mode",
         choices=("evaluate", "generate", "auto", "agent", "online", "cegis"),
-        default="evaluate",
+        default=None,
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seeds", default="0-9")
@@ -519,6 +575,13 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--list-cases", action="store_true")
     args = parser.parse_args()
+
+    if args.source_file:
+        _run_source_file(args, parser)
+        return
+    args.source = args.source or "panda"
+    args.source_control_mode = args.source_control_mode or "pd_ee_delta_pos"
+    args.mode = args.mode or "evaluate"
 
     if args.list_cases:
         _list_cases()

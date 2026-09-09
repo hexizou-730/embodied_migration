@@ -22,6 +22,22 @@ real `env.step(action)` execution on the target embodiment.
 The active research path is full target-adapter generation, real simulator
 counterexamples, active physical probing, and held-out verification.
 
+## Direct Migration From Existing Actions
+
+The simplest harness input is an existing source action file and a target robot:
+
+```bash
+python migrate.py examples/panda_pull.py xarm6
+```
+
+The source file declares `ENV_ID`, `SOURCE_ROBOT`, and either `run(env)` or an
+existing `TASK_PROGRAM` plus `build_robot(...)`. The harness verifies those
+source actions in ManiSkill, observes both robot interfaces, asks the LLM to
+write a fresh target adapter, runs it, and feeds measured state and failure
+results into the next generation round. No registered case or prewritten target
+adapter is used. The terminal prints only progress and the final result; complete
+prompts, traces, and generated code are saved under `results/migrations/`.
+
 ## Evidence Status
 
 | Case | Task | Source -> Target | ManiSkill support | Current committed adapter | Tracked reproducible result |
