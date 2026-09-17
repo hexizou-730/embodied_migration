@@ -369,6 +369,10 @@ def synthesize_source_program(
             candidate = extract_python_module(generated.text).rstrip() + "\n"
             candidate_path = cycle_dir / "candidate.py"
             candidate_path.write_text(candidate, encoding="utf-8")
+            # Preserve even a statically invalid generation so the next cycle repairs
+            # the concrete failed module instead of restarting from the bootstrap code.
+            current_code = candidate
+            record["candidate_sha256"] = _sha256_file(candidate_path)
             program = extract_task_program(candidate)
             validate_dynamic_adapter(
                 candidate, task_program=program, require_program_constant=True
@@ -416,7 +420,13 @@ def synthesize_source_program(
                 "failure_diagnosis": {
                     "layer": "program",
                     "reason": "generated_source_module_invalid",
-                    "repair_hint": "Fix the concrete module exception before changing motion parameters.",
+                    "repair_hint": (
+                        "Repair the concrete module shown in the prompt before changing motion "
+                        "parameters. For state-feedback validation, call a documented helper such "
+                        "as self._snapshot(), self._tcp_pos(), self._entity_pos(name), "
+                        "self._region_pos(name), or self._official_evaluation(), then use the "
+                        "measured value to decide an action or runtime branch."
+                    ),
                 },
             }
         cycles.append(record)

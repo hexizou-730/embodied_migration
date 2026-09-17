@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+from maniskill_backend.llm import LLMTextResult
 from maniskill_backend.source_programs import (
     freeze_source_program,
     load_source_program_catalog,
@@ -114,6 +115,62 @@ class SourceProgramTests(unittest.TestCase):
         self.assertEqual(result["status"], "environment_contract_mismatch")
         discover.assert_not_called()
         generate.assert_not_called()
+
+    def test_invalid_generation_is_shown_to_next_repair_cycle(self) -> None:
+        _, specs = load_source_program_catalog()
+        invalid = '''
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+ENV_ID = "RollBall-v1"
+SOURCE_ROBOT = "panda"
+CONTROL_MODE = "pd_ee_delta_pos"
+TASK_PROGRAM = "ret_val = robot.solve_task()"
+# FIRST_INVALID_MARKER
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def solve_task(self):
+        for _ in range(2):
+            if self._early_stop():
+                return False
+            self._step(self._make_action(np.zeros(3), gripper=0.0))
+        return False
+def build_robot(env, *, control_mode, robot_uid):
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bootstrap = root / "bootstrap.py"
+            bootstrap.write_text(invalid.replace("# FIRST_INVALID_MARKER\n", ""), encoding="utf-8")
+            spec = replace(specs[2], candidate_path=bootstrap, frozen_path=root / "frozen.py")
+            runtime = {
+                "contract_sha256": "a" * 64,
+                "validation": {"ok": True, "mismatches": []},
+            }
+            generated = LLMTextResult(invalid, True, "test-model", raw_text=invalid)
+            with patch(
+                "maniskill_backend.source_programs.capture_experiment_environment",
+                return_value=runtime,
+            ), patch(
+                "maniskill_backend.source_programs.discover_environment",
+                return_value={"robot_uid": "panda", "action_space": {"shape": [4]}},
+            ), patch(
+                "maniskill_backend.source_programs.gen_text",
+                side_effect=[generated, generated],
+            ) as generate:
+                result = synthesize_source_program(
+                    spec,
+                    seeds=[0, 1],
+                    output_dir=root / "out",
+                    max_cycles=2,
+                    obs_mode="state",
+                    sim_backend="auto",
+                    render_backend="gpu",
+                )
+
+        second_prompt = generate.call_args_list[1].kwargs["prompt"]
+        self.assertFalse(result["success"])
+        self.assertIn("FIRST_INVALID_MARKER", second_prompt)
+        self.assertIn("self._snapshot()", second_prompt)
+        self.assertIn("Generated adapter must read physical state", second_prompt)
 
 
 if __name__ == "__main__":

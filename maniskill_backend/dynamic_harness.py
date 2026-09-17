@@ -39,6 +39,7 @@ _STATE_CALLS = {
     "_actor_pos",
     "_entity_pos",
     "_entity_quat",
+    "_region_pos",
     "_is_grasping_entity",
     "_official_evaluation",
     "_official_success",
@@ -245,7 +246,13 @@ def validate_dynamic_adapter(code: str, *, task_program: str, require_program_co
             "inherited action helper that checks it."
         )
     if not (_STATE_CALLS & calls):
-        raise ValueError("Generated adapter must read physical state before deciding actions.")
+        accepted = ", ".join(f"self.{name}(...)" for name in sorted(_STATE_CALLS))
+        raise ValueError(
+            "Generated adapter must read physical state before deciding actions. "
+            f"Call at least one documented measurement API: {accepted}. "
+            "Store the measured value and use it in a runtime branch or action calculation; "
+            "direct self.env attribute reads do not satisfy this contract."
+        )
     if not any(isinstance(node, ast.If) for node in ast.walk(tree)):
         raise ValueError("Generated adapter must contain a measured runtime branch.")
     for node in ast.walk(tree):
@@ -859,8 +866,23 @@ def _dynamic_system_prompt(*, source: bool) -> str:
     return (
         f"You write a complete Python module for a ManiSkill {role}. "
         "Return only Python code. Use measured state and bounded self._step(action) loops. "
+        "Read state through the documented ManiSkillDynamicRobot measurement methods, and "
+        "use those measurements to choose or stop actions. "
         "Never mutate simulator state, actor poses, task success, or controller internals."
     )
+
+
+def _measurement_api_contract() -> str:
+    return """Documented physical-state API on ManiSkillDynamicRobot:
+- self._snapshot(): complete TCP, entity poses, official evaluation and episode flags.
+- self._tcp_pos(): current tool-center-point position as xyz.
+- self._entity_pos(name), self._actor_pos(name), self._region_pos(name): current xyz.
+- self._entity_quat(name): current entity orientation quaternion.
+- self._is_grasping_entity(name): current grasp detector.
+- self._official_evaluation() and self._official_success(): official task state.
+At least one method above must be called inside the generated skill. Store its return value
+and use that measured value in an if/loop condition or to compute an action. Do not read
+self.env internals as a substitute. Re-read measurements after actions to close the loop."""
 
 
 def _source_prompt(
@@ -887,6 +909,20 @@ Required module contract:
 - Read physical state, check _early_stop(), execute bounded self._step(action) loops, and return truthful booleans.
 - The harness independently checks env.unwrapped.evaluate()['success'].
 - Do not call set_pose, set_state, reset, or alter success/controller/simulator fields.
+
+{_measurement_api_contract()}
+
+Minimal closed-loop pattern (adapt entity names and motion to the observed task):
+```python
+for _ in range(bounded_steps):
+    if self._early_stop():
+        return False
+    tcp = self._tcp_pos()
+    target = self._entity_pos("observed_entity_name")
+    if np.linalg.norm(target - tcp) < tolerance:
+        break
+    self._step(self._make_action(bounded_delta, gripper=command))
+```
 
 Current failed source module, if any:
 ```python
@@ -950,6 +986,8 @@ Required target module contract:
 - Read measured state and use bounded loops; inherited action helpers already check _early_stop().
 - Do not modify TASK_PROGRAM, simulator state, object poses, controller internals, or official success.
 - Returning True is insufficient: the harness independently checks env.unwrapped.evaluate()['success'].
+
+{_measurement_api_contract()}
 
 Current failed target adapter, if any:
 ```python

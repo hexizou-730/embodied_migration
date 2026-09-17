@@ -209,6 +209,38 @@ def build_robot(env, *, control_mode, robot_uid):
             require_program_constant=False,
         )
 
+    def test_validate_accepts_region_position_as_physical_state(self) -> None:
+        code = '''
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def solve_task(self):
+        goal = self._region_pos("goal")
+        if goal.size:
+            self._move_towards(goal, gripper=0.0, steps=2)
+        return self._official_success()
+
+def build_robot(env, *, control_mode, robot_uid):
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+'''
+        validate_dynamic_adapter(
+            code,
+            task_program="ret_val = robot.solve_task()",
+            require_program_constant=False,
+        )
+
+    def test_missing_state_error_lists_documented_measurement_api(self) -> None:
+        code = TARGET_CODE.replace("state = self._snapshot()", "state = True").replace(
+            "self._official_success()", "False"
+        )
+        with self.assertRaisesRegex(ValueError, r"self\._snapshot\(\.\.\.\)"):
+            validate_dynamic_adapter(
+                code,
+                task_program="ret_val = robot.solve_task()",
+                require_program_constant=False,
+            )
+
     def test_overridden_helper_does_not_bypass_action_validation(self) -> None:
         code = '''
 import numpy as np
