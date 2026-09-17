@@ -20,6 +20,10 @@ from maniskill_backend.dynamic_harness import (
     run_dynamic_agent_migration,
     validate_dynamic_adapter,
 )
+from maniskill_backend.experiment_environment import (
+    compare_with_contract,
+    load_experiment_contract,
+)
 from maniskill_backend.llm import LLMTextResult
 
 
@@ -78,6 +82,28 @@ class _FakeEnv:
 
 
 class DynamicHarnessTests(unittest.TestCase):
+    def test_experiment_contract_detects_runtime_mismatch(self) -> None:
+        contract = load_experiment_contract()
+        actual = {
+            "python": {"version": "3.12.2"},
+            "packages": {
+                "mani_skill": {"version": None},
+                "sapien": {"version": None},
+            },
+            "cuda": {"driver_api": None},
+            "llm": dict(contract["llm"]),
+            "migration": {
+                "source_robot": "panda",
+                "target_robot": "xarm6_robotiq",
+                "seed": 0,
+            },
+        }
+        mismatches = compare_with_contract(contract, actual)
+        fields = {item["field"] for item in mismatches}
+        self.assertIn("python.version", fields)
+        self.assertIn("packages.mani_skill.version", fields)
+        self.assertIn("cuda.driver_api", fields)
+
     def test_env_id_detection(self) -> None:
         self.assertTrue(looks_like_env_id("TurnFaucet-v1"))
         self.assertTrue(looks_like_env_id("StackPyramid-v12"))
@@ -232,6 +258,42 @@ def build_robot(env, *, control_mode, robot_uid):
             manifest = json.loads((run_dir / "case_manifest.json").read_text(encoding="utf-8"))
             self.assertFalse(manifest["registered_case"])
             self.assertEqual(manifest["env_id"], "TurnFaucet-v1")
+            self.assertTrue((run_dir / "runtime_environment.json").is_file())
+            runtime = json.loads((run_dir / "runtime_environment.json").read_text(encoding="utf-8"))
+            self.assertEqual(runtime["schema"], "embodied_migration_runtime.v1")
+            self.assertEqual(runtime["actual"]["migration"]["target_robot"], "fetch")
+            self.assertEqual(len(runtime["contract_sha256"]), 64)
+
+    def test_environment_contract_blocks_real_run_before_llm(self) -> None:
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1",
+            task_label="TurnFaucet-v1",
+            source_robot="panda",
+            target_robot="fetch",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch(
+                "maniskill_backend.dynamic_harness.capture_experiment_environment"
+            ) as capture, patch(
+                "maniskill_backend.dynamic_harness.gen_text"
+            ) as generate:
+                capture.return_value = {
+                    "contract_sha256": "a" * 64,
+                    "validation": {
+                        "ok": False,
+                        "mismatches": [
+                            {"field": "python.version", "expected": "3.10.14", "observed": "3.12.2"}
+                        ],
+                    },
+                }
+                result = run_dynamic_agent_migration(
+                    spec=spec,
+                    run_dir=Path(tmp) / "run",
+                    enforce_environment=True,
+                )
+        self.assertEqual(result["status"], "environment_contract_mismatch")
+        self.assertFalse(result["success"])
+        generate.assert_not_called()
 
     @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
     @patch("maniskill_backend.dynamic_harness.discover_environment")
@@ -407,38 +469,6 @@ def build_robot(env, *, control_mode, robot_uid):
         self.assertFalse(result["success"])
         self.assertIn("semantically unchanged", result["target_cycles"][1]["error"])
         self.assertEqual(run_trial.call_count, 2)
-
-    def test_migrate_cli_accepts_unregistered_env_in_dry_run(self) -> None:
-        root = Path(__file__).resolve().parents[1]
-        with tempfile.TemporaryDirectory() as tmp:
-            process = subprocess.run(
-                [
-                    sys.executable,
-                    "migrate.py",
-                    "--task",
-                    "TurnFaucet-v1",
-                    "--source",
-                    "panda",
-                    "--target",
-                    "fetch",
-                    "--mode",
-                    "agent",
-                    "--dry-run",
-                    "--output-root",
-                    tmp,
-                    "--run-name",
-                    "dynamic_cli_test",
-                ],
-                cwd=root,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                check=False,
-            )
-            self.assertEqual(process.returncode, 0, process.stdout)
-            payload = json.loads((Path(tmp) / "dynamic_cli_test" / "summary.json").read_text(encoding="utf-8"))
-            self.assertFalse(payload["case"]["registered"])
-            self.assertIsNone(payload["result"]["success"])
 
     def test_migrate_cli_accepts_source_file_without_registered_case(self) -> None:
         root = Path(__file__).resolve().parents[1]

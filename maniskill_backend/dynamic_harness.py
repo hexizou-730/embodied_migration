@@ -16,12 +16,12 @@ import numpy as np
 
 from lmp.executor import execute_lmp, is_safe
 
+from .code_validation import extract_python_module, validate_generated_adapter_module
 from .dynamic_adapter import ManiSkillDynamicRobot, iter_pose_entities
+from .dynamic_adapter import ManiSkillSceneAdapter, _scalar_bool, _to_numpy
 from .env_adapter import ManiSkillEnvAdapter
+from .experiment_environment import capture_experiment_environment
 from .llm import gen_text
-from .module_generation_runner import extract_python_module, validate_generated_adapter_module
-from .reporting import success_from_ret_val
-from .skill_adapter import ManiSkillSceneAdapter, _scalar_bool, _to_numpy
 
 
 TASK_PROGRAM_NAME = "TASK_PROGRAM"
@@ -45,6 +45,17 @@ _STATE_CALLS = {
     "_snapshot",
 }
 _TRUSTED_ACTION_HELPERS = {"_move_towards", "_repeat_action"}
+
+
+def _success_from_ret_val(ret_val: Any) -> bool:
+    if ret_val is True:
+        return True
+    if ret_val is None:
+        return False
+    if isinstance(ret_val, str):
+        lowered = ret_val.lower()
+        return not (lowered.startswith("failure") or lowered.startswith("infeasible"))
+    return bool(ret_val)
 
 
 @dataclass(frozen=True)
@@ -354,7 +365,9 @@ def run_dynamic_trial(
         recorded.trace.append(recorded.snapshot())
         module = _load_module(adapter_path)
         if source_entrypoint == "run":
-            ret_val = module.run(recorded)
+            run = module.run
+            parameters = inspect.signature(run).parameters
+            ret_val = run(recorded, seed=spec.seed) if "seed" in parameters else run(recorded)
             code_ok, code_message = True, "source run(env) completed"
         else:
             build_robot = getattr(module, "build_robot", None)
@@ -370,7 +383,7 @@ def run_dynamic_trial(
             ret_val = locals_dict.get("ret_val")
         official = _safe_evaluate(getattr(env, "unwrapped", env))
         official_success = _scalar_bool(official.get("success", False))
-        returned_success = bool(code_ok and (source_entrypoint == "run" or success_from_ret_val(ret_val)))
+        returned_success = bool(code_ok and (source_entrypoint == "run" or _success_from_ret_val(ret_val)))
         success = bool(returned_success and official_success and recorded.steps > 0)
         execution_error = "" if code_ok else code_message
         if success:
@@ -418,9 +431,16 @@ def run_dynamic_trial(
         }
         if robot is not None:
             cls = type(robot)
+            policy_sources = []
+            for policy_cls in cls.__mro__:
+                if policy_cls in {ManiSkillDynamicRobot, object}:
+                    continue
+                source = _source_of(policy_cls, 14000)
+                if source:
+                    policy_sources.append(source)
             result["implementation_context"] = {
                 "class_path": f"{cls.__module__}.{cls.__name__}",
-                "policy_source": _source_of(cls, 14000),
+                "policy_source": "\n\n".join(policy_sources),
                 "inherited_action_helpers": {
                     "_move_towards": "closed-loop TCP delta motion; checks _early_stop and calls _step",
                     "_repeat_action": "bounded repeated action; checks _early_stop and calls _step",
@@ -462,6 +482,7 @@ def run_dynamic_agent_migration(
     dry_run: bool = False,
     source_actions: SourceActions | None = None,
     progress: Callable[[str], None] | None = None,
+    enforce_environment: bool = False,
 ) -> Dict[str, Any]:
     """Validate supplied source actions (or synthesize them), then migrate."""
 
@@ -472,6 +493,9 @@ def run_dynamic_agent_migration(
     if source_actions is not None:
         (artifacts / "source_adapter.py").write_text(source_actions.code, encoding="utf-8")
         (artifacts / "task_program.py").write_text(source_actions.program + "\n", encoding="utf-8")
+    runtime_environment = capture_experiment_environment(asdict(spec))
+    runtime_environment_path = run_dir / "runtime_environment.json"
+    _write_json(runtime_environment_path, runtime_environment)
     manifest_path = run_dir / "case_manifest.json"
     manifest: Dict[str, Any] = {
         "schema": "dynamic_migration_manifest.v1",
@@ -480,6 +504,8 @@ def run_dynamic_agent_migration(
         "success_authority": "env.unwrapped.evaluate()['success']",
         "llm_may_modify": ["source task program before source success", "source adapter", "target adapter"],
         "llm_may_not_modify": ["environment", "controller", "simulator state", "official success"],
+        "runtime_environment": str(runtime_environment_path),
+        "environment_contract_sha256": runtime_environment["contract_sha256"],
     }
     if source_actions is not None:
         manifest.update(
@@ -501,6 +527,30 @@ def run_dynamic_agent_migration(
             "status": "dry_run_planned",
             "success": None,
             "manifest": str(manifest_path),
+            "runtime_environment": str(runtime_environment_path),
+            "run_dir": str(run_dir),
+            "spec": asdict(spec),
+            "source_cycles": [],
+            "target_cycles": [],
+        }
+        _write_dynamic_summary(run_dir, payload)
+        return payload
+
+    if enforce_environment and not runtime_environment["validation"]["ok"]:
+        mismatches = runtime_environment["validation"]["mismatches"]
+        manifest["outcome"] = {
+            "status": "environment_contract_mismatch",
+            "success": False,
+            "mismatches": mismatches,
+        }
+        _write_json(manifest_path, manifest)
+        payload = {
+            "schema": "dynamic_agent_migration_result.v1",
+            "status": "environment_contract_mismatch",
+            "success": False,
+            "message": "runtime does not match experiment_config.json",
+            "manifest": str(manifest_path),
+            "runtime_environment": str(runtime_environment_path),
             "run_dir": str(run_dir),
             "spec": asdict(spec),
             "source_cycles": [],
@@ -522,6 +572,7 @@ def run_dynamic_agent_migration(
             "success": False,
             "message": repr(exc),
             "manifest": str(manifest_path),
+            "runtime_environment": str(runtime_environment_path),
             "run_dir": str(run_dir),
             "spec": asdict(spec),
             "source_cycles": [],
@@ -646,6 +697,7 @@ def run_dynamic_agent_migration(
             "success": False,
             "message": "source program and adapter did not reach official success",
             "manifest": str(manifest_path),
+            "runtime_environment": str(runtime_environment_path),
             "run_dir": str(run_dir),
             "spec": asdict(spec),
             "source_cycles": source_cycles,
@@ -773,6 +825,7 @@ def run_dynamic_agent_migration(
             or "target adapter did not reach official success within the generation budget"
         ),
         "manifest": str(manifest_path),
+        "runtime_environment": str(runtime_environment_path),
         "run_dir": str(run_dir),
         "spec": asdict(spec),
         "frozen_program": str(artifacts / "task_program.py"),

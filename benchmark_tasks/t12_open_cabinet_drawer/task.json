@@ -1,0 +1,60 @@
+{
+  "schema": "benchmark_task.v1",
+  "task_id": "t12_open_cabinet_drawer",
+  "env_id": "OpenCabinetDrawer-v1",
+  "source_robot": "fetch",
+  "task_family": "mobile_manipulation",
+  "description": "Navigate to a cabinet, grasp a drawer handle, and open the drawer.",
+  "required_capabilities": [
+    "mobile_base",
+    "cartesian_translation",
+    "parallel_gripper",
+    "handle_grasping",
+    "articulation_contact",
+    "joint_state_sensing"
+  ],
+  "success_signal": {
+    "authority": "env.unwrapped.evaluate()",
+    "key": "success",
+    "predicate": "drawer is at least 90 percent open and target link is static"
+  },
+  "episode_limit": 100,
+  "difficulty_variants": [
+    {
+      "variant_id": "d1_nominal",
+      "difficulty": 1,
+      "profile": "d1_nominal",
+      "episode_limit": 200
+    },
+    {
+      "variant_id": "d2_pose",
+      "difficulty": 2,
+      "profile": "d2_pose",
+      "episode_limit": 175
+    },
+    {
+      "variant_id": "d3_geometry",
+      "difficulty": 3,
+      "profile": "d3_geometry",
+      "episode_limit": 150
+    },
+    {
+      "variant_id": "d4_dynamics",
+      "difficulty": 4,
+      "profile": "d4_dynamics",
+      "episode_limit": 125
+    },
+    {
+      "variant_id": "d5_actuation",
+      "difficulty": 5,
+      "profile": "d5_actuation",
+      "episode_limit": 111
+    },
+    {
+      "variant_id": "d6_compound",
+      "difficulty": 6,
+      "profile": "d6_compound",
+      "episode_limit": 100
+    }
+  ]
+}

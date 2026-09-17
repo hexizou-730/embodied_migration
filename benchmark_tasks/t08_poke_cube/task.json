@@ -1,0 +1,60 @@
+{
+  "schema": "benchmark_task.v1",
+  "task_id": "t08_poke_cube",
+  "env_id": "PokeCube-v1",
+  "source_robot": "panda",
+  "task_family": "tool_use",
+  "description": "Use a peg as a tool to poke a cube into its goal.",
+  "required_capabilities": [
+    "cartesian_translation",
+    "parallel_gripper",
+    "tool_grasping",
+    "tool_contact_control",
+    "multi_object_pose_sensing",
+    "static_state_control"
+  ],
+  "success_signal": {
+    "authority": "env.unwrapped.evaluate()",
+    "key": "success",
+    "predicate": "cube is within the goal radius and robot is static"
+  },
+  "episode_limit": 50,
+  "difficulty_variants": [
+    {
+      "variant_id": "d1_nominal",
+      "difficulty": 1,
+      "profile": "d1_nominal",
+      "episode_limit": 100
+    },
+    {
+      "variant_id": "d2_pose",
+      "difficulty": 2,
+      "profile": "d2_pose",
+      "episode_limit": 88
+    },
+    {
+      "variant_id": "d3_geometry",
+      "difficulty": 3,
+      "profile": "d3_geometry",
+      "episode_limit": 75
+    },
+    {
+      "variant_id": "d4_dynamics",
+      "difficulty": 4,
+      "profile": "d4_dynamics",
+      "episode_limit": 63
+    },
+    {
+      "variant_id": "d5_actuation",
+      "difficulty": 5,
+      "profile": "d5_actuation",
+      "episode_limit": 56
+    },
+    {
+      "variant_id": "d6_compound",
+      "difficulty": 6,
+      "profile": "d6_compound",
+      "episode_limit": 50
+    }
+  ]
+}

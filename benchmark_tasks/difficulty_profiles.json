@@ -1,0 +1,65 @@
+{
+  "schema": "difficulty_profiles.v1",
+  "profiles": [
+    {
+      "profile_id": "d1_nominal",
+      "difficulty": 1,
+      "description": "Official environment with an expanded action budget.",
+      "episode_limit_multiplier": 2.0,
+      "perturbations": {}
+    },
+    {
+      "profile_id": "d2_pose",
+      "difficulty": 2,
+      "description": "Wider initial object and goal pose distribution.",
+      "episode_limit_multiplier": 1.75,
+      "perturbations": {"pose_range_scale": 1.25}
+    },
+    {
+      "profile_id": "d3_geometry",
+      "difficulty": 3,
+      "description": "Pose variation plus bounded object-geometry variation.",
+      "episode_limit_multiplier": 1.5,
+      "perturbations": {"pose_range_scale": 1.25, "geometry_scale_range": [0.9, 1.1]}
+    },
+    {
+      "profile_id": "d4_dynamics",
+      "difficulty": 4,
+      "description": "Pose, geometry, mass and friction variation.",
+      "episode_limit_multiplier": 1.25,
+      "perturbations": {
+        "pose_range_scale": 1.25,
+        "geometry_scale_range": [0.9, 1.1],
+        "mass_scale_range": [0.8, 1.2],
+        "friction_scale_range": [0.8, 1.2]
+      }
+    },
+    {
+      "profile_id": "d5_actuation",
+      "difficulty": 5,
+      "description": "Dynamics variation with bounded action noise and one-step delay.",
+      "episode_limit_multiplier": 1.1,
+      "perturbations": {
+        "pose_range_scale": 1.25,
+        "mass_scale_range": [0.8, 1.2],
+        "friction_scale_range": [0.8, 1.2],
+        "action_noise_std": 0.01,
+        "action_delay_steps": 1
+      }
+    },
+    {
+      "profile_id": "d6_compound",
+      "difficulty": 6,
+      "description": "Combined pose, geometry, dynamics and actuation shift at the official budget.",
+      "episode_limit_multiplier": 1.0,
+      "perturbations": {
+        "pose_range_scale": 1.5,
+        "geometry_scale_range": [0.85, 1.15],
+        "mass_scale_range": [0.75, 1.25],
+        "friction_scale_range": [0.75, 1.25],
+        "action_noise_std": 0.015,
+        "action_delay_steps": 1
+      }
+    }
+  ]
+}

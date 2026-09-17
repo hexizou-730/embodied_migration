@@ -7,14 +7,26 @@ with ``EM_LLM_PROVIDER``:
 - ``deepseek`` uses ``DEEPSEEK_API_KEY`` and DeepSeek model ids.
 """
 
+import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict
 from openai import OpenAI
 
 
 PROVIDER_OPENROUTER = "openrouter"
 PROVIDER_DEEPSEEK = "deepseek"
+
+
+def _experiment_llm_defaults() -> Dict[str, Any]:
+    path = Path(__file__).resolve().with_name("experiment_config.json")
+    if not path.is_file():
+        return {}
+    return dict(json.loads(path.read_text(encoding="utf-8")).get("llm", {}))
+
+
+EXPERIMENT_LLM = _experiment_llm_defaults()
 
 PROVIDER_CONFIG = {
     PROVIDER_OPENROUTER: {
@@ -31,7 +43,9 @@ PROVIDER_CONFIG = {
 
 
 def current_provider() -> str:
-    provider = os.environ.get("EM_LLM_PROVIDER", PROVIDER_OPENROUTER).strip().lower()
+    provider = os.environ.get(
+        "EM_LLM_PROVIDER", EXPERIMENT_LLM.get("provider", PROVIDER_OPENROUTER)
+    ).strip().lower()
     if provider not in PROVIDER_CONFIG:
         allowed = ", ".join(sorted(PROVIDER_CONFIG))
         raise ValueError(f"Unknown EM_LLM_PROVIDER={provider!r}. Allowed: {allowed}")
@@ -40,12 +54,14 @@ def current_provider() -> str:
 
 def default_model(provider: str | None = None) -> str:
     provider = provider or current_provider()
-    return os.environ.get("EM_MODEL") or PROVIDER_CONFIG[provider]["default_model"]
+    configured = EXPERIMENT_LLM.get("model") if provider == EXPERIMENT_LLM.get("provider") else None
+    return os.environ.get("EM_MODEL") or configured or PROVIDER_CONFIG[provider]["default_model"]
 
 
 DEFAULT_MODEL = default_model()
-DEFAULT_MAX_TOKENS = 8192
+DEFAULT_MAX_TOKENS = int(EXPERIMENT_LLM.get("max_tokens", 8192))
 DEEPSEEK_THINKING_MODES = {"enabled", "disabled"}
+REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 
 @dataclass(frozen=True)
@@ -67,7 +83,7 @@ def completion_token_limit() -> int:
 def generation_temperature() -> float:
     """Return the recorded sampling temperature for independent paper runs."""
 
-    value = float(os.environ.get("EM_TEMPERATURE", "0.0"))
+    value = float(os.environ.get("EM_TEMPERATURE", EXPERIMENT_LLM.get("temperature", 0.0)))
     if value < 0.0 or value > 2.0:
         raise ValueError("EM_TEMPERATURE must be between 0 and 2.")
     return value
@@ -81,6 +97,48 @@ def deepseek_thinking_mode() -> str:
         allowed = ", ".join(sorted(DEEPSEEK_THINKING_MODES))
         raise ValueError(f"Unknown EM_DEEPSEEK_THINKING={value!r}. Allowed: {allowed}")
     return value
+
+
+def llm_seed() -> int:
+    value = int(os.environ.get("EM_LLM_SEED", EXPERIMENT_LLM.get("seed", 0)))
+    if value < 0:
+        raise ValueError("EM_LLM_SEED must be non-negative.")
+    return value
+
+
+def openrouter_reasoning_effort() -> str:
+    value = os.environ.get(
+        "EM_REASONING_EFFORT", EXPERIMENT_LLM.get("reasoning_effort", "low")
+    ).strip().lower()
+    if value not in REASONING_EFFORTS:
+        raise ValueError(f"EM_REASONING_EFFORT must be one of {sorted(REASONING_EFFORTS)}.")
+    return value
+
+
+def openrouter_exclude_reasoning() -> bool:
+    raw = os.environ.get(
+        "EM_EXCLUDE_REASONING",
+        str(EXPERIMENT_LLM.get("exclude_reasoning_from_response", True)),
+    ).strip().lower()
+    if raw not in {"true", "false", "1", "0", "yes", "no"}:
+        raise ValueError("EM_EXCLUDE_REASONING must be true or false.")
+    return raw in {"true", "1", "yes"}
+
+
+def openrouter_upstream_provider() -> str:
+    return os.environ.get(
+        "EM_OPENROUTER_PROVIDER", EXPERIMENT_LLM.get("upstream_provider", "DeepSeek")
+    ).strip()
+
+
+def openrouter_allow_fallbacks() -> bool:
+    raw = os.environ.get(
+        "EM_OPENROUTER_ALLOW_FALLBACKS",
+        str(EXPERIMENT_LLM.get("allow_provider_fallbacks", False)),
+    ).strip().lower()
+    if raw not in {"true", "false", "1", "0", "yes", "no"}:
+        raise ValueError("EM_OPENROUTER_ALLOW_FALLBACKS must be true or false.")
+    return raw in {"true", "1", "yes"}
 
 
 def api_key_env(provider: str | None = None) -> str:
@@ -138,9 +196,21 @@ def chat_with_metadata(
         ],
         temperature=temperature,
         max_tokens=completion_token_limit(),
+        seed=llm_seed(),
     )
     if provider == PROVIDER_DEEPSEEK:
         request["extra_body"] = {"thinking": {"type": deepseek_thinking_mode()}}
+    elif provider == PROVIDER_OPENROUTER:
+        request["extra_body"] = {
+            "reasoning": {
+                "effort": openrouter_reasoning_effort(),
+                "exclude": openrouter_exclude_reasoning(),
+            },
+            "provider": {
+                "order": [openrouter_upstream_provider()],
+                "allow_fallbacks": openrouter_allow_fallbacks(),
+            },
+        }
     resp = client.chat.completions.create(**request)
     usage_obj = getattr(resp, "usage", None)
     if usage_obj is None:

@@ -1,1 +1,0 @@
-from capabilities.capability_card import CapabilityCard

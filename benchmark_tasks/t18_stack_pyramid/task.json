@@ -1,0 +1,61 @@
+{
+  "schema": "benchmark_task.v1",
+  "task_id": "t18_stack_pyramid",
+  "env_id": "StackPyramid-v1",
+  "source_robot": "panda",
+  "task_family": "long_horizon_stacking",
+  "description": "Arrange three cubes into a stable pyramid and release all cubes.",
+  "required_capabilities": [
+    "cartesian_translation",
+    "parallel_gripper",
+    "grasp_state",
+    "multi_object_pose_sensing",
+    "multi_stage_planning",
+    "release_control",
+    "static_state_control"
+  ],
+  "success_signal": {
+    "authority": "env.unwrapped.evaluate()",
+    "key": "success",
+    "predicate": "blue cube is supported by both base cubes, static, and no cube is grasped"
+  },
+  "episode_limit": 250,
+  "difficulty_variants": [
+    {
+      "variant_id": "d1_nominal",
+      "difficulty": 1,
+      "profile": "d1_nominal",
+      "episode_limit": 500
+    },
+    {
+      "variant_id": "d2_pose",
+      "difficulty": 2,
+      "profile": "d2_pose",
+      "episode_limit": 438
+    },
+    {
+      "variant_id": "d3_geometry",
+      "difficulty": 3,
+      "profile": "d3_geometry",
+      "episode_limit": 375
+    },
+    {
+      "variant_id": "d4_dynamics",
+      "difficulty": 4,
+      "profile": "d4_dynamics",
+      "episode_limit": 313
+    },
+    {
+      "variant_id": "d5_actuation",
+      "difficulty": 5,
+      "profile": "d5_actuation",
+      "episode_limit": 275
+    },
+    {
+      "variant_id": "d6_compound",
+      "difficulty": 6,
+      "profile": "d6_compound",
+      "episode_limit": 250
+    }
+  ]
+}

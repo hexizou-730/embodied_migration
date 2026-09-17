@@ -1,0 +1,60 @@
+{
+  "schema": "benchmark_task.v1",
+  "task_id": "t16_plug_charger",
+  "env_id": "PlugCharger-v1",
+  "source_robot": "panda_wristcam",
+  "task_family": "precision_insertion",
+  "description": "Pick up a charger and insert its two prongs into a receptacle.",
+  "required_capabilities": [
+    "cartesian_translation",
+    "cartesian_orientation",
+    "parallel_gripper",
+    "grasp_state",
+    "precision_insertion",
+    "object_pose_sensing"
+  ],
+  "success_signal": {
+    "authority": "env.unwrapped.evaluate()",
+    "key": "success",
+    "predicate": "charger pose error is at most 0.005 m and angular error is at most 0.2 rad"
+  },
+  "episode_limit": 200,
+  "difficulty_variants": [
+    {
+      "variant_id": "d1_nominal",
+      "difficulty": 1,
+      "profile": "d1_nominal",
+      "episode_limit": 400
+    },
+    {
+      "variant_id": "d2_pose",
+      "difficulty": 2,
+      "profile": "d2_pose",
+      "episode_limit": 350
+    },
+    {
+      "variant_id": "d3_geometry",
+      "difficulty": 3,
+      "profile": "d3_geometry",
+      "episode_limit": 300
+    },
+    {
+      "variant_id": "d4_dynamics",
+      "difficulty": 4,
+      "profile": "d4_dynamics",
+      "episode_limit": 250
+    },
+    {
+      "variant_id": "d5_actuation",
+      "difficulty": 5,
+      "profile": "d5_actuation",
+      "episode_limit": 221
+    },
+    {
+      "variant_id": "d6_compound",
+      "difficulty": 6,
+      "profile": "d6_compound",
+      "episode_limit": 200
+    }
+  ]
+}

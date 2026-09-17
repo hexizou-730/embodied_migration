@@ -1,0 +1,88 @@
+{
+  "schema": "task_catalog.v1",
+  "mani_skill_version": "3.0.1",
+  "task_count": 20,
+  "target_robot_policy": "runtime_input_not_catalogued",
+  "tasks": [
+    {
+      "task_id": "t01_push_cube",
+      "path": "t01_push_cube/task.json"
+    },
+    {
+      "task_id": "t02_pull_cube",
+      "path": "t02_pull_cube/task.json"
+    },
+    {
+      "task_id": "t03_roll_ball",
+      "path": "t03_roll_ball/task.json"
+    },
+    {
+      "task_id": "t04_pick_cube",
+      "path": "t04_pick_cube/task.json"
+    },
+    {
+      "task_id": "t05_place_sphere",
+      "path": "t05_place_sphere/task.json"
+    },
+    {
+      "task_id": "t06_lift_peg_upright",
+      "path": "t06_lift_peg_upright/task.json"
+    },
+    {
+      "task_id": "t07_stack_cube",
+      "path": "t07_stack_cube/task.json"
+    },
+    {
+      "task_id": "t08_poke_cube",
+      "path": "t08_poke_cube/task.json"
+    },
+    {
+      "task_id": "t09_push_t",
+      "path": "t09_push_t/task.json"
+    },
+    {
+      "task_id": "t10_pull_cube_tool",
+      "path": "t10_pull_cube_tool/task.json"
+    },
+    {
+      "task_id": "t11_turn_faucet",
+      "path": "t11_turn_faucet/task.json"
+    },
+    {
+      "task_id": "t12_open_cabinet_drawer",
+      "path": "t12_open_cabinet_drawer/task.json"
+    },
+    {
+      "task_id": "t13_open_cabinet_door",
+      "path": "t13_open_cabinet_door/task.json"
+    },
+    {
+      "task_id": "t14_pick_single_ycb",
+      "path": "t14_pick_single_ycb/task.json"
+    },
+    {
+      "task_id": "t15_peg_insertion_side",
+      "path": "t15_peg_insertion_side/task.json"
+    },
+    {
+      "task_id": "t16_plug_charger",
+      "path": "t16_plug_charger/task.json"
+    },
+    {
+      "task_id": "t17_assembling_kits",
+      "path": "t17_assembling_kits/task.json"
+    },
+    {
+      "task_id": "t18_stack_pyramid",
+      "path": "t18_stack_pyramid/task.json"
+    },
+    {
+      "task_id": "t19_draw_triangle",
+      "path": "t19_draw_triangle/task.json"
+    },
+    {
+      "task_id": "t20_fmb_assembly",
+      "path": "t20_fmb_assembly/task.json"
+    }
+  ]
+}

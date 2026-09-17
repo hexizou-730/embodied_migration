@@ -1,0 +1,60 @@
+{
+  "schema": "benchmark_task.v1",
+  "task_id": "t20_fmb_assembly",
+  "env_id": "FMBAssembly1Easy-v1",
+  "source_robot": "panda",
+  "task_family": "industrial_assembly",
+  "description": "Complete the FMB bridge-and-peg assembly task.",
+  "required_capabilities": [
+    "cartesian_translation",
+    "cartesian_orientation",
+    "parallel_gripper",
+    "multi_object_pose_sensing",
+    "precision_assembly",
+    "multi_stage_planning"
+  ],
+  "success_signal": {
+    "authority": "env.unwrapped.evaluate()",
+    "key": "success",
+    "predicate": "the bridge component satisfies the official placed condition"
+  },
+  "episode_limit": 500,
+  "difficulty_variants": [
+    {
+      "variant_id": "d1_nominal",
+      "difficulty": 1,
+      "profile": "d1_nominal",
+      "episode_limit": 1000
+    },
+    {
+      "variant_id": "d2_pose",
+      "difficulty": 2,
+      "profile": "d2_pose",
+      "episode_limit": 875
+    },
+    {
+      "variant_id": "d3_geometry",
+      "difficulty": 3,
+      "profile": "d3_geometry",
+      "episode_limit": 750
+    },
+    {
+      "variant_id": "d4_dynamics",
+      "difficulty": 4,
+      "profile": "d4_dynamics",
+      "episode_limit": 625
+    },
+    {
+      "variant_id": "d5_actuation",
+      "difficulty": 5,
+      "profile": "d5_actuation",
+      "episode_limit": 550
+    },
+    {
+      "variant_id": "d6_compound",
+      "difficulty": 6,
+      "profile": "d6_compound",
+      "episode_limit": 500
+    }
+  ]
+}

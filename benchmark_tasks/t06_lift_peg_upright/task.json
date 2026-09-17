@@ -1,0 +1,59 @@
+{
+  "schema": "benchmark_task.v1",
+  "task_id": "t06_lift_peg_upright",
+  "env_id": "LiftPegUpright-v1",
+  "source_robot": "panda",
+  "task_family": "reorientation",
+  "description": "Reorient a horizontal peg to an upright pose on the table.",
+  "required_capabilities": [
+    "cartesian_translation",
+    "parallel_gripper",
+    "grasp_state",
+    "object_reorientation",
+    "object_pose_sensing"
+  ],
+  "success_signal": {
+    "authority": "env.unwrapped.evaluate()",
+    "key": "success",
+    "predicate": "peg orientation is upright and peg center height is near its half-length"
+  },
+  "episode_limit": 50,
+  "difficulty_variants": [
+    {
+      "variant_id": "d1_nominal",
+      "difficulty": 1,
+      "profile": "d1_nominal",
+      "episode_limit": 100
+    },
+    {
+      "variant_id": "d2_pose",
+      "difficulty": 2,
+      "profile": "d2_pose",
+      "episode_limit": 88
+    },
+    {
+      "variant_id": "d3_geometry",
+      "difficulty": 3,
+      "profile": "d3_geometry",
+      "episode_limit": 75
+    },
+    {
+      "variant_id": "d4_dynamics",
+      "difficulty": 4,
+      "profile": "d4_dynamics",
+      "episode_limit": 63
+    },
+    {
+      "variant_id": "d5_actuation",
+      "difficulty": 5,
+      "profile": "d5_actuation",
+      "episode_limit": 56
+    },
+    {
+      "variant_id": "d6_compound",
+      "difficulty": 6,
+      "profile": "d6_compound",
+      "episode_limit": 50
+    }
+  ]
+}

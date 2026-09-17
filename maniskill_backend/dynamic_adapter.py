@@ -1,12 +1,154 @@
-"""Generic runtime surface for adapters synthesized for unregistered tasks."""
+"""Task-neutral ManiSkill runtime exposed to generated adapters."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 
-from .skill_adapter import ManiSkillDeltaEERobot, _scalar_bool, _to_numpy
+
+@dataclass(frozen=True)
+class SkillTarget:
+    name: str
+    kind: str
+
+
+class ManiSkillSceneAdapter:
+    """Minimal scene vocabulary used by generated high-level programs."""
+
+    def get_object(self, name: str) -> SkillTarget:
+        return SkillTarget(name=name, kind="object")
+
+    def get_region(self, name: str) -> SkillTarget:
+        return SkillTarget(name=name, kind="region")
+
+
+class ManiSkillDeltaEERobot:
+    """Generic delta end-effector execution helpers with no task policy."""
+
+    def __init__(
+        self,
+        env: Any,
+        *,
+        move_steps: int = 14,
+        settle_steps: int = 10,
+        max_delta_m: float = 0.07,
+        gripper_open: float = 1.0,
+        gripper_close: float = -1.0,
+        control_mode: Optional[str] = None,
+    ) -> None:
+        self.env = env
+        self.move_steps = move_steps
+        self.settle_steps = settle_steps
+        self.max_delta_m = max_delta_m
+        self.gripper_open = gripper_open
+        self.gripper_close = gripper_close
+        self.control_mode = control_mode
+        self.last_info: Dict[str, Any] = {}
+        self.terminated = False
+        self.truncated = False
+        self.events: List[Dict[str, Any]] = []
+        self._validate_action_space()
+
+    def _validate_action_space(self) -> None:
+        space = getattr(self.env, "action_space", None)
+        shape = getattr(space, "shape", None)
+        if not shape or len(shape) != 1 or int(shape[0]) < 3:
+            raise RuntimeError(
+                "Adapter requires a one-dimensional Box-like action space "
+                f"with at least three entries, got {shape!r}."
+            )
+
+    def execution_log(self) -> List[Dict[str, Any]]:
+        return list(self.events)
+
+    def _move_towards(self, target_pos: np.ndarray, *, gripper: float, steps: int) -> None:
+        for _ in range(max(1, steps)):
+            if self._early_stop():
+                return
+            delta = np.asarray(target_pos, dtype=np.float32) - self._tcp_pos()
+            if np.linalg.norm(delta) < 0.01:
+                return
+            command = np.clip(delta / self.max_delta_m, -1.0, 1.0)
+            self._step(self._make_action(command, gripper=gripper))
+
+    def _repeat_action(self, delta_xyz: np.ndarray, *, gripper: float, steps: int) -> None:
+        action = self._make_action(delta_xyz, gripper=gripper)
+        for _ in range(max(1, steps)):
+            if self._early_stop():
+                return
+            self._step(action)
+
+    def _early_stop(self) -> bool:
+        return bool(self.terminated or self.truncated)
+
+    def _make_action(self, delta_xyz: np.ndarray, *, gripper: float = 0.0) -> Any:
+        space = self.env.action_space
+        action = np.zeros(space.shape, dtype=getattr(space, "dtype", np.float32))
+        flat = action.reshape(-1)
+        flat[:3] = np.asarray(delta_xyz, dtype=np.float32).reshape(-1)[:3]
+        if flat.size >= 4:
+            flat[-1] = float(gripper)
+        low = getattr(space, "low", None)
+        high = getattr(space, "high", None)
+        if low is not None and high is not None:
+            action = np.clip(action, low, high)
+        return action
+
+    def _step(self, action: Any) -> None:
+        _, _, terminated, truncated, info = self.env.step(action)
+        self.last_info = dict(info or {})
+        self.terminated = self.terminated or _scalar_bool(terminated)
+        self.truncated = self.truncated or _scalar_bool(truncated)
+
+    def _base_env(self) -> Any:
+        return getattr(self.env, "unwrapped", self.env)
+
+    def _tcp_pos(self) -> np.ndarray:
+        agent = self._base_env().agent
+        tcp_pose = getattr(agent, "tcp_pose", None)
+        if tcp_pose is not None:
+            return _to_numpy(tcp_pose.p)
+        tcp = getattr(agent, "tcp", None)
+        if tcp is not None and getattr(tcp, "pose", None) is not None:
+            return _to_numpy(tcp.pose.p)
+        raise RuntimeError("Could not read the ManiSkill agent TCP pose.")
+
+    def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
+        self.events.append(
+            {
+                "step": len(self.events) + 1,
+                "api": api,
+                "args": dict(args),
+                "result": bool(result),
+                "ok": bool(ok),
+                "message": message,
+                "failure_type": "" if ok else "execution failure",
+            }
+        )
+        return bool(ok)
+
+    def _fail(self, api: str, args: Dict[str, Any], message: str) -> bool:
+        return self._log(api, args, False, False, message)
+
+
+def _to_numpy(value: Any) -> np.ndarray:
+    try:
+        import torch
+
+        if torch.is_tensor(value):
+            return value.detach().cpu().numpy()
+    except Exception:
+        pass
+    return np.asarray(value)
+
+
+def _scalar_bool(value: Any) -> bool:
+    try:
+        return bool(_to_numpy(value).reshape(-1)[0])
+    except Exception:
+        return bool(value)
 
 
 _ENTITY_ALIAS_GROUPS = (

@@ -1,0 +1,32 @@
+{
+  "schema": "source_program_catalog.v1",
+  "freeze_policy": {
+    "seeds_from": "experiment_config.json:seed_policy.development_seeds",
+    "minimum_seed_count": 2,
+    "required_success_rate": 1.0,
+    "max_episode_steps": 1000,
+    "success_authority": "env.unwrapped.evaluate()['success']"
+  },
+  "programs": [
+    {"task_id": "t01_push_cube", "control_mode": "pd_joint_pos", "candidate": "candidates/t01_push_cube.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t02_pull_cube", "control_mode": "pd_joint_pos", "candidate": "candidates/t02_pull_cube.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t03_roll_ball", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t03_roll_ball.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t04_pick_cube", "control_mode": "pd_joint_pos", "candidate": "candidates/t04_pick_cube.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t05_place_sphere", "control_mode": "pd_joint_pos", "candidate": "candidates/t05_place_sphere.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t06_lift_peg_upright", "control_mode": "pd_joint_pos", "candidate": "candidates/t06_lift_peg_upright.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t07_stack_cube", "control_mode": "pd_joint_pos", "candidate": "candidates/t07_stack_cube.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t08_poke_cube", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t08_poke_cube.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t09_push_t", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t09_push_t.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t10_pull_cube_tool", "control_mode": "pd_joint_pos", "candidate": "candidates/t10_pull_cube_tool.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t11_turn_faucet", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t11_turn_faucet.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t12_open_cabinet_drawer", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t12_open_cabinet_drawer.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t13_open_cabinet_door", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t13_open_cabinet_door.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t14_pick_single_ycb", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t14_pick_single_ycb.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t15_peg_insertion_side", "control_mode": "pd_joint_pos", "candidate": "candidates/t15_peg_insertion_side.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t16_plug_charger", "control_mode": "pd_joint_pos", "candidate": "candidates/t16_plug_charger.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t17_assembling_kits", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t17_assembling_kits.py", "origin": "bootstrap_pending_remote_validation"},
+    {"task_id": "t18_stack_pyramid", "control_mode": "pd_joint_pos", "candidate": "candidates/t18_stack_pyramid.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t19_draw_triangle", "control_mode": "pd_joint_pos", "candidate": "candidates/t19_draw_triangle.py", "origin": "maniskill_3.0.1_motionplanning_reference"},
+    {"task_id": "t20_fmb_assembly", "control_mode": "pd_ee_delta_pos", "candidate": "candidates/t20_fmb_assembly.py", "origin": "bootstrap_pending_remote_validation"}
+  ]
+}
