@@ -33,7 +33,7 @@ Generated adapters, prompts, state traces, and results are written below
 ## Fixed Experiment Environment
 
 [`experiment_config.json`](experiment_config.json) is the single tracked
-experiment contract. It fixes Python 3.10.14, ManiSkill 3.0.1, SAPIEN 3.0.3,
+experiment contract. It fixes Python 3.10.20, ManiSkill 3.0.1, SAPIEN 3.0.3,
 CUDA 13.2, the exact OpenRouter/DeepSeek model and generation parameters, the
 controller defaults, and the simulation seed split.
 

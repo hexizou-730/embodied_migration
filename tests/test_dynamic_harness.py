@@ -282,7 +282,7 @@ def build_robot(env, *, control_mode, robot_uid):
                     "validation": {
                         "ok": False,
                         "mismatches": [
-                            {"field": "python.version", "expected": "3.10.14", "observed": "3.12.2"}
+                            {"field": "python.version", "expected": "3.10.20", "observed": "3.12.2"}
                         ],
                     },
                 }

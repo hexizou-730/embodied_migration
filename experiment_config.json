@@ -1,7 +1,7 @@
 {
   "schema": "embodied_migration_experiment.v1",
   "runtime": {
-    "python_version": "3.10.14",
+    "python_version": "3.10.20",
     "packages": {
       "mani_skill": "3.0.1",
       "sapien": "3.0.3"

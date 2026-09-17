@@ -90,7 +90,7 @@ class SourceProgramTests(unittest.TestCase):
             "validation": {
                 "ok": False,
                 "mismatches": [
-                    {"field": "python.version", "expected": "3.10.14", "observed": "3.12.2"}
+                    {"field": "python.version", "expected": "3.10.20", "observed": "3.12.2"}
                 ],
             },
         }
