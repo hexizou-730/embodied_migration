@@ -18,6 +18,7 @@ from maniskill_backend.dynamic_harness import (
     looks_like_env_id,
     read_source_actions,
     run_dynamic_agent_migration,
+    run_dynamic_trial,
     validate_dynamic_adapter,
 )
 from maniskill_backend.experiment_environment import (
@@ -82,6 +83,56 @@ class _FakeEnv:
 
 
 class DynamicHarnessTests(unittest.TestCase):
+    def test_official_success_termination_is_not_reported_as_runtime_failure(self) -> None:
+        env = _FakeEnv()
+        succeeded = False
+
+        def evaluate():
+            return {"success": succeeded}
+
+        def step(action):
+            nonlocal succeeded
+            succeeded = True
+            return {}, 1.0, True, False, {"success": True}
+
+        env.evaluate = evaluate
+        env.step = step
+
+        def run(recorded, seed=None):
+            recorded.step(np.zeros(4, dtype=np.float32))
+            raise AssertionError("execution must stop at official success")
+
+        spec = DynamicMigrationSpec(
+            env_id="PushCube-v1",
+            task_label="t01_push_cube",
+            source_robot="panda",
+            target_robot="panda",
+            source_control_mode="pd_joint_pos",
+            target_control_mode="pd_joint_pos",
+            seed=0,
+        )
+        with patch("maniskill_backend.dynamic_harness.ManiSkillEnvAdapter") as adapter_cls, patch(
+            "maniskill_backend.dynamic_harness._load_module",
+            return_value=SimpleNamespace(run=run),
+        ):
+            adapter = adapter_cls.return_value
+            adapter.make.return_value = env
+            adapter.reset.return_value = ({}, {})
+            result = run_dynamic_trial(
+                spec=spec,
+                robot_uid="panda",
+                control_mode="pd_joint_pos",
+                program="ret_val = True",
+                adapter_path=Path("unused.py"),
+                source_entrypoint="run",
+            )
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["official_success"])
+        self.assertEqual(result["action_steps"], 1)
+        self.assertTrue(result["terminated"])
+        self.assertFalse(result["truncated"])
+
     def test_experiment_contract_detects_runtime_mismatch(self) -> None:
         contract = load_experiment_contract()
         actual = {

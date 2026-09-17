@@ -334,7 +334,15 @@ class _RecordedEnv:
         self.done = self.terminated or self.truncated
         if self.steps == 1 or self.steps % 10 == 0 or self.done:
             self.trace.append({**self.snapshot(), "action": _jsonable(action)})
+        if self.done:
+            evaluation = _safe_evaluate(getattr(self._env, "unwrapped", self._env))
+            if _scalar_bool(evaluation.get("success", False)):
+                raise _OfficialSuccessReached
         return result
+
+
+class _OfficialSuccessReached(RuntimeError):
+    """Stop a policy cleanly when ManiSkill terminates on official success."""
 
 
 def run_dynamic_trial(
@@ -364,23 +372,28 @@ def run_dynamic_trial(
         recorded = _RecordedEnv(env, spec.max_episode_steps)
         recorded.trace.append(recorded.snapshot())
         module = _load_module(adapter_path)
-        if source_entrypoint == "run":
-            run = module.run
-            parameters = inspect.signature(run).parameters
-            ret_val = run(recorded, seed=spec.seed) if "seed" in parameters else run(recorded)
-            code_ok, code_message = True, "source run(env) completed"
-        else:
-            build_robot = getattr(module, "build_robot", None)
-            if not callable(build_robot):
-                raise ValueError("Generated module must define callable build_robot(...).")
-            robot = build_robot(recorded, control_mode=control_mode, robot_uid=robot_uid)
-            scene = ManiSkillSceneAdapter()
-            code_ok, code_message, locals_dict = execute_lmp(
-                program,
-                {"scene": scene, "robot": robot},
-                verbose=False,
-            )
-            ret_val = locals_dict.get("ret_val")
+        try:
+            if source_entrypoint == "run":
+                run = module.run
+                parameters = inspect.signature(run).parameters
+                ret_val = run(recorded, seed=spec.seed) if "seed" in parameters else run(recorded)
+                code_ok, code_message = True, "source run(env) completed"
+            else:
+                build_robot = getattr(module, "build_robot", None)
+                if not callable(build_robot):
+                    raise ValueError("Generated module must define callable build_robot(...).")
+                robot = build_robot(recorded, control_mode=control_mode, robot_uid=robot_uid)
+                scene = ManiSkillSceneAdapter()
+                code_ok, code_message, locals_dict = execute_lmp(
+                    program,
+                    {"scene": scene, "robot": robot},
+                    verbose=False,
+                )
+                ret_val = locals_dict.get("ret_val")
+        except _OfficialSuccessReached:
+            ret_val = True
+            code_ok = True
+            code_message = "official task success terminated the episode"
         official = _safe_evaluate(getattr(env, "unwrapped", env))
         official_success = _scalar_bool(official.get("success", False))
         returned_success = bool(code_ok and (source_entrypoint == "run" or _success_from_ret_val(ret_val)))
