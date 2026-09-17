@@ -12,11 +12,17 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
+
+from dotenv import load_dotenv
 from openai import OpenAI
 
 
 PROVIDER_OPENROUTER = "openrouter"
 PROVIDER_DEEPSEEK = "deepseek"
+
+# Every caller, including the runtime-contract recorder, must observe the same
+# project-local LLM configuration before it selects a provider or model.
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 
 def _experiment_llm_defaults() -> Dict[str, Any]:

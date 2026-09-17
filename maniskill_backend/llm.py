@@ -45,6 +45,11 @@ def has_llm_key() -> bool:
     return has_api_key()
 
 
+def _request_failure_reason(exc: Exception) -> str:
+    message = str(exc).replace("\n", " ").strip()
+    return f"llm_request_failed:{type(exc).__name__}: {message[:1000]}"
+
+
 def gen_code(
     *,
     prompt: str,
@@ -77,13 +82,21 @@ def gen_code(
         "You adapt robot LMP Python code across robot embodiments. "
         "Return only executable Python code. Do not include Markdown."
     )
-    response = chat_with_metadata(
-        client=make_client(provider),
-        system=system,
-        user=prompt,
-        model=chosen_model,
-        temperature=generation_temperature(),
-    )
+    try:
+        response = chat_with_metadata(
+            client=make_client(provider),
+            system=system,
+            user=prompt,
+            model=chosen_model,
+            temperature=generation_temperature(),
+        )
+    except Exception as exc:
+        return LLMResult(
+            code=fallback_code,
+            used_llm=False,
+            model=chosen_model,
+            reason=_request_failure_reason(exc),
+        )
     return LLMResult(
         code=extract_code_or_text(response.content),
         used_llm=True,
@@ -121,13 +134,21 @@ def gen_text(
             reason=f"missing_{api_key_env(provider).lower()}",
         )
 
-    response = chat_with_metadata(
-        client=make_client(provider),
-        system=system,
-        user=prompt,
-        model=chosen_model,
-        temperature=generation_temperature(),
-    )
+    try:
+        response = chat_with_metadata(
+            client=make_client(provider),
+            system=system,
+            user=prompt,
+            model=chosen_model,
+            temperature=generation_temperature(),
+        )
+    except Exception as exc:
+        return LLMTextResult(
+            text=fallback_text,
+            used_llm=False,
+            model=chosen_model,
+            reason=_request_failure_reason(exc),
+        )
     return LLMTextResult(
         text=response.content.strip(),
         used_llm=True,
