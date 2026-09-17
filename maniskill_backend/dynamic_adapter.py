@@ -9,6 +9,12 @@ import numpy as np
 from .skill_adapter import ManiSkillDeltaEERobot, _scalar_bool, _to_numpy
 
 
+_ENTITY_ALIAS_GROUPS = (
+    ("cube", "object", "obj"),
+    ("goal", "target", "goal_region", "target_region"),
+)
+
+
 class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
     """Task-neutral helpers available to dynamically generated adapters.
 
@@ -80,11 +86,41 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
         matches = [value for path, value in catalog.items() if path.rsplit(".", 1)[-1] == name]
         if len(matches) == 1:
             return matches[0]
+        alias_matches = self._entity_alias_matches(name, catalog)
+        if len(alias_matches) == 1:
+            return alias_matches[0]
         direct = getattr(self._base_env(), name, None)
         if direct is not None:
             return direct
         available = ", ".join(sorted(catalog)[:40])
-        raise AttributeError(f"Unknown task entity {name!r}. Available pose entities: {available}")
+        aliases = self._entity_aliases(catalog)
+        raise AttributeError(
+            f"Unknown or ambiguous task entity {name!r}. Available pose entities: {available}. "
+            f"Unambiguous semantic aliases: {aliases}"
+        )
+
+    @staticmethod
+    def _entity_alias_matches(name: str, catalog: Dict[str, Any]) -> list[Any]:
+        """Resolve only common, unambiguous task names such as cube -> obj."""
+
+        group = next((items for items in _ENTITY_ALIAS_GROUPS if name in items), ())
+        if not group:
+            return []
+        matching_keys = [key for key in group if key in catalog]
+        return [catalog[key] for key in matching_keys]
+
+    @classmethod
+    def _entity_aliases(cls, catalog: Dict[str, Any]) -> Dict[str, str]:
+        aliases: Dict[str, str] = {}
+        for group in _ENTITY_ALIAS_GROUPS:
+            matching_keys = [key for key in group if key in catalog]
+            if len(matching_keys) != 1:
+                continue
+            resolved = matching_keys[0]
+            for alias in group:
+                if alias not in catalog:
+                    aliases[alias] = resolved
+        return aliases
 
     def _actor(self, name: str) -> Any:
         return self._entity(name)
@@ -133,6 +169,7 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
         return {
             "tcp": tcp,
             "entities": entities,
+            "entity_aliases": self._entity_aliases(self._entity_catalog()),
             "official_evaluation": _jsonable(self._official_evaluation()),
             "terminated": bool(self.terminated),
             "truncated": bool(self.truncated),

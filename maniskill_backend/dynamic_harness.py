@@ -151,6 +151,7 @@ def discover_environment(spec: DynamicMigrationSpec, robot_uid: str, control_mod
             "controller_action_mapping": _jsonable(getattr(controller, "action_mapping", None)),
             "tcp": tcp,
             "pose_entities": entities,
+            "entity_aliases": ManiSkillDynamicRobot._entity_aliases(entities),
             "reset_info": _jsonable(reset_info),
             "official_evaluation": evaluation,
             "environment_source": _source_of(cls, 24000),
@@ -252,6 +253,40 @@ def validate_dynamic_adapter(code: str, *, task_program: str, require_program_co
         raise ValueError("Target adapter may not modify the frozen source TASK_PROGRAM.")
 
 
+class _RemoveDocstrings(ast.NodeTransformer):
+    """Normalize formatting-only changes before comparing generated modules."""
+
+    def _visit_body(self, node: ast.AST) -> ast.AST:
+        self.generic_visit(node)
+        body = getattr(node, "body", None)
+        if (
+            isinstance(body, list)
+            and body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            node.body = body[1:]
+        return node
+
+    visit_Module = _visit_body
+    visit_ClassDef = _visit_body
+    visit_FunctionDef = _visit_body
+    visit_AsyncFunctionDef = _visit_body
+
+
+def _semantic_code_sha256(code: str) -> str:
+    tree = _RemoveDocstrings().visit(ast.parse(code))
+    ast.fix_missing_locations(tree)
+    normalized = ast.dump(tree, annotate_fields=True, include_attributes=False)
+    return _sha256_text(normalized)
+
+
+def _concise_execution_error(message: str) -> str:
+    lines = [line.strip() for line in str(message or "").splitlines() if line.strip()]
+    return (lines[-1] if lines else "unknown execution error")[:1200]
+
+
 class _RecordedEnv:
     """Record actual simulator steps independently of generated logging code."""
 
@@ -337,16 +372,22 @@ def run_dynamic_trial(
         official_success = _scalar_bool(official.get("success", False))
         returned_success = bool(code_ok and (source_entrypoint == "run" or success_from_ret_val(ret_val)))
         success = bool(returned_success and official_success and recorded.steps > 0)
+        execution_error = "" if code_ok else code_message
         if success:
             message = (
                 "source actions reached official success"
                 if source_entrypoint == "run"
                 else "adapter returned success and official evaluate() returned success"
             )
+        elif not code_ok:
+            summary = _concise_execution_error(code_message)
+            message = (
+                f"Task program failed before the first simulator action: {summary}"
+                if recorded.steps == 0
+                else summary
+            )
         elif recorded.steps == 0:
             message = "No simulator actions executed; source or target was not tested."
-        elif not code_ok:
-            message = code_message
         elif source_entrypoint == "run":
             message = "source actions did not reach official environment success"
         elif returned_success and not official_success:
@@ -363,6 +404,7 @@ def run_dynamic_trial(
             "seed": spec.seed,
             "max_episode_steps": spec.max_episode_steps,
             "code_ok": bool(code_ok),
+            "execution_error": execution_error,
             "ret_val": _jsonable(ret_val),
             "official_success": bool(official_success),
             "official_evaluation": official,
@@ -391,6 +433,7 @@ def run_dynamic_trial(
         result = {
             "success": False,
             "message": repr(exc),
+            "execution_error": repr(exc),
             "env_id": spec.env_id,
             "robot_uid": robot_uid,
             "control_mode": control_mode,
@@ -670,10 +713,15 @@ def run_dynamic_agent_migration(
             record.update(
                 adapter=str(candidate_path),
                 adapter_sha256=_sha256_text(candidate.rstrip() + "\n"),
+                semantic_sha256=_semantic_code_sha256(candidate),
             )
             previous_code = target_code
-            if previous_code and candidate.strip() == previous_code.strip():
-                raise ValueError("Generated target adapter is unchanged from the failed adapter.")
+            if previous_code and _semantic_code_sha256(candidate) == _semantic_code_sha256(previous_code):
+                raise ValueError(
+                    "Generated target adapter is semantically unchanged from the failed adapter; "
+                    "formatting, comments, or docstrings do not count as a repair."
+                )
+            record["changed_from_previous"] = bool(previous_code)
             target_code = candidate
             validate_dynamic_adapter(candidate, task_program=frozen_program, require_program_constant=False)
             report(f"Target round {cycle}: running generated code ({generated.model})...")
@@ -844,6 +892,11 @@ Current failed target adapter, if any:
 
 Latest target execution, including measured state_trace sampled during execution:
 {_pretty(_prompt_trial(latest_result))}
+
+Repair requirement for this round:
+- Fix the concrete failure shown above before tuning later motion stages.
+- Make a semantic code change; formatting, comments, or docstrings alone are rejected.
+- If action_steps is 0, remove the reported pre-action exception so the candidate reaches self._step(action).
 """
 
 
@@ -853,7 +906,7 @@ def _prompt_observation(observation: Mapping[str, Any]) -> Dict[str, Any]:
     keys = (
         "env_id", "robot_uid", "control_mode", "environment_class", "environment_doc",
         "supported_robots", "action_space", "controller_summary", "controller_action_mapping",
-        "tcp", "reset_info", "official_evaluation", "evaluate_source",
+        "tcp", "entity_aliases", "reset_info", "official_evaluation", "evaluate_source",
     )
     compact = {key: observation.get(key) for key in keys if key in observation}
     compact["pose_entities"] = _prompt_entities(observation.get("pose_entities"))
@@ -866,7 +919,7 @@ def _prompt_trial(result: Mapping[str, Any]) -> Dict[str, Any]:
     keys = (
         "success", "message", "code_ok", "ret_val", "official_success",
         "official_evaluation", "action_steps", "terminated", "truncated",
-        "failure_layer", "failure_diagnosis",
+        "execution_error", "failure_layer", "failure_diagnosis",
     )
     compact = {key: result.get(key) for key in keys if key in result}
     snapshot = result.get("runtime_snapshot")
@@ -896,6 +949,8 @@ def _prompt_snapshot(snapshot: Mapping[str, Any]) -> Dict[str, Any]:
     }
     if "entities" in snapshot:
         compact["entities"] = _prompt_entities(snapshot.get("entities"))
+    if "entity_aliases" in snapshot:
+        compact["entity_aliases"] = snapshot.get("entity_aliases")
     return compact
 
 
@@ -923,6 +978,7 @@ def _program_robot_methods(tree: ast.AST) -> set[str]:
 
 def _dynamic_diagnosis(result: Mapping[str, Any]) -> Dict[str, Any]:
     message = str(result.get("message") or "")
+    execution_error = str(result.get("execution_error") or "")
     if result.get("failure_layer") == "runtime_setup":
         return {
             "layer": "runtime_setup",
@@ -930,10 +986,24 @@ def _dynamic_diagnosis(result: Mapping[str, Any]) -> Dict[str, Any]:
             "repair_hint": "Fix environment compatibility, module structure, or the observed action mapping before task motion.",
         }
     if not result.get("code_ok", True):
+        if int(result.get("action_steps") or 0) == 0 and "task entity" in execution_error.lower():
+            return {
+                "layer": "interface_contract",
+                "reason": "semantic_entity_name_mismatch",
+                "evidence": _concise_execution_error(execution_error),
+                "repair_hint": (
+                    "Use an exact pose entity from the target observation or an unambiguous "
+                    "runtime semantic alias before changing motion parameters."
+                ),
+            }
         return {
             "layer": "program",
-            "reason": "high_level_program_execution_error",
-            "repair_hint": "Implement the missing public skill or fix its truthful return path without changing the frozen program.",
+            "reason": "pre_action_execution_error" if int(result.get("action_steps") or 0) == 0 else "high_level_program_execution_error",
+            "evidence": _concise_execution_error(execution_error or message),
+            "repair_hint": (
+                "Fix the reported exception in the generated adapter before changing motion "
+                "parameters; the next candidate must reach self._step(action)."
+            ),
         }
     if result.get("truncated"):
         return {

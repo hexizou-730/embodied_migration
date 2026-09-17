@@ -204,6 +204,19 @@ def build_robot(env, *, control_mode, robot_uid):
         self.assertTrue(robot._is_grasping_entity("cube"))
         self.assertFalse(snapshot["official_evaluation"]["success"])
 
+    def test_dynamic_robot_resolves_unambiguous_cube_to_obj_alias(self) -> None:
+        env = _FakeEnv()
+        env.obj = env.cube
+        del env.cube
+        env.agent.is_grasping = lambda actor: actor is env.obj
+        robot = ManiSkillDynamicRobot(
+            env,
+            control_mode="pd_ee_delta_pos",
+            robot_uid="xarm6_robotiq",
+        )
+        np.testing.assert_allclose(robot._entity_pos("cube"), [0.1, 0.2, 0.03])
+        self.assertEqual(robot._snapshot()["entity_aliases"]["cube"], "obj")
+
     def test_dynamic_dry_run_writes_manifest_without_llm_or_simulation(self) -> None:
         spec = DynamicMigrationSpec(
             env_id="TurnFaucet-v1",
@@ -317,14 +330,21 @@ def build_robot(env, *, control_mode, robot_uid):
             {"robot_uid": "panda", "action_space": {"shape": [4]}},
             {"robot_uid": "fetch", "action_space": {"shape": [9]}},
         ]
+        execution_error = (
+            "Traceback (most recent call last):\n"
+            "AttributeError: Unknown task entity 'cube'. Available pose entities: obj"
+        )
         run_trial.side_effect = [
             {"success": True, "message": "supplied source success"},
             {
                 "success": False,
-                "message": "contact missed",
-                "state_trace": [{"step": 10, "tcp": [0.1, 0.2, 0.3]}],
+                "message": "Task program failed before the first simulator action",
+                "code_ok": False,
+                "execution_error": execution_error,
+                "action_steps": 0,
+                "state_trace": [{"step": 0, "tcp": [0.1, 0.2, 0.3]}],
             },
-            {"success": True, "message": "target success"},
+            {"success": True, "message": "target success", "action_steps": 1},
         ]
         spec = DynamicMigrationSpec(
             env_id="TurnFaucet-v1", task_label="TurnFaucet-v1",
@@ -340,10 +360,53 @@ def build_robot(env, *, control_mode, robot_uid):
             )
         second_prompt = generate.call_args_list[1].kwargs["prompt"]
         self.assertTrue(result["success"])
-        self.assertIn("contact missed", second_prompt)
-        self.assertIn('"step": 10', second_prompt)
+        self.assertIn("Unknown task entity 'cube'", second_prompt)
+        self.assertIn('"action_steps": 0', second_prompt)
+        self.assertIn('"step": 0', second_prompt)
         self.assertIn("Current failed target adapter", second_prompt)
         self.assertIn("class GeneratedRobot", second_prompt)
+        first, second = result["target_cycles"]
+        self.assertNotEqual(first["semantic_sha256"], second["semantic_sha256"])
+        self.assertTrue(second["changed_from_previous"])
+        self.assertEqual(second["trial"]["action_steps"], 1)
+
+    @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
+    @patch("maniskill_backend.dynamic_harness.discover_environment")
+    @patch("maniskill_backend.dynamic_harness.gen_text")
+    def test_formatting_only_target_repair_is_rejected(
+        self,
+        generate,
+        discover,
+        run_trial,
+    ) -> None:
+        formatting_only = "\n\n# no behavioral change\n" + TARGET_CODE
+        generate.side_effect = [
+            LLMTextResult(TARGET_CODE, True, "test-model", raw_text=TARGET_CODE),
+            LLMTextResult(formatting_only, True, "test-model", raw_text=formatting_only),
+        ]
+        discover.side_effect = [
+            {"robot_uid": "panda", "action_space": {"shape": [4]}},
+            {"robot_uid": "fetch", "action_space": {"shape": [9]}},
+        ]
+        run_trial.side_effect = [
+            {"success": True, "message": "supplied source success"},
+            {"success": False, "message": "target failed", "action_steps": 1},
+        ]
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1", task_label="TurnFaucet-v1",
+            source_robot="panda", target_robot="fetch", max_target_cycles=2,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "source.py"
+            source_path.write_text(SOURCE_CODE, encoding="utf-8")
+            result = run_dynamic_agent_migration(
+                spec=spec,
+                run_dir=Path(tmp) / "run",
+                source_actions=read_source_actions(source_path),
+            )
+        self.assertFalse(result["success"])
+        self.assertIn("semantically unchanged", result["target_cycles"][1]["error"])
+        self.assertEqual(run_trial.call_count, 2)
 
     def test_migrate_cli_accepts_unregistered_env_in_dry_run(self) -> None:
         root = Path(__file__).resolve().parents[1]
