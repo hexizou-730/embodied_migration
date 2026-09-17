@@ -9,8 +9,8 @@ from llm_client import openrouter_upstream_provider
 
 class LLMTests(unittest.TestCase):
     def test_openrouter_provider_name_is_normalized_to_routing_slug(self) -> None:
-        with patch.dict("os.environ", {"EM_OPENROUTER_PROVIDER": "DeepSeek"}):
-            self.assertEqual(openrouter_upstream_provider(), "deepseek")
+        with patch.dict("os.environ", {"EM_OPENROUTER_PROVIDER": "OpenAI"}):
+            self.assertEqual(openrouter_upstream_provider(), "openai")
 
     @patch("maniskill_backend.llm.has_api_key", return_value=True)
     @patch("maniskill_backend.llm.make_client")

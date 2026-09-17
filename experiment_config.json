@@ -10,14 +10,14 @@
   },
   "llm": {
     "provider": "openrouter",
-    "model": "deepseek/deepseek-v4-pro-0813",
+    "model": "openai/gpt-5.6-luna",
     "temperature": 0.0,
     "max_tokens": 16384,
     "reasoning_effort": "low",
     "exclude_reasoning_from_response": true,
     "seed": 0,
-    "upstream_provider": "deepseek",
-    "allow_provider_fallbacks": false
+    "upstream_provider": "openai",
+    "allow_provider_fallbacks": true
   },
   "migration_defaults": {
     "source_control_mode": "pd_ee_delta_pos",

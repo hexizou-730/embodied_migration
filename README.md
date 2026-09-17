@@ -34,7 +34,7 @@ Generated adapters, prompts, state traces, and results are written below
 
 [`experiment_config.json`](experiment_config.json) is the single tracked
 experiment contract. It fixes Python 3.10.20, ManiSkill 3.0.1, SAPIEN 3.0.3,
-CUDA 13.2, the exact OpenRouter/DeepSeek model and generation parameters, the
+CUDA 13.2, the exact OpenRouter/GPT model and generation parameters, the
 controller defaults, and the simulation seed split.
 
 Every invocation writes `runtime_environment.json` before calling the LLM or

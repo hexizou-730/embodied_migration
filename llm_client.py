@@ -133,14 +133,14 @@ def openrouter_exclude_reasoning() -> bool:
 
 def openrouter_upstream_provider() -> str:
     return os.environ.get(
-        "EM_OPENROUTER_PROVIDER", EXPERIMENT_LLM.get("upstream_provider", "deepseek")
+        "EM_OPENROUTER_PROVIDER", EXPERIMENT_LLM.get("upstream_provider", "openai")
     ).strip().lower()
 
 
 def openrouter_allow_fallbacks() -> bool:
     raw = os.environ.get(
         "EM_OPENROUTER_ALLOW_FALLBACKS",
-        str(EXPERIMENT_LLM.get("allow_provider_fallbacks", False)),
+        str(EXPERIMENT_LLM.get("allow_provider_fallbacks", True)),
     ).strip().lower()
     if raw not in {"true", "false", "1", "0", "yes", "no"}:
         raise ValueError("EM_OPENROUTER_ALLOW_FALLBACKS must be true or false.")
@@ -167,6 +167,11 @@ def make_client(provider: str | None = None) -> OpenAI:
     return OpenAI(
         base_url=PROVIDER_CONFIG[provider]["base_url"],
         api_key=api_key,
+        default_headers=(
+            {"X-OpenRouter-Metadata": "enabled"}
+            if provider == PROVIDER_OPENROUTER
+            else None
+        ),
     )
 
 
@@ -229,6 +234,16 @@ def chat_with_metadata(
             for key in ("prompt_tokens", "completion_tokens", "total_tokens")
             if getattr(usage_obj, key, None) is not None
         }
+    routing_obj = getattr(resp, "openrouter_metadata", None)
+    if routing_obj is not None:
+        usage["openrouter_metadata"] = (
+            routing_obj.model_dump()
+            if hasattr(routing_obj, "model_dump")
+            else routing_obj
+        )
+    routed_provider = getattr(resp, "provider", None)
+    if routed_provider:
+        usage["provider"] = str(routed_provider)
     return ChatResponse(
         content=resp.choices[0].message.content or "",
         model=str(getattr(resp, "model", None) or model or default_model()),
