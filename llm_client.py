@@ -133,8 +133,8 @@ def openrouter_exclude_reasoning() -> bool:
 
 def openrouter_upstream_provider() -> str:
     return os.environ.get(
-        "EM_OPENROUTER_PROVIDER", EXPERIMENT_LLM.get("upstream_provider", "DeepSeek")
-    ).strip()
+        "EM_OPENROUTER_PROVIDER", EXPERIMENT_LLM.get("upstream_provider", "deepseek")
+    ).strip().lower()
 
 
 def openrouter_allow_fallbacks() -> bool:
