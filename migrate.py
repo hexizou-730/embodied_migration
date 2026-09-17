@@ -318,6 +318,22 @@ def _run_source_file(args: argparse.Namespace, parser: argparse.ArgumentParser) 
             )
     print(f"status = {result['status']}")
     print(f"success = {result['success']}")
+    target_trials = [
+        cycle.get("trial") or {}
+        for cycle in result.get("target_cycles", [])
+        if isinstance(cycle, dict)
+    ]
+    target_max_action_steps = max(
+        (int(trial.get("action_steps") or 0) for trial in target_trials),
+        default=0,
+    )
+    semantic_repairs = sum(
+        bool(cycle.get("changed_from_previous"))
+        for cycle in result.get("target_cycles", [])
+        if isinstance(cycle, dict)
+    )
+    print(f"target_max_action_steps = {target_max_action_steps}")
+    print(f"semantic_repairs = {semantic_repairs}")
     if result.get("message"):
         print(f"message = {result['message']}")
     if result.get("target_adapter"):
