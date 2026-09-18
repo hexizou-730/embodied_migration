@@ -1066,6 +1066,14 @@ def _prompt_trial(result: Mapping[str, Any]) -> Dict[str, Any]:
         compact["state_trace_sample"] = [
             _prompt_snapshot(item) if isinstance(item, Mapping) else item for item in selected
         ]
+    failures = result.get("multi_seed_failures")
+    if isinstance(failures, list) and failures:
+        compact["multi_seed_failure_count"] = len(failures)
+        compact["multi_seed_failure_sample"] = [
+            _prompt_trial(item)
+            for item in failures[:3]
+            if isinstance(item, Mapping)
+        ]
     return compact
 
 
@@ -1133,6 +1141,19 @@ def _dynamic_diagnosis(result: Mapping[str, Any]) -> Dict[str, Any]:
                 "parameters; the next candidate must reach self._step(action)."
             ),
         }
+    escaped = _escaped_object_evidence(result)
+    if escaped is not None:
+        return {
+            "layer": "contact_geometry",
+            "reason": "manipulated_object_left_workspace",
+            "evidence": escaped,
+            "repair_hint": (
+                "The action frame is working, but contact is too aggressive or poorly staged. "
+                "Use short low-magnitude pulses, re-read the object pose after every pulse, "
+                "stop before overshoot, and retreat/reposition when displacement is unexpectedly "
+                "large. Do not repeat one long open-loop push."
+            ),
+        }
     if result.get("truncated"):
         return {
             "layer": "skill_adapter",
@@ -1151,6 +1172,45 @@ def _dynamic_diagnosis(result: Mapping[str, Any]) -> Dict[str, Any]:
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": message,
     }
+
+
+def _escaped_object_evidence(result: Mapping[str, Any]) -> Dict[str, Any] | None:
+    trace = result.get("state_trace")
+    if not isinstance(trace, list) or len(trace) < 2:
+        return None
+    first_entities = trace[0].get("entities") if isinstance(trace[0], Mapping) else None
+    last_entities = trace[-1].get("entities") if isinstance(trace[-1], Mapping) else None
+    if not isinstance(first_entities, Mapping) or not isinstance(last_entities, Mapping):
+        return None
+
+    evidence = []
+    for name in sorted(set(first_entities) & set(last_entities)):
+        lowered = str(name).lower()
+        if lowered.startswith("segmentation_id_map") or any(
+            token in lowered for token in ("goal", "target", "region", "site")
+        ):
+            continue
+        try:
+            initial = np.asarray(first_entities[name], dtype=np.float64).reshape(-1)[:3]
+            final = np.asarray(last_entities[name], dtype=np.float64).reshape(-1)[:3]
+        except Exception:
+            continue
+        if initial.size < 3 or final.size < 3 or not np.all(np.isfinite(final)):
+            continue
+        displacement = float(np.linalg.norm(final - initial))
+        fell = bool(final[2] < -0.05 and final[2] < initial[2] - 0.10)
+        escaped = bool(displacement > 2.0)
+        if fell or escaped:
+            evidence.append(
+                {
+                    "entity": str(name),
+                    "initial_position": np.round(initial, 5).tolist(),
+                    "final_position": np.round(final, 5).tolist(),
+                    "displacement_m": round(displacement, 5),
+                    "fell_below_workspace": fell,
+                }
+            )
+    return max(evidence, key=lambda item: item["displacement_m"]) if evidence else None
 
 
 def _read_tcp(agent: Any) -> Any:

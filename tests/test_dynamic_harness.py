@@ -14,6 +14,8 @@ import numpy as np
 from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
 from maniskill_backend.dynamic_harness import (
     DynamicMigrationSpec,
+    _dynamic_diagnosis,
+    _prompt_trial,
     extract_task_program,
     looks_like_env_id,
     read_source_actions,
@@ -83,6 +85,58 @@ class _FakeEnv:
 
 
 class DynamicHarnessTests(unittest.TestCase):
+    def test_multi_seed_prompt_keeps_bounded_physical_counterexamples(self) -> None:
+        failure = {
+            "seed": 0,
+            "success": False,
+            "message": "ball left workspace",
+            "action_steps": 20,
+            "state_trace": [
+                {"step": 0, "entities": {"ball": [[0.0, 0.2, 0.035]]}},
+                {"step": 20, "entities": {"ball": [[3.0, 2.0, -0.8]]}},
+            ],
+        }
+        compact = _prompt_trial(
+            {
+                "success": False,
+                "message": "4/4 validation seeds failed",
+                "multi_seed_failures": [failure, failure, failure, failure],
+            }
+        )
+        self.assertEqual(compact["multi_seed_failure_count"], 4)
+        self.assertEqual(len(compact["multi_seed_failure_sample"]), 3)
+        self.assertEqual(
+            compact["multi_seed_failure_sample"][0]["state_trace_sample"][-1]["entities"]["ball"],
+            [[3.0, 2.0, -0.8]],
+        )
+
+    def test_diagnosis_detects_manipulated_object_leaving_workspace(self) -> None:
+        diagnosis = _dynamic_diagnosis(
+            {
+                "success": False,
+                "code_ok": True,
+                "state_trace": [
+                    {
+                        "step": 0,
+                        "entities": {
+                            "ball": [[-0.1, 0.65, 0.035]],
+                            "goal_region": [[-0.3, -0.8, 0.001]],
+                        },
+                    },
+                    {
+                        "step": 200,
+                        "entities": {
+                            "ball": [[10.2, 3.1, -0.88]],
+                            "goal_region": [[-0.3, -0.8, 0.001]],
+                        },
+                    },
+                ],
+            }
+        )
+        self.assertEqual(diagnosis["reason"], "manipulated_object_left_workspace")
+        self.assertEqual(diagnosis["evidence"]["entity"], "ball")
+        self.assertTrue(diagnosis["evidence"]["fell_below_workspace"])
+
     def test_official_success_termination_is_not_reported_as_runtime_failure(self) -> None:
         env = _FakeEnv()
         succeeded = False
