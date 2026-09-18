@@ -313,6 +313,38 @@ def build_robot(env, *, control_mode, robot_uid):
         self.assertTrue(robot._is_grasping_entity("cube"))
         self.assertFalse(snapshot["official_evaluation"]["success"])
 
+    def test_dynamic_robot_flattens_single_environment_pose_vectors(self) -> None:
+        env = _FakeEnv()
+        env.agent.tcp_pose.p = np.array([[0.0, 0.0, 0.2]], dtype=np.float32)
+        env.cube.pose.p = np.array([[0.1, 0.2, 0.03]], dtype=np.float32)
+        robot = ManiSkillDynamicRobot(
+            env,
+            control_mode="pd_ee_delta_pos",
+            robot_uid="panda",
+        )
+        self.assertEqual(robot._tcp_pos().shape, (3,))
+        self.assertEqual(robot._entity_pos("cube").shape, (3,))
+
+    def test_world_delta_is_rotated_into_robot_root_controller_frame(self) -> None:
+        env = _FakeEnv()
+        half = np.sqrt(0.5)
+        env.agent.robot = SimpleNamespace(
+            pose=SimpleNamespace(
+                q=np.array([[half, 0.0, 0.0, -half]], dtype=np.float32)
+            )
+        )
+        robot = ManiSkillDynamicRobot(
+            env,
+            control_mode="pd_ee_delta_pos",
+            robot_uid="panda",
+        )
+        action = robot._make_action(
+            np.array([1.0, 0.0, 0.0], dtype=np.float32),
+            gripper=0.25,
+        )
+        np.testing.assert_allclose(action[:3], [0.0, 1.0, 0.0], atol=1e-6)
+        self.assertAlmostEqual(float(action[3]), 0.25)
+
     def test_dynamic_robot_resolves_unambiguous_cube_to_obj_alias(self) -> None:
         env = _FakeEnv()
         env.obj = env.cube

@@ -87,7 +87,7 @@ class ManiSkillDeltaEERobot:
         space = self.env.action_space
         action = np.zeros(space.shape, dtype=getattr(space, "dtype", np.float32))
         flat = action.reshape(-1)
-        flat[:3] = np.asarray(delta_xyz, dtype=np.float32).reshape(-1)[:3]
+        flat[:3] = self._world_delta_to_action_delta(delta_xyz)
         if flat.size >= 4:
             flat[-1] = float(gripper)
         low = getattr(space, "low", None)
@@ -95,6 +95,31 @@ class ManiSkillDeltaEERobot:
         if low is not None and high is not None:
             action = np.clip(action, low, high)
         return action
+
+    def _robot_root_quat(self) -> Optional[np.ndarray]:
+        """Return the root-to-world rotation used by root-frame EE controllers."""
+
+        agent = getattr(self._base_env(), "agent", None)
+        robot = getattr(agent, "robot", None)
+        pose = getattr(robot, "pose", None)
+        if pose is None:
+            get_pose = getattr(robot, "get_pose", None)
+            pose = get_pose() if callable(get_pose) else None
+        quat = getattr(pose, "q", None)
+        if quat is None:
+            return None
+        return _first_vector(quat, 4)
+
+    def _world_delta_to_action_delta(self, delta_xyz: np.ndarray) -> np.ndarray:
+        """Express a normalized world-frame translation in the controller root frame."""
+
+        delta = _first_vector(delta_xyz, 3)
+        if not str(self.control_mode or "").startswith("pd_ee_delta_"):
+            return delta
+        quat = self._robot_root_quat()
+        if quat is None:
+            return delta
+        return _quat_rotate_wxyz(_quat_conjugate_wxyz(quat), delta)
 
     def _step(self, action: Any) -> None:
         _, _, terminated, truncated, info = self.env.step(action)
@@ -109,10 +134,10 @@ class ManiSkillDeltaEERobot:
         agent = self._base_env().agent
         tcp_pose = getattr(agent, "tcp_pose", None)
         if tcp_pose is not None:
-            return _to_numpy(tcp_pose.p)
+            return _first_vector(tcp_pose.p, 3)
         tcp = getattr(agent, "tcp", None)
         if tcp is not None and getattr(tcp, "pose", None) is not None:
-            return _to_numpy(tcp.pose.p)
+            return _first_vector(tcp.pose.p, 3)
         raise RuntimeError("Could not read the ManiSkill agent TCP pose.")
 
     def _log(self, api: str, args: Dict[str, Any], result: Any, ok: bool, message: str = "") -> bool:
@@ -151,6 +176,39 @@ def _scalar_bool(value: Any) -> bool:
         return bool(value)
 
 
+def _first_vector(value: Any, width: int) -> np.ndarray:
+    """Normalize a single-environment batched vector to a flat float32 value."""
+
+    array = np.asarray(_to_numpy(value), dtype=np.float32)
+    if array.ndim == 0 or array.size < width:
+        raise ValueError(f"Expected a vector with at least {width} values, got {array.shape!r}.")
+    if array.ndim > 1 and array.shape[-1] >= width:
+        return array.reshape(-1, array.shape[-1])[0, :width].copy()
+    return array.reshape(-1)[:width].copy()
+
+
+def _quat_conjugate_wxyz(quat: np.ndarray) -> np.ndarray:
+    value = _first_vector(quat, 4)
+    norm = float(np.linalg.norm(value))
+    if norm < 1e-8:
+        return np.asarray([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    value /= norm
+    value[1:] *= -1.0
+    return value
+
+
+def _quat_rotate_wxyz(quat: np.ndarray, vector: np.ndarray) -> np.ndarray:
+    q = _first_vector(quat, 4)
+    norm = float(np.linalg.norm(q))
+    if norm < 1e-8:
+        return _first_vector(vector, 3)
+    q /= norm
+    v = _first_vector(vector, 3)
+    q_xyz = q[1:]
+    twice_cross = 2.0 * np.cross(q_xyz, v)
+    return (v + q[0] * twice_cross + np.cross(q_xyz, twice_cross)).astype(np.float32)
+
+
 _ENTITY_ALIAS_GROUPS = (
     ("cube", "object", "obj"),
     ("goal", "target", "goal_region", "target_region"),
@@ -183,19 +241,9 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
             )
 
     def _make_action(self, delta_xyz: np.ndarray, *, gripper: float = 0.0) -> Any:
-        """Conservative fallback mapping; generated adapters may override it."""
+        """Map normalized world xyz plus gripper into the current action space."""
 
-        space = self.env.action_space
-        action = np.zeros(space.shape, dtype=getattr(space, "dtype", np.float32))
-        flat = action.reshape(-1)
-        flat[:3] = np.asarray(delta_xyz, dtype=np.float32).reshape(-1)[:3]
-        if flat.size >= 4:
-            flat[-1] = float(gripper)
-        low = getattr(space, "low", None)
-        high = getattr(space, "high", None)
-        if low is not None and high is not None:
-            action = np.clip(action, low, high)
-        return action
+        return super()._make_action(delta_xyz, gripper=gripper)
 
     def _entity_catalog(self) -> Dict[str, Any]:
         """Return actor-like public task fields without traversing object graphs."""
@@ -268,13 +316,13 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
         return self._entity(name)
 
     def _actor_pos(self, name: str) -> np.ndarray:
-        return _to_numpy(self._entity(name).pose.p)
+        return _first_vector(self._entity(name).pose.p, 3)
 
     def _entity_pos(self, name: str) -> np.ndarray:
         return self._actor_pos(name)
 
     def _entity_quat(self, name: str) -> np.ndarray:
-        return _to_numpy(self._entity(name).pose.q)
+        return _first_vector(self._entity(name).pose.q, 4)
 
     def _region_pos(self, name: str) -> np.ndarray:
         return self._actor_pos(name)

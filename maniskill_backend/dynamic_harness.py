@@ -33,6 +33,8 @@ _PROTECTED_METHODS = {
     "_official_success",
     "_snapshot",
     "_entity_catalog",
+    "_robot_root_quat",
+    "_world_delta_to_action_delta",
 }
 _STATE_CALLS = {
     "_tcp_pos",
@@ -464,7 +466,13 @@ def run_dynamic_trial(
                 "inherited_action_helpers": {
                     "_move_towards": "closed-loop TCP delta motion; checks _early_stop and calls _step",
                     "_repeat_action": "bounded repeated action; checks _early_stop and calls _step",
-                    "_make_action": "maps xyz plus gripper command into the current action space",
+                    "_make_action": (
+                        "maps normalized world-frame xyz into the robot-root controller frame "
+                        "and fills the gripper channel"
+                    ),
+                    "_world_delta_to_action_delta": (
+                        "rotates a normalized world xyz command into controller root coordinates"
+                    ),
                 },
             }
         result["failure_diagnosis"] = _dynamic_diagnosis(result)
@@ -885,6 +893,17 @@ and use that measured value in an if/loop condition or to compute an action. Do 
 self.env internals as a substitute. Re-read measurements after actions to close the loop."""
 
 
+def _action_api_contract() -> str:
+    return """Documented action-frame contract:
+- TCP and entity positions are flat xyz vectors in the world frame.
+- For standard 4D pd_ee_delta_pos, do not override self._make_action().
+- Compute a normalized world-frame command, then call self._make_action(command, gripper=...).
+  The inherited method rotates world xyz into the robot-root controller frame.
+- Prefer inherited self._move_towards(world_target, gripper=..., steps=...) for waypoint motion.
+- For a nonstandard observed action layout only, map the extra channels explicitly and call
+  self._world_delta_to_action_delta(world_command) before filling EE translation channels."""
+
+
 def _source_prompt(
     spec: DynamicMigrationSpec,
     observation: Mapping[str, Any],
@@ -912,6 +931,8 @@ Required module contract:
 
 {_measurement_api_contract()}
 
+{_action_api_contract()}
+
 Minimal closed-loop pattern (adapt entity names and motion to the observed task):
 ```python
 for _ in range(bounded_steps):
@@ -921,7 +942,8 @@ for _ in range(bounded_steps):
     target = self._entity_pos("observed_entity_name")
     if np.linalg.norm(target - tcp) < tolerance:
         break
-    self._step(self._make_action(bounded_delta, gripper=command))
+    world_command = np.clip((target - tcp) / self.max_delta_m, -1.0, 1.0)
+    self._step(self._make_action(world_command, gripper=command))
 ```
 
 Current failed source module, if any:
@@ -988,6 +1010,8 @@ Required target module contract:
 - Returning True is insufficient: the harness independently checks env.unwrapped.evaluate()['success'].
 
 {_measurement_api_contract()}
+
+{_action_api_contract()}
 
 Current failed target adapter, if any:
 ```python
