@@ -45,7 +45,9 @@ def extract_python_module(text: str) -> str:
     return text.strip()
 
 
-def validate_generated_adapter_module(code: str) -> None:
+def validate_generated_adapter_module(
+    code: str, *, entrypoint: str = "build_robot", extra_imports: tuple[str, ...] = ()
+) -> None:
     """Reject unsafe or structurally invalid generated adapter modules."""
 
     if not code.strip():
@@ -60,34 +62,33 @@ def validate_generated_adapter_module(code: str) -> None:
         raise ValueError(f"Generated adapter module is not valid Python: {exc}") from exc
 
     has_factory = any(
-        isinstance(node, ast.FunctionDef) and node.name == "build_robot"
+        isinstance(node, ast.FunctionDef) and node.name == entrypoint
         for node in tree.body
     )
     if not has_factory:
         raise ValueError(
-            "Generated adapter module must define "
-            "build_robot(env, *, control_mode, robot_uid)."
+            f"Generated adapter module must define {entrypoint}."
         )
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                _validate_import(alias.name)
+                _validate_import(alias.name, extra_imports)
         elif isinstance(node, ast.ImportFrom):
             if node.level:
                 raise ValueError("Generated adapter module must use absolute imports only.")
-            _validate_import(node.module or "")
+            _validate_import(node.module or "", extra_imports)
         elif isinstance(node, ast.Call):
             func = node.func
             if isinstance(func, ast.Name) and func.id in _FORBIDDEN_CALLS:
                 raise ValueError(f"Generated adapter module calls forbidden function: {func.id}")
 
 
-def _validate_import(module_name: str) -> None:
+def _validate_import(module_name: str, extra_imports: tuple[str, ...] = ()) -> None:
     if not module_name:
         raise ValueError("Generated adapter module contains an empty import.")
     if not any(
         module_name == prefix or module_name.startswith(prefix + ".")
-        for prefix in _ALLOWED_IMPORT_PREFIXES
+        for prefix in _ALLOWED_IMPORT_PREFIXES + extra_imports
     ):
         raise ValueError(f"Generated adapter module imports disallowed module: {module_name}")

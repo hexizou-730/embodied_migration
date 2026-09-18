@@ -17,7 +17,7 @@ import numpy as np
 from lmp.executor import execute_lmp, is_safe
 
 from .code_validation import extract_python_module, validate_generated_adapter_module
-from .dynamic_adapter import ManiSkillDynamicRobot, iter_pose_entities
+from .dynamic_adapter import ManiSkillDynamicRobot, iter_pose_entities, physical_state_extras
 from .dynamic_adapter import ManiSkillSceneAdapter, _scalar_bool, _to_numpy
 from .env_adapter import ManiSkillEnvAdapter
 from .experiment_environment import capture_experiment_environment
@@ -143,9 +143,10 @@ def discover_environment(spec: DynamicMigrationSpec, robot_uid: str, control_mod
         entities: Dict[str, Any] = {}
         for name, actor in iter_pose_entities(base):
             try:
+                pose = getattr(actor, "pose", actor)
                 entities[name] = {
-                    "position": np.round(_to_numpy(actor.pose.p), 6).tolist(),
-                    "quaternion": np.round(_to_numpy(actor.pose.q), 6).tolist(),
+                    "position": np.round(_to_numpy(pose.p), 6).tolist(),
+                    "quaternion": np.round(_to_numpy(pose.q), 6).tolist(),
                 }
             except Exception:
                 continue
@@ -153,6 +154,7 @@ def discover_environment(spec: DynamicMigrationSpec, robot_uid: str, control_mod
         controller = getattr(agent, "controller", None)
         cls = base.__class__
         return {
+            **physical_state_extras(base),
             "env_id": spec.env_id,
             "robot_uid": robot_uid,
             "control_mode": control_mode,
@@ -325,10 +327,11 @@ class _RecordedEnv:
     def snapshot(self) -> Dict[str, Any]:
         base = getattr(self._env, "unwrapped", self._env)
         return {
+            **physical_state_extras(base),
             "step": self.steps,
             "tcp": _read_tcp(getattr(base, "agent", None)),
             "entities": {
-                name: _jsonable(actor.pose.p) for name, actor in iter_pose_entities(base)
+                name: _jsonable(getattr(actor, "pose", actor).p) for name, actor in iter_pose_entities(base)
             },
             "official_evaluation": _safe_evaluate(base),
         }
@@ -882,7 +885,8 @@ def _dynamic_system_prompt(*, source: bool) -> str:
 
 def _measurement_api_contract() -> str:
     return """Documented physical-state API on ManiSkillDynamicRobot:
-- self._snapshot(): complete TCP, entity poses, official evaluation and episode flags.
+- self._snapshot(): TCP, entity poses/velocities, robot joints/root pose, small numeric task_state,
+  official evaluation and episode flags. Values in task_state are measurements, not writable objects.
 - self._tcp_pos(): current tool-center-point position as xyz.
 - self._entity_pos(name), self._actor_pos(name), self._region_pos(name): current xyz.
 - self._entity_quat(name): current entity orientation quaternion.
@@ -1035,6 +1039,7 @@ def _prompt_observation(observation: Mapping[str, Any]) -> Dict[str, Any]:
         "env_id", "robot_uid", "control_mode", "environment_class", "environment_doc",
         "supported_robots", "action_space", "controller_summary", "controller_action_mapping",
         "tcp", "entity_aliases", "reset_info", "official_evaluation", "evaluate_source",
+        "task_state", "entity_velocities", "robot_state",
     )
     compact = {key: observation.get(key) for key in keys if key in observation}
     compact["pose_entities"] = _prompt_entities(observation.get("pose_entities"))
@@ -1045,7 +1050,7 @@ def _prompt_trial(result: Mapping[str, Any]) -> Dict[str, Any]:
     """Bound feedback size while retaining physical counterexamples."""
 
     keys = (
-        "success", "message", "code_ok", "ret_val", "official_success",
+        "seed", "success", "message", "code_ok", "ret_val", "official_success",
         "official_evaluation", "action_steps", "terminated", "truncated",
         "execution_error", "failure_layer", "failure_diagnosis",
     )
@@ -1080,7 +1085,8 @@ def _prompt_trial(result: Mapping[str, Any]) -> Dict[str, Any]:
 def _prompt_snapshot(snapshot: Mapping[str, Any]) -> Dict[str, Any]:
     compact = {
         key: snapshot.get(key)
-        for key in ("step", "tcp", "action", "official_evaluation", "terminated", "truncated")
+        for key in ("step", "tcp", "action", "official_evaluation", "terminated", "truncated",
+                    "task_state", "entity_velocities", "robot_state")
         if key in snapshot
     }
     if "entities" in snapshot:

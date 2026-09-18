@@ -379,6 +379,22 @@ def build_robot(env, *, control_mode, robot_uid):
         self.assertEqual(robot._tcp_pos().shape, (3,))
         self.assertEqual(robot._entity_pos("cube").shape, (3,))
 
+    def test_numeric_goals_and_object_velocity_are_available_read_only(self) -> None:
+        env = _FakeEnv()
+        env.goal_pos = np.array([[0.4, 0.2, 0.1]], dtype=np.float32)
+        env.goal_pose = SimpleNamespace(p=env.goal_pos, q=np.array([[1., 0., 0., 0.]]))
+        env.cube.linear_velocity = np.array([[0.1, -0.2, 0.0]])
+        robot = ManiSkillDynamicRobot(env, control_mode="pd_ee_delta_pos", robot_uid="panda")
+        np.testing.assert_allclose(robot._region_pos("goal_pos"), [0.4, 0.2, 0.1])
+        np.testing.assert_allclose(robot._region_pos("goal_pose"), [0.4, 0.2, 0.1])
+        state = robot._snapshot()
+        np.testing.assert_allclose(state["entity_velocities"]["cube"]["linear_velocity"], [0.1, -0.2, 0.])
+        state["task_state"]["goal_pos"][0][0] = 99
+        self.assertAlmostEqual(float(env.goal_pos[0, 0]), 0.4)
+        env.invalid_point = np.array([1., 2.])
+        with self.assertRaisesRegex(ValueError, "not an xyz point"):
+            robot._region_pos("invalid_point")
+
     def test_world_delta_is_rotated_into_robot_root_controller_frame(self) -> None:
         env = _FakeEnv()
         half = np.sqrt(0.5)

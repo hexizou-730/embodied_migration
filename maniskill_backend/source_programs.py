@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import shutil
@@ -10,10 +11,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .code_validation import extract_python_module
+from .code_validation import extract_python_module, validate_generated_adapter_module
 from .dynamic_harness import (
     DynamicMigrationSpec,
     _dynamic_system_prompt,
+    _prompt_observation,
+    _prompt_trial,
+    _semantic_code_sha256,
     _source_prompt,
     discover_environment,
     extract_task_program,
@@ -22,7 +26,7 @@ from .dynamic_harness import (
     validate_dynamic_adapter,
 )
 from .experiment_environment import capture_experiment_environment, load_experiment_contract
-from .llm import gen_text
+from .llm import LLMTextResult, gen_text
 from .task_catalog import load_task_catalog
 
 
@@ -197,6 +201,12 @@ def validate_source_program(
     if not static["ok"]:
         _write_json(output_dir / spec.task_id / "summary.json", summary)
         return summary
+    summary["provenance"] = {"kind": "existing_candidate", "catalog_origin": spec.origin}
+    provenance_path = spec.candidate_path.with_suffix(".provenance.json")
+    if provenance_path.exists():
+        provenance = _read_json(provenance_path)
+        if provenance.get("candidate_sha256") == static["sha256"]:
+            summary["provenance"] = provenance["provenance"]
 
     source = read_source_actions(spec.candidate_path)
     runtime = capture_experiment_environment(
@@ -212,6 +222,8 @@ def validate_source_program(
     )
     summary["runtime_environment"] = str(output_dir / spec.task_id / "runtime_environment.json")
     summary["environment_contract_sha256"] = runtime["contract_sha256"]
+    summary["environment_valid"] = runtime["validation"]["ok"]
+    summary["support_code_sha256"] = _support_code_sha256(spec)
     _write_json(output_dir / spec.task_id / "runtime_environment.json", runtime)
     if enforce_environment and not runtime["validation"]["ok"]:
         summary["status"] = "environment_contract_mismatch"
@@ -252,9 +264,16 @@ def validate_source_program(
             "terminated": trial.get("terminated", False),
             "truncated": trial.get("truncated", False),
             "failure_diagnosis": trial.get("failure_diagnosis"),
+            "trial_path": str((output_dir / spec.task_id / f"seed_{seed:03d}.json").resolve()),
         }
         summary["trials"].append(compact)
         _write_json(output_dir / spec.task_id / f"seed_{seed:03d}.json", trial)
+        summary["status"] = "validating"
+        _write_json(output_dir / spec.task_id / "summary.json", summary)
+        if _infrastructure_failure(trial):
+            summary.update(status="infrastructure_failure", message=trial.get("message"))
+            _write_json(output_dir / spec.task_id / "summary.json", summary)
+            return summary
 
     successes = sum(int(row["success"]) for row in summary["trials"])
     summary.update(
@@ -278,8 +297,9 @@ def synthesize_source_program(
     sim_backend: str,
     render_backend: str,
     initial_validation: Mapping[str, Any] | None = None,
+    retry_unavailable: bool = False,
 ) -> dict[str, Any]:
-    """Generate and repair one source program against real multi-seed trials."""
+    """Repair sources in their native controller contract, with durable cycle records."""
 
     if spec.candidate_path is None:
         raise ValueError(f"{spec.task_id} has no candidate destination")
@@ -324,7 +344,32 @@ def synthesize_source_program(
         sim_backend=sim_backend,
         render_backend=render_backend,
     )
+    task_dir = output_dir / spec.task_id
+    previous_summary = task_dir / "synthesis_summary.json"
+    if previous_summary.exists():
+        previous = _read_json(previous_summary)
+        evidence = previous.get("validation", {})
+        if (previous.get("success") and spec.candidate_path.is_file()
+                and evidence.get("candidate", {}).get("sha256") == _sha256_file(spec.candidate_path)
+                and evidence.get("environment_contract_sha256") == runtime["contract_sha256"]
+                and evidence.get("support_code_sha256") == _support_code_sha256(spec)
+                and evidence.get("seeds") == seeds):
+            return previous
+    context = {
+        "task_id": spec.task_id,
+        "seeds": seeds,
+        "control_mode": spec.control_mode,
+        "contract_sha256": runtime["contract_sha256"],
+        "support_code_sha256": _support_code_sha256(spec),
+        "candidate_sha256": _sha256_file(spec.candidate_path) if spec.candidate_path.is_file() else None,
+        "obs_mode": obs_mode, "sim_backend": sim_backend, "render_backend": render_backend,
+    }
+    context_path = task_dir / "context.json"
+    if context_path.exists() and _read_json(context_path) != context:
+        raise ValueError("Source repair inputs changed; start a new --run-name.")
+    _write_json(context_path, context)
     observation = discover_environment(base_spec, spec.source_robot, spec.control_mode)
+    _write_json(task_dir / "observation.json", observation)
     current_code = (
         spec.candidate_path.read_text(encoding="utf-8")
         if spec.candidate_path.is_file()
@@ -337,8 +382,23 @@ def synthesize_source_program(
     for cycle in range(1, max_cycles + 1):
         cycle_dir = output_dir / spec.task_id / f"synthesis_cycle_{cycle:02d}"
         cycle_dir.mkdir(parents=True, exist_ok=True)
-        system = _dynamic_system_prompt(source=True)
-        prompt = _source_prompt(base_spec, observation, current_code, latest_result)
+        record_path = cycle_dir / "cycle.json"
+        if record_path.exists():
+            saved = _read_json(record_path)
+            if retry_unavailable and saved.get("blocked") == "llm_unavailable":
+                suffix = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+                cycle_dir.rename(cycle_dir.with_name(cycle_dir.name + "_unavailable_" + suffix))
+                cycle_dir.mkdir()
+            else:
+                cycles.append(saved)
+                candidate_path = cycle_dir / "candidate.py"
+                if candidate_path.exists():
+                    current_code = candidate_path.read_text(encoding="utf-8")
+                latest_result = saved.get("feedback", latest_result)
+                if saved.get("blocked"):
+                    break
+                continue
+        system, prompt = _repair_prompt(spec, base_spec, observation, current_code, latest_result)
         prompt += (
             "\nMulti-seed requirement:\n"
             f"- Define ENV_ID = {spec.env_id!r}, SOURCE_ROBOT = {spec.source_robot!r}, "
@@ -350,7 +410,12 @@ def synthesize_source_program(
         )
         (cycle_dir / "system_prompt.txt").write_text(system, encoding="utf-8")
         (cycle_dir / "user_prompt.txt").write_text(prompt, encoding="utf-8")
-        generated = gen_text(system=system, prompt=prompt, fallback_text="")
+        generation_path = cycle_dir / "generation.json"
+        if generation_path.exists():
+            generated = LLMTextResult(**_read_json(generation_path))
+        else:
+            generated = gen_text(system=system, prompt=prompt, fallback_text="")
+            _write_json(generation_path, asdict(generated))
         (cycle_dir / "llm_response.txt").write_text(
             generated.raw_text or generated.text, encoding="utf-8"
         )
@@ -363,7 +428,9 @@ def synthesize_source_program(
         }
         if not generated.used_llm:
             record["error"] = generated.reason or "LLM unavailable"
+            record["blocked"] = "llm_unavailable"
             cycles.append(record)
+            _write_json(record_path, record)
             break
         try:
             candidate = extract_python_module(generated.text).rstrip() + "\n"
@@ -371,36 +438,63 @@ def synthesize_source_program(
             candidate_path.write_text(candidate, encoding="utf-8")
             # Preserve even a statically invalid generation so the next cycle repairs
             # the concrete failed module instead of restarting from the bootstrap code.
+            previous_code = current_code
             current_code = candidate
             record["candidate_sha256"] = _sha256_file(candidate_path)
-            program = extract_task_program(candidate)
-            validate_dynamic_adapter(
-                candidate, task_program=program, require_program_constant=True
-            )
+            _validate_source_repair(candidate, native_run=spec.control_mode == "pd_joint_pos")
+            try:
+                previous_hash = _semantic_code_sha256(previous_code) if previous_code else None
+            except SyntaxError:
+                previous_hash = None
+            if previous_hash == _semantic_code_sha256(candidate):
+                raise ValueError("Generated source is semantically unchanged. Change the failed decision or action sequence, not comments.")
             trial_spec = replace(spec, candidate_path=candidate_path)
+            smoke_seeds = seeds[:2]
             validation = validate_source_program(
                 trial_spec,
-                seeds=seeds,
-                output_dir=cycle_dir / "validation",
+                seeds=smoke_seeds,
+                output_dir=cycle_dir / "smoke",
                 obs_mode=obs_mode,
                 sim_backend=sim_backend,
                 render_backend=render_backend,
                 enforce_environment=True,
             )
+            validation_path = cycle_dir / "smoke" / spec.task_id / "summary.json"
+            if validation.get("success") and len(seeds) > len(smoke_seeds):
+                validation = validate_source_program(
+                    trial_spec, seeds=seeds, output_dir=cycle_dir / "validation",
+                    obs_mode=obs_mode, sim_backend=sim_backend,
+                    render_backend=render_backend, enforce_environment=True,
+                )
+                validation_path = cycle_dir / "validation" / spec.task_id / "summary.json"
             record.update(
                 valid=True,
                 candidate_sha256=_sha256_file(candidate_path),
                 success=validation.get("success", False),
                 success_rate=validation.get("success_rate", 0.0),
-                validation=str(cycle_dir / "validation" / spec.task_id / "summary.json"),
+                validation=str(validation_path),
+                evaluated_seeds=validation.get("seeds", []),
+                num_success=validation.get("num_success", 0),
             )
             current_code = candidate
             latest_result = _multi_seed_feedback(validation)
+            if validation.get("status") in {"environment_contract_mismatch", "infrastructure_failure"}:
+                record["blocked"] = validation["status"]
             if validation.get("success"):
                 spec.candidate_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(candidate_path, spec.candidate_path)
                 record["installed_candidate"] = str(spec.candidate_path)
                 cycles.append(record)
+                _write_json(record_path, record)
+                validation["provenance"] = {
+                    "kind": "llm_repair", "base_origin": spec.origin,
+                    "model": generated.model, "cycle": cycle,
+                    "generation_path": str(generation_path),
+                }
+                _write_json(spec.candidate_path.with_suffix(".provenance.json"), {
+                    "candidate_sha256": record["candidate_sha256"],
+                    "provenance": validation["provenance"],
+                })
                 result = {
                     "schema": "source_program_synthesis.v1",
                     "task_id": spec.task_id,
@@ -417,30 +511,108 @@ def synthesize_source_program(
                 "success": False,
                 "message": repr(exc),
                 "action_steps": 0,
+                "multi_seed_failures": latest_result.get("multi_seed_failures", []),
                 "failure_diagnosis": {
                     "layer": "program",
                     "reason": "generated_source_module_invalid",
                     "repair_hint": (
-                        "Repair the concrete module shown in the prompt before changing motion "
-                        "parameters. For state-feedback validation, call a documented helper such "
-                        "as self._snapshot(), self._tcp_pos(), self._entity_pos(name), "
-                        "self._region_pos(name), or self._official_evaluation(), then use the "
-                        "measured value to decide an action or runtime branch."
+                        "Repair the reported exception while preserving the documented "
+                        "entrypoint and control mode. Use the state API in the module contract "
+                        "and feed the measured values into bounded action decisions."
                     ),
                 },
             }
         cycles.append(record)
-        _write_json(cycle_dir / "cycle.json", record)
+        record["feedback"] = latest_result
+        _write_json(record_path, record)
+        _write_json(task_dir / "synthesis_summary.json", {
+            "schema": "source_program_synthesis.v1", "task_id": spec.task_id,
+            "success": False, "status": "repairing", "cycles": cycles,
+        })
+        if record.get("blocked"):
+            break
 
     result = {
         "schema": "source_program_synthesis.v1",
         "task_id": spec.task_id,
         "success": False,
+        "status": cycles[-1].get("blocked", "repair_budget_exhausted") if cycles else "not_started",
         "cycles": cycles,
         "candidate_path": str(spec.candidate_path),
     }
     _write_json(output_dir / spec.task_id / "synthesis_summary.json", result)
     return result
+
+
+def _repair_prompt(spec, base_spec, observation, current_code, latest_result):
+    if spec.control_mode != "pd_joint_pos":
+        prompt = _source_prompt(base_spec, observation, current_code, latest_result)
+        prompt += "\nRead-only task definition (do not copy simulator mutations):\n" + str(
+            observation.get("environment_source", "")
+        )[:18000]
+        if "BootstrapSourceRobot" in current_code:
+            prompt += "\nInherited bootstrap implementation (read-only context):\n" + (
+                SOURCE_ROOT / "candidate_runtime.py"
+            ).read_text(encoding="utf-8")
+        return _dynamic_system_prompt(source=True), prompt
+    system = (
+        "Repair a complete ManiSkill source motion-planning program. Return only Python. "
+        "Keep run(env, seed=None, debug=False, vis=False), pd_joint_pos, and the provided "
+        "PandaArmMotionPlanningSolver API. Never mutate simulator state or task success."
+    )
+    prompt = f"""Task: {spec.task_id}. Environment: {spec.env_id}. Robot: {spec.source_robot}.
+Observed environment:
+{json.dumps(_prompt_observation(observation), indent=2, default=str)}
+Required source contract:
+- Keep the run(env, seed=None, debug=False, vis=False) entrypoint, not build_robot.
+- Construct the planner with the supplied wrapped env BEFORE obtaining env.unwrapped.
+  Physical execution must go through that planner or the original wrapped env.step.
+- Read poses/joints/evaluate from env.unwrapped. Tensor positions may be (1,3);
+  flatten explicitly and do not index a batch dimension as xyz.
+- pd_joint_pos actions are joint positions, NOT normalized xyz commands.
+- Do not call reset, set_pose, set_state, set_qpos, or edit any environment fields.
+  The harness resets each trial and checks official success independently.
+- Use bounded waypoints, inspect planning failures, and re-read state between moves.
+Current failed source:
+```python
+{current_code}
+```
+Measured validation feedback:
+{json.dumps(_prompt_trial(latest_result), indent=2, default=str)}
+"""
+    planner_root = SOURCE_ROOT / "vendor" / "mani_skill_motionplanning"
+    for part in ("panda", "base_motionplanner", "two_finger_gripper"):
+        path = planner_root / part / "motionplanner.py"
+        prompt += f"\nRead-only planner API ({part}):\n" + path.read_text(encoding="utf-8")
+    return system, prompt
+
+
+def _validate_source_repair(code: str, *, native_run: bool) -> None:
+    if not native_run:
+        validate_dynamic_adapter(code, task_program=extract_task_program(code), require_program_constant=True)
+        return
+    validate_generated_adapter_module(
+        code, entrypoint="run",
+        extra_imports=("source_programs.vendor.mani_skill_motionplanning",),
+    )
+    tree = ast.parse(code)
+    calls = {node.func.attr for node in ast.walk(tree)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)}
+    if any(name.startswith("set_") or name in {"reset", "exec", "eval"} for name in calls):
+        raise ValueError("Source repair may not reset or directly mutate the simulator.")
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if any(isinstance(item, ast.Attribute) and item.attr in {
+                    "pose", "success", "qpos", "qvel", "controller", "agent", "robot", "scene", "unwrapped",
+                } for item in ast.walk(target)):
+                    raise ValueError("Source repair may not assign environment or controller fields.")
+    if not calls.intersection({"step", "move_to_pose_with_screw", "move_to_pose_with_RRTConnect", "move_to_pose_with_RRTStar"}):
+        raise ValueError("Source repair must execute physical actions through the wrapped env/planner.")
+    if not any(isinstance(node, ast.Attribute) and node.attr in {"pose", "tcp", "qpos", "evaluate"}
+               for node in ast.walk(tree)):
+        raise ValueError("Source repair must read physical state before planning.")
 
 
 def freeze_source_program(
@@ -450,22 +622,38 @@ def freeze_source_program(
     minimum_seed_count: int,
 ) -> dict[str, Any]:
     trials = validation.get("trials") or []
-    if not validation.get("success") or len(trials) < minimum_seed_count:
+    required = load_experiment_contract()["source_program_validation"]["default_seeds"]
+    actual_seeds = [row.get("seed") for row in trials]
+    if (
+        not validation.get("success") or len(trials) < minimum_seed_count
+        or sorted(actual_seeds) != sorted(required)
+        or any(not row.get("success") or not row.get("official_success")
+               or int(row.get("action_steps", 0)) <= 0 for row in trials)
+    ):
         raise ValueError(
             f"{spec.task_id} cannot be frozen before all required seeds succeed"
         )
     if spec.candidate_path is None:
         raise ValueError(f"{spec.task_id} has no candidate to freeze")
+    if (
+        not validation.get("environment_valid")
+        or validation.get("environment_contract_sha256") != _sha256_file(REPO_ROOT / "experiment_config.json")
+        or validation.get("candidate", {}).get("sha256") != _sha256_file(spec.candidate_path)
+        or validation.get("support_code_sha256") != _support_code_sha256(spec)
+        or validation.get("task", {}).get("task_id") != spec.task_id
+    ):
+        raise ValueError("Cannot freeze: validation evidence does not match the current code/environment.")
 
     spec.frozen_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(spec.candidate_path, spec.frozen_path)
     record = {
-        "schema": "frozen_source_program.v1",
+        "schema": "frozen_source_program.v2",
         "task_id": spec.task_id,
         "env_id": spec.env_id,
         "source_robot": spec.source_robot,
         "control_mode": spec.control_mode,
         "origin": spec.origin,
+        "provenance": validation.get("provenance", {"kind": "existing_candidate", "catalog_origin": spec.origin}),
         "frozen_at_utc": datetime.now(timezone.utc).isoformat(),
         "candidate_path": _display_path(spec.candidate_path),
         "frozen_path": _display_path(spec.frozen_path),
@@ -476,6 +664,7 @@ def freeze_source_program(
         "max_episode_steps": spec.episode_limit,
         "success_authority": "env.unwrapped.evaluate()['success']",
         "environment_contract_sha256": validation.get("environment_contract_sha256"),
+        "trials": trials,
     }
     _write_json(spec.frozen_path.with_suffix(".json"), record)
     return record
@@ -489,11 +678,23 @@ def source_program_status(specs: Iterable[SourceProgramSpec]) -> list[dict[str, 
         frozen_valid = False
         frozen_record = None
         if spec.frozen_path.is_file() and record_path.is_file():
-            frozen_record = _read_json(record_path)
+            try:
+                frozen_record = _read_json(record_path)
+            except (OSError, ValueError):
+                frozen_record = {}
+            evidence = frozen_record.get("trials", [])
             frozen_valid = (
-                frozen_record.get("source_sha256") == _sha256_file(spec.frozen_path)
+                frozen_record.get("schema") == "frozen_source_program.v2"
+                and frozen_record.get("source_sha256") == _sha256_file(spec.frozen_path)
                 and frozen_record.get("support_code_sha256")
                 == _support_code_sha256(spec)
+                and frozen_record.get("environment_contract_sha256")
+                == _sha256_file(REPO_ROOT / "experiment_config.json")
+                and sorted(frozen_record.get("validated_seeds", []))
+                == sorted(load_experiment_contract()["source_program_validation"]["default_seeds"])
+                and [row.get("seed") for row in evidence] == frozen_record.get("validated_seeds")
+                and all(row.get("success") and row.get("official_success")
+                        and int(row.get("action_steps", 0)) > 0 for row in evidence)
             )
         rows.append(
             {
@@ -513,22 +714,45 @@ def source_program_status(specs: Iterable[SourceProgramSpec]) -> list[dict[str, 
 def _multi_seed_feedback(validation: Mapping[str, Any]) -> dict[str, Any]:
     trials = validation.get("trials") or []
     failed = [row for row in trials if not row.get("success")]
+    enriched = []
+    for index, row in enumerate(failed):
+        full = dict(row)
+        path = row.get("trial_path")
+        if index < 3 and path and Path(path).is_file():
+            full.update(_read_json(Path(path)))
+            full["seed"] = row["seed"]
+            filtered = _prompt_trial(full)
+            # Keep the canonical input key so repeated prompt construction remains lossless.
+            filtered["state_trace"] = filtered.pop("state_trace_sample", [])
+            full = filtered
+        enriched.append(full)
+    passed = bool(validation.get("success")) and bool(trials) and not failed
     return {
-        "success": not failed,
+        "success": passed,
         "message": (
             "all validation seeds succeeded"
-            if not failed
-            else f"{len(failed)}/{len(trials)} validation seeds failed"
+            if passed
+            else f"{len(failed)}/{len(trials)} validation seeds failed; status={validation.get('status')}"
         ),
-        "official_success": not failed,
+        "official_success": passed,
         "action_steps": sum(int(row.get("action_steps") or 0) for row in trials),
-        "multi_seed_failures": failed,
+        "multi_seed_failures": enriched,
         "failure_diagnosis": (
             failed[0].get("failure_diagnosis")
             if failed
             else {"reason": "none"}
         ),
     }
+
+
+def _infrastructure_failure(trial: Mapping[str, Any]) -> bool:
+    if int(trial.get("action_steps") or 0) > 0:
+        return False
+    text = str(trial.get("message", "")) + str(trial.get("execution_error", ""))
+    return any(token in text for token in (
+        "URLError", "EOFError", "No module named", "Vulkan", "CUDA error",
+        "VK_ERROR", "requires asset", "could not be found", "FileNotFoundError",
+    ))
 
 
 def _sha256_file(path: Path) -> str:
@@ -554,6 +778,9 @@ def _support_code_sha256(spec: SourceProgramSpec) -> str:
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")
+    for name in ("dynamic_adapter.py", "dynamic_harness.py", "env_adapter.py"):
+        digest.update(name.encode("utf-8"))
+        digest.update((REPO_ROOT / "maniskill_backend" / name).read_bytes())
     return digest.hexdigest()
 
 
@@ -563,7 +790,9 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False, default=str) + "\n",
         encoding="utf-8",
     )
+    temporary.replace(path)

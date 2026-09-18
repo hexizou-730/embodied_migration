@@ -113,12 +113,34 @@ bootstraps and are synthesized/repaired in the remote simulator when needed.
 
 Candidates and successful sources are intentionally separate. A program moves
 to `source_programs/frozen/` only when the exact same code reaches the official
-success signal on every requested development seed; the frozen record includes
+success signal on all ten development seeds (0-9); the frozen record includes
 the code hash, seeds, controller, episode budget, and environment-contract hash.
 
 ```bash
 python source.py status
-python source.py prepare --tasks all --max-cycles 5
+python source.py prepare --background
 python source.py validate --tasks t01_push_cube,t02_pull_cube --freeze
 python source.py synthesize --tasks t03_roll_ball --max-cycles 5 --freeze
 ```
+
+`prepare` defaults to the resumable `phase4` run. It applies the public LLM
+settings from `experiment_config.json` (not API keys), prepares missing assets,
+tries the 11 official candidates first, and repairs failures. New candidates
+must pass a two-seed smoke check before all ten seeds are tested. Only full
+passes are installed and frozen; failed candidates remain in the run artifacts.
+Each task has its own process, timeout, and log. One failure does not stop the
+other tasks. `--background` survives an SSH disconnect; no `tmux` is needed.
+
+Check progress with `python source.py status`. Repeating the same prepare
+command resumes interrupted work without buying the completed LLM generations
+again. Completed failures are retained; `--retry-failed` rechecks them without
+resetting the recorded repair budget. Use a new `--run-name` for changed code,
+configuration, or a fresh budget. Defaults: five repair cycles per task, one
+hour per task, fifteen minutes for asset setup. Downloads may need substantial
+disk space; `--no-download` reports missing assets instead.
+
+This automates source preparation, not a guarantee of 20 successful programs.
+The terminal summary separates full passes, exhausted repair budgets, asset
+problems, and runtime/API problems. Historical v1 freeze records are preserved
+but require revalidation for the new, evidence-checked v2 format. See
+[`source_programs/README.md`](source_programs/README.md) for remote instructions.

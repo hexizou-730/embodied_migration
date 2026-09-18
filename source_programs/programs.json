@@ -2,7 +2,7 @@
   "schema": "source_program_catalog.v1",
   "freeze_policy": {
     "seeds_from": "experiment_config.json:seed_policy.development_seeds",
-    "minimum_seed_count": 2,
+    "minimum_seed_count": 10,
     "required_success_rate": 1.0,
     "max_episode_steps": 1000,
     "success_authority": "env.unwrapped.evaluate()['success']"

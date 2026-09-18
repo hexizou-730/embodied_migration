@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +18,9 @@ from maniskill_backend.source_programs import (
     source_program_status,
     synthesize_source_program,
     validate_source_program,
+)
+from maniskill_backend.source_preparation import (
+    launch_background, preparation_options, run_preparation, use_contract_llm,
 )
 
 
@@ -30,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = subparsers.add_parser("status", help="Show candidate and frozen status.")
     status.add_argument("--json", action="store_true")
+    status.add_argument("--run-name", default="phase4")
+    status.add_argument("--output-root", default="results/source_preparation")
 
     validate = subparsers.add_parser("validate", help="Run source programs in ManiSkill.")
     validate.add_argument("--tasks", default="all", help="all or comma-separated task IDs")
@@ -76,6 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--render-backend", default="gpu")
     prepare.add_argument("--output-root", default="results/source_preparation")
     prepare.add_argument("--run-name")
+    prepare.add_argument("--background", action="store_true", help="Detach safely from SSH; progress is saved to run.log.")
+    prepare.add_argument("--retry-failed", action="store_true", help="Recheck blocked tasks; does not reset the LLM cycle budget.")
+    prepare.add_argument("--task-timeout", type=int, default=3600, help="Wall-clock seconds per task, including asset setup.")
+    prepare.add_argument("--asset-timeout", type=int, default=900)
+    prepare.add_argument("--no-download", action="store_true", help="Mark missing assets blocked instead of downloading them.")
+    prepare.add_argument("--keep-llm-settings", action="store_true", help="Check existing environment settings instead of applying the frozen LLM contract.")
     return parser
 
 
@@ -84,9 +97,25 @@ def main() -> None:
     catalog, specs = load_source_program_catalog()
     if args.command == "status":
         rows = source_program_status(specs)
+        progress_path = REPO_ROOT / args.output_root / args.run_name / "summary.json"
+        progress = json.loads(progress_path.read_text()) if progress_path.exists() else None
         if args.json:
-            print(json.dumps(rows, indent=2, ensure_ascii=False))
+            print(json.dumps({"preparation": progress, "sources": rows}, indent=2, ensure_ascii=False))
         else:
+            if progress:
+                pid = progress.get("pid")
+                try:
+                    os.kill(pid, 0)
+                    alive = True
+                except (TypeError, ProcessLookupError):
+                    alive = False
+                state = progress.get("state", "legacy_result")
+                if state == "running" and not alive:
+                    state = "interrupted (rerun prepare to resume)"
+                print(f"{args.run_name}: {state}; frozen={progress['frozen']}/{progress['tasks']}; current={progress.get('current_task') or '-'}")
+                for item in progress.get("results", []):
+                    if not item.get("success"):
+                        print(f"  {item['task_id']}: {item['status']}")
             print("task  source          candidate               frozen  seeds")
             for row in rows:
                 seeds = ",".join(map(str, row["validated_seeds"])) or "-"
@@ -104,83 +133,28 @@ def main() -> None:
             "Source preparation may use only development seeds: "
             + ",".join(map(str, sorted(allowed)))
         )
-    run_name = args.run_name or datetime.now().strftime("source_%Y%m%d_%H%M%S")
+    run_name = args.run_name or ("phase4" if args.command == "prepare" else datetime.now().strftime("source_%Y%m%d_%H%M%S"))
+    if Path(run_name).name != run_name or run_name in {".", ".."}:
+        raise SystemExit("--run-name must be a simple directory name")
     output_dir = REPO_ROOT / args.output_root / run_name
-    output_dir.mkdir(parents=True, exist_ok=False)
     if args.command == "prepare":
-        rows = []
-        for spec in selected:
-            print(f"[{spec.task_id}] validating candidate", flush=True)
-            validation = validate_source_program(
-                spec,
-                seeds=seeds,
-                output_dir=output_dir / "initial_validation",
-                obs_mode=args.obs_mode,
-                sim_backend=args.sim_backend,
-                render_backend=args.render_backend,
-                enforce_environment=True,
-            )
-            if validation.get("status") == "environment_contract_mismatch":
-                row = {
-                    "task_id": spec.task_id,
-                    "success": False,
-                    "path": "environment_contract_mismatch",
-                }
-            elif validation.get("success"):
-                freeze_source_program(
-                    spec,
-                    validation,
-                    minimum_seed_count=int(
-                        catalog["freeze_policy"]["minimum_seed_count"]
-                    ),
-                )
-                row = {
-                    "task_id": spec.task_id,
-                    "success": True,
-                    "path": "validated_existing_candidate",
-                }
-            else:
-                print(f"[{spec.task_id}] repairing failed candidate", flush=True)
-                synthesis = synthesize_source_program(
-                    spec,
-                    seeds=seeds,
-                    output_dir=output_dir / "repair",
-                    max_cycles=args.max_cycles,
-                    obs_mode=args.obs_mode,
-                    sim_backend=args.sim_backend,
-                    render_backend=args.render_backend,
-                    initial_validation=validation,
-                )
-                if synthesis.get("success"):
-                    freeze_source_program(
-                        spec,
-                        synthesis["validation"],
-                        minimum_seed_count=int(
-                            catalog["freeze_policy"]["minimum_seed_count"]
-                        ),
-                    )
-                row = {
-                    "task_id": spec.task_id,
-                    "success": bool(synthesis.get("success")),
-                    "path": "llm_repair",
-                    "cycles": len(synthesis.get("cycles") or []),
-                }
-            rows.append(row)
-            print(f"  frozen={row['success']} path={row['path']}", flush=True)
-        batch = {
-            "schema": "source_program_preparation.v1",
-            "tasks": len(rows),
-            "frozen": sum(int(row["success"]) for row in rows),
-            "complete": all(row["success"] for row in rows),
-            "results": rows,
-        }
-        (output_dir / "summary.json").write_text(
-            json.dumps(batch, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-        )
+        if sorted(seeds) != sorted(CONTRACT["source_program_validation"]["default_seeds"]):
+            raise SystemExit("prepare requires all development seeds; use validate for a partial smoke test.")
+        if not selected or min(args.max_cycles, args.task_timeout, args.asset_timeout) <= 0:
+            raise SystemExit("Choose tasks and positive cycle/time budgets.")
+        if not args.keep_llm_settings:
+            use_contract_llm()
+        if args.background:
+            pid = launch_background([arg for arg in sys.argv[1:] if arg != "--background"], output_dir)
+            print(f"Submitted in background: pid={pid}\nlog = {output_dir / 'run.log'}\nCheck: python source.py status --run-name {run_name}")
+            return
+        print(f"LLM settings: {CONTRACT['llm']['model']} (contract checked before execution)", flush=True)
+        batch = run_preparation(preparation_options(args, selected, seeds), output_dir, retry_failed=args.retry_failed)
         print(f"summary = {output_dir / 'summary.json'}")
         if not batch["complete"]:
             raise SystemExit(1)
         return
+    output_dir.mkdir(parents=True, exist_ok=False)
     if args.command == "synthesize":
         failed = False
         for spec in selected:

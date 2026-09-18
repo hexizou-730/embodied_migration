@@ -258,7 +258,7 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
 
     @staticmethod
     def _add_entity(catalog: Dict[str, Any], path: str, value: Any) -> None:
-        pose = getattr(value, "pose", None)
+        pose = getattr(value, "pose", value)
         if pose is not None and getattr(pose, "p", None) is not None:
             catalog[path] = value
             return
@@ -316,13 +316,20 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
         return self._entity(name)
 
     def _actor_pos(self, name: str) -> np.ndarray:
-        return _first_vector(self._entity(name).pose.p, 3)
+        entity = self._entity(name)
+        pose = getattr(entity, "pose", entity)
+        value = getattr(pose, "p", pose)
+        array = _to_numpy(value)
+        if array.ndim not in (1, 2) or array.shape[-1] != 3:
+            raise ValueError(f"{name!r} is not an xyz point; observed shape={array.shape}")
+        return _first_vector(array, 3)
 
     def _entity_pos(self, name: str) -> np.ndarray:
         return self._actor_pos(name)
 
     def _entity_quat(self, name: str) -> np.ndarray:
-        return _first_vector(self._entity(name).pose.q, 4)
+        entity = self._entity(name)
+        return _first_vector(getattr(entity, "pose", entity).q, 4)
 
     def _region_pos(self, name: str) -> np.ndarray:
         return self._actor_pos(name)
@@ -346,9 +353,10 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
         entities = {}
         for name, actor in self._entity_catalog().items():
             try:
+                pose = getattr(actor, "pose", actor)
                 entities[name] = {
-                    "position": np.round(_to_numpy(actor.pose.p), 6).tolist(),
-                    "quaternion": np.round(_to_numpy(actor.pose.q), 6).tolist(),
+                    "position": np.round(_to_numpy(pose.p), 6).tolist(),
+                    "quaternion": np.round(_to_numpy(pose.q), 6).tolist(),
                 }
             except Exception:
                 continue
@@ -357,6 +365,7 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
         except Exception:
             tcp = None
         return {
+            **physical_state_extras(self._base_env()),
             "tcp": tcp,
             "entities": entities,
             "entity_aliases": self._entity_aliases(self._entity_catalog()),
@@ -405,3 +414,50 @@ def iter_pose_entities(base_env: Any) -> Iterable[Tuple[str, Any]]:
             continue
         ManiSkillDynamicRobot._add_entity(catalog, name, value)
     return tuple(sorted(catalog.items()))
+
+
+def physical_state_extras(base_env: Any) -> Dict[str, Any]:
+    """Read small numeric task fields and motion state without exposing simulator objects."""
+    task_state = {}
+    for name, value in vars(base_env).items():
+        if name.startswith("_") or name in {"agent", "scene"}:
+            continue
+        shape = getattr(value, "shape", None)
+        if not isinstance(value, (int, float, bool, np.number)) and (
+            shape is None or len(shape) > 2 or np.prod(shape) > 64
+        ):
+            continue
+        try:
+            array = _to_numpy(value)
+            if array.dtype.kind in "biuf" and np.all(np.isfinite(array)):
+                task_state[name] = _jsonable(np.round(array, 6))
+        except (TypeError, ValueError):
+            continue
+        if len(task_state) >= 64:
+            break
+    velocities = {}
+    for name, entity in iter_pose_entities(base_env):
+        if name.startswith("segmentation_id_map"):
+            continue
+        velocity = {}
+        for field in ("linear_velocity", "angular_velocity"):
+            try:
+                value = getattr(entity, field, None)
+                if value is not None:
+                    velocity[field] = np.round(_first_vector(value, 3), 6).tolist()
+            except (TypeError, ValueError):
+                continue
+        if velocity:
+            velocities[name] = velocity
+    robot_state = {}
+    robot = getattr(getattr(base_env, "agent", None), "robot", None)
+    for field in ("qpos", "qvel"):
+        try:
+            robot_state[field] = _jsonable(getattr(robot, f"get_{field}")())
+        except (AttributeError, TypeError, RuntimeError):
+            continue
+    pose = getattr(robot, "pose", None)
+    if pose is not None:
+        robot_state["root_position"] = _jsonable(pose.p)
+        robot_state["root_quaternion"] = _jsonable(pose.q)
+    return {"task_state": task_state, "entity_velocities": velocities, "robot_state": robot_state}
