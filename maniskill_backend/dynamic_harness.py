@@ -514,6 +514,7 @@ def run_dynamic_agent_migration(
     source_actions: SourceActions | None = None,
     progress: Callable[[str], None] | None = None,
     enforce_environment: bool = False,
+    source_provenance: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Validate supplied source actions (or synthesize them), then migrate."""
 
@@ -541,7 +542,8 @@ def run_dynamic_agent_migration(
     if source_actions is not None:
         manifest.update(
             source_input={"path": source_actions.path, "sha256": _sha256_text(source_actions.code),
-                          "entrypoint": source_actions.entrypoint},
+                          "entrypoint": source_actions.entrypoint,
+                          "provenance": _jsonable(source_provenance or {})},
             llm_may_modify=["target adapter"],
         )
     if dry_run:
@@ -637,7 +639,8 @@ def run_dynamic_agent_migration(
             source_entrypoint=source_actions.entrypoint,
         )
         _write_json(run_dir / "source_trial.json", source_result)
-        source_cycles.append({"cycle": 0, "used_llm": False, "origin": "user_supplied",
+        source_cycles.append({"cycle": 0, "used_llm": False,
+                              "origin": "frozen_source" if source_provenance else "user_supplied",
                               "adapter_sha256": _sha256_text(source_code), "trial": source_result})
         if source_result.get("success"):
             frozen_program = source_actions.program
@@ -833,16 +836,21 @@ def run_dynamic_agent_migration(
             break
 
     artifact_hashes = {
-        "task_program": _sha256_file(artifacts / "task_program.py"),
-        "source_adapter": _sha256_file(artifacts / "source_adapter.py"),
-        "target_adapter": _sha256_file(artifacts / "target_adapter.py"),
+        name: _sha256_file(path) if path.is_file() else None
+        for name, path in {
+            "task_program": artifacts / "task_program.py",
+            "source_adapter": artifacts / "source_adapter.py",
+            "target_adapter": artifacts / "target_adapter.py",
+        }.items()
     }
+    metrics = _migration_metrics(source_cycles, target_cycles)
     manifest["outcome"] = {
         "status": "success" if target_success else target_status,
         "success": target_success,
         "source_cycles": len(source_cycles),
         "target_cycles": len(target_cycles),
         "artifact_sha256": artifact_hashes,
+        "metrics": metrics,
     }
     _write_json(manifest_path, manifest)
     payload = {
@@ -867,9 +875,41 @@ def run_dynamic_agent_migration(
         "target_cycles": target_cycles,
         "source_result": source_result,
         "target_result": target_result,
+        "metrics": metrics,
     }
     _write_dynamic_summary(run_dir, payload)
     return payload
+
+
+def _migration_metrics(
+    source_cycles: Sequence[Mapping[str, Any]],
+    target_cycles: Sequence[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """Summarize execution and LLM cost without changing success semantics."""
+
+    calls = [row for row in target_cycles if row.get("used_llm")]
+    prompt_tokens = sum(int((row.get("usage") or {}).get("prompt_tokens") or 0) for row in calls)
+    completion_tokens = sum(
+        int((row.get("usage") or {}).get("completion_tokens") or 0) for row in calls
+    )
+    cost = sum(float((row.get("usage") or {}).get("cost") or 0.0) for row in calls)
+    executed = [row for row in target_cycles if isinstance(row.get("trial"), Mapping)]
+    return {
+        "generation_cycles": len(target_cycles),
+        "repair_cycles": max(0, len(target_cycles) - 1),
+        "llm_calls": len(calls),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+        "llm_cost_usd": round(cost, 8),
+        "source_action_steps": sum(
+            int((row.get("trial") or {}).get("action_steps") or 0) for row in source_cycles
+        ),
+        "target_trials": len(executed),
+        "target_action_steps": sum(
+            int((row.get("trial") or {}).get("action_steps") or 0) for row in executed
+        ),
+    }
 
 
 def _dynamic_system_prompt(*, source: bool) -> str:

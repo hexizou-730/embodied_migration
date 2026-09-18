@@ -255,7 +255,7 @@ def prepare_task(config: dict) -> dict:
         return dict(row, status="worker_error", message=repr(exc))
 
 
-def ensure_assets(task_id: str, *, download: bool):
+def ensure_assets(task_id: str, *, download: bool, robot_uid: str | None = None):
     # Use the installed, pinned ManiSkill registry rather than task-specific URLs.
     import mani_skill.envs  # noqa: F401
     from mani_skill.agents.registration import REGISTERED_AGENTS
@@ -265,7 +265,10 @@ def ensure_assets(task_id: str, *, download: bool):
     _, specs = load_source_program_catalog()
     spec = next(spec for spec in specs if spec.task_id == task_id)
     required = list(REGISTERED_ENVS[spec.env_id].asset_download_ids or [])
-    required += list(REGISTERED_AGENTS[spec.source_robot].asset_download_ids or [])
+    asset_robot = robot_uid or spec.source_robot
+    if asset_robot not in REGISTERED_AGENTS:
+        raise RuntimeError(f"Unknown ManiSkill robot UID: {asset_robot}")
+    required += list(REGISTERED_AGENTS[asset_robot].asset_download_ids or [])
     ids = set()
     for asset_id in required:
         if asset_id in assets.DATA_GROUPS:

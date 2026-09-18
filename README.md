@@ -144,3 +144,27 @@ The terminal summary separates full passes, exhausted repair budgets, asset
 problems, and runtime/API problems. Historical v1 freeze records are preserved
 but require revalidation for the new, evidence-checked v2 format. See
 [`source_programs/README.md`](source_programs/README.md) for remote instructions.
+
+## Target Migration
+
+Phase 5 consumes only valid frozen sources; it never regenerates or edits them.
+For each task it first initializes the requested target robot and records the
+control mode, action layout, TCP, and entity aliases. Only a successful
+interface check is followed by bounded LLM generation and real ManiSkill
+execution. Each failed target trial, including its measured state trace, is fed
+to the next repair round. Official `env.unwrapped.evaluate()["success"]`
+remains the sole success authority.
+
+Run every currently frozen source on xArm6 in a disconnect-safe batch:
+
+```bash
+python target.py migrate xarm6 --background
+python target.py status xarm6
+```
+
+The batch survives SSH disconnects, isolates tasks in separate worker
+processes, and skips completed tasks when resumed. Use `--retry-failed` to give
+completed failures another attempt without overwriting prior evidence. Results
+are written under `results/target_migration/phase5_xarm6_robotiq/`, including
+`target_interface.json`, generated adapters, prompts, physical traces, official
+outcomes, repair cycles, simulator action counts, tokens, and LLM cost.
