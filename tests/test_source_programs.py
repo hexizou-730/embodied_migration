@@ -17,6 +17,7 @@ from maniskill_backend.source_programs import (
     _validate_source_repair,
     freeze_source_program,
     load_source_program_catalog,
+    refresh_frozen_source_program,
     source_program_status,
     statically_check_candidate,
     synthesize_source_program,
@@ -85,6 +86,97 @@ class SourceProgramTests(unittest.TestCase):
         self.assertEqual(record["source_sha256"], saved["source_sha256"])
         self.assertEqual(saved["validated_seeds"], list(range(10)))
         self.assertEqual(saved["success_rate"], 1.0)
+
+    def test_status_distinguishes_stale_dependencies_from_failed_trials(self):
+        _, specs = load_source_program_catalog()
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = replace(specs[0], frozen_path=Path(tmp) / "frozen.py")
+            record = freeze_source_program(spec, complete_evidence(spec), minimum_seed_count=10)
+            self.assertTrue(source_program_status([spec])[0]["frozen"])
+            record["support_code_sha256"] = "previous-runtime"
+            spec.frozen_path.with_suffix(".json").write_text(json.dumps(record))
+            row = source_program_status([spec])[0]
+            self.assertFalse(row["frozen"])
+            self.assertEqual(row["freeze_status"], "needs_revalidation")
+            self.assertEqual(row["failed_checks"], ["support_hash"])
+            self.assertEqual((row["recorded_passes"], row["recorded_trials"]), (10, 10))
+            record["support_code_sha256"] = _support_code_sha256(spec)
+            record["trials"][0]["official_success"] = False
+            spec.frozen_path.with_suffix(".json").write_text(json.dumps(record))
+            row = source_program_status([spec])[0]
+            self.assertEqual(row["freeze_status"], "failed_evidence")
+            self.assertEqual(row["recorded_passes"], 9)
+
+    def test_status_handles_malformed_records_and_wrong_task_metadata(self):
+        _, specs = load_source_program_catalog()
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = replace(specs[0], frozen_path=Path(tmp) / "frozen.py")
+            record = freeze_source_program(spec, complete_evidence(spec), minimum_seed_count=10)
+            for bad in ([], {**record, "trials": None}, {**record, "validated_seeds": [None]}):
+                with self.subTest(record=bad):
+                    spec.frozen_path.with_suffix(".json").write_text(json.dumps(bad))
+                    self.assertEqual(source_program_status([spec])[0]["freeze_status"], "invalid_record")
+            record["task_id"] = "wrong_task"
+            spec.frozen_path.with_suffix(".json").write_text(json.dumps(record))
+            self.assertEqual(source_program_status([spec])[0]["freeze_status"], "metadata_mismatch")
+
+    def test_refresh_uses_exact_frozen_code_and_never_calls_llm(self):
+        _, specs = load_source_program_catalog()
+        for succeeds in (True, False):
+            with self.subTest(success=succeeds), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                candidate = root / "candidate.py"
+                candidate.write_text(specs[0].candidate_path.read_text())
+                spec = replace(specs[0], candidate_path=candidate, frozen_path=root / "frozen.py")
+                evidence = complete_evidence(spec)
+                evidence["provenance"] = {"kind": "llm_repair", "model": "original-model"}
+                record = freeze_source_program(spec, evidence, minimum_seed_count=10)
+                code = spec.frozen_path.read_bytes()
+                record["support_code_sha256"] = "previous-runtime"
+                record_path = spec.frozen_path.with_suffix(".json")
+                record_path.write_text(json.dumps(record))
+                old_record = record_path.read_bytes()
+                candidate.write_text("raise AssertionError('Candidate must not execute')")
+                executed = []
+
+                def trial(**kwargs):
+                    self.assertEqual(kwargs["adapter_path"].read_bytes(), code)
+                    executed.append(kwargs["spec"].seed)
+                    return {"success": succeeds, "official_success": succeeds,
+                            "action_steps": 20, "message": "success" if succeeds else "goal not reached"}
+
+                runtime = {"contract_sha256": _sha256_file(REPO_ROOT / "experiment_config.json"),
+                           "validation": {"ok": True}}
+                with patch("maniskill_backend.source_programs.capture_experiment_environment", return_value=runtime), patch(
+                    "maniskill_backend.source_programs.run_dynamic_trial", side_effect=trial
+                ), patch("maniskill_backend.source_programs.gen_text") as llm:
+                    result = refresh_frozen_source_program(
+                        spec, output_dir=root / "refresh", obs_mode="state",
+                        sim_backend="auto", render_backend="gpu",
+                    )
+                llm.assert_not_called()
+                self.assertEqual(executed, list(range(10)))
+                self.assertEqual(spec.frozen_path.read_bytes(), code)
+                self.assertEqual(candidate.read_text(), "raise AssertionError('Candidate must not execute')")
+                self.assertEqual(Path(result["previous_frozen_record"]).read_bytes(), old_record)
+                self.assertEqual(result["frozen"], succeeds)
+                if succeeds:
+                    self.assertTrue(source_program_status([spec])[0]["frozen"])
+                    self.assertEqual(json.loads(record_path.read_text())["provenance"], evidence["provenance"])
+                else:
+                    self.assertEqual(record_path.read_bytes(), old_record)
+
+    def test_refresh_rejects_changed_frozen_code_before_simulation(self):
+        _, specs = load_source_program_catalog()
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = replace(specs[0], frozen_path=Path(tmp) / "frozen.py")
+            freeze_source_program(spec, complete_evidence(spec), minimum_seed_count=10)
+            spec.frozen_path.write_text("changed code")
+            with patch("maniskill_backend.source_programs.run_dynamic_trial") as trial:
+                with self.assertRaisesRegex(ValueError, "Frozen code changed"):
+                    refresh_frozen_source_program(spec, output_dir=Path(tmp) / "out",
+                        obs_mode="state", sim_backend="auto", render_backend="gpu")
+                trial.assert_not_called()
 
     def test_freeze_rejects_smoke_duplicates_claims_and_changed_code(self):
         _, specs = load_source_program_catalog()

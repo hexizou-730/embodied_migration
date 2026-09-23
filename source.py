@@ -14,6 +14,7 @@ from maniskill_backend.source_programs import (
     REPO_ROOT,
     freeze_source_program,
     load_source_program_catalog,
+    refresh_frozen_source_program,
     select_source_programs,
     source_program_status,
     synthesize_source_program,
@@ -37,6 +38,16 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--json", action="store_true")
     status.add_argument("--run-name", default="phase4")
     status.add_argument("--output-root", default="results/source_preparation")
+
+    refresh = subparsers.add_parser(
+        "refresh", help="Revalidate existing frozen code on all required seeds, without LLM repair."
+    )
+    refresh.add_argument("--tasks", default="frozen", help="frozen or comma-separated task IDs")
+    refresh.add_argument("--run-name")
+    refresh.add_argument("--output-root", default="results/source_refresh")
+    refresh.add_argument("--obs-mode", default="state")
+    refresh.add_argument("--sim-backend", default="auto")
+    refresh.add_argument("--render-backend", default="gpu")
 
     validate = subparsers.add_parser("validate", help="Run source programs in ManiSkill.")
     validate.add_argument("--tasks", default="all", help="all or comma-separated task IDs")
@@ -112,17 +123,24 @@ def main() -> None:
                 state = progress.get("state", "legacy_result")
                 if state == "running" and not alive:
                     state = "interrupted (rerun prepare to resume)"
-                print(f"{args.run_name}: {state}; frozen={progress['frozen']}/{progress['tasks']}; current={progress.get('current_task') or '-'}")
+                print(f"{args.run_name}: {state}; recorded_frozen={progress['frozen']}/{progress['tasks']}; current={progress.get('current_task') or '-'}")
                 for item in progress.get("results", []):
                     if not item.get("success"):
                         print(f"  {item['task_id']}: {item['status']}")
-            print("task  source          candidate               frozen  seeds")
+            print(f"Currently ready: {sum(row['frozen'] for row in rows)}/{len(rows)}")
+            print("task  source          candidate               frozen  status                 recorded_passes")
             for row in rows:
-                seeds = ",".join(map(str, row["validated_seeds"])) or "-"
+                passes = f"{row['recorded_passes']}/{row['recorded_trials']}" if row["recorded_trials"] else "-"
+                reason = ",".join(row["failed_checks"])
                 print(
                     f"{row['task_id']:<22} {row['source_robot']:<15} "
-                    f"{row['candidate_status']:<23} {str(row['frozen']):<7} {seeds}"
+                    f"{row['candidate_status']:<23} {str(row['frozen']):<7} "
+                    f"{row['freeze_status']:<22} {passes}" + (f" ({reason})" if reason else "")
                 )
+        return
+
+    if args.command == "refresh":
+        _refresh_sources(args, specs)
         return
 
     selected = select_source_programs(specs, args.tasks)
@@ -253,6 +271,49 @@ def _parse_seeds(value: str) -> list[int]:
     if len(set(seeds)) != len(seeds) or len(seeds) < 2:
         raise SystemExit("--seeds must contain at least two unique values")
     return seeds
+
+
+def _refresh_sources(args, specs) -> None:
+    selected = (
+        [spec for spec in specs if spec.frozen_path.is_file() and spec.frozen_path.with_suffix(".json").is_file()]
+        if args.tasks == "frozen" else select_source_programs(specs, args.tasks)
+    )
+    if not selected:
+        raise SystemExit("No frozen code/record pairs found; nothing to revalidate.")
+    run_name = args.run_name or datetime.now().strftime("refresh_%Y%m%d_%H%M%S")
+    if Path(run_name).name != run_name or run_name in {".", ".."}:
+        raise SystemExit("--run-name must be a simple directory name")
+    output_dir = REPO_ROOT / args.output_root / run_name
+    output_dir.mkdir(parents=True, exist_ok=False)
+    use_contract_llm()
+    seeds = ",".join(map(str, CONTRACT["source_program_validation"]["default_seeds"]))
+    print(f"Revalidating frozen code on seeds {seeds}; no LLM calls or code repair.", flush=True)
+    rows = []
+    for spec in selected:
+        print(f"[{spec.task_id}] revalidating frozen source", flush=True)
+        try:
+            result = refresh_frozen_source_program(
+                spec, output_dir=output_dir, obs_mode=args.obs_mode,
+                sim_backend=args.sim_backend, render_backend=args.render_backend,
+            )
+            row = {
+                "task_id": spec.task_id, "success": bool(result.get("success")),
+                "frozen": bool(result.get("frozen")), "status": result.get("status", "validation_failed"),
+                "success_rate": result.get("success_rate", 0.0),
+            }
+        except (OSError, ValueError) as exc:
+            row = {"task_id": spec.task_id, "success": False, "frozen": False,
+                   "status": "refresh_blocked", "message": str(exc)}
+        rows.append(row)
+        print(f"  {row['status']}; frozen={row['frozen']}" + (f"; {row['message']}" if row.get("message") else ""), flush=True)
+        (output_dir / "summary.json").write_text(json.dumps({
+            "schema": "source_refresh.v1", "tasks": len(selected),
+            "completed": len(rows), "frozen": sum(item["frozen"] for item in rows),
+            "results": rows,
+        }, indent=2) + "\n", encoding="utf-8")
+    print(f"summary = {output_dir / 'summary.json'}")
+    if not all(row["frozen"] for row in rows):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

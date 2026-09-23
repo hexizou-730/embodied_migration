@@ -675,27 +675,57 @@ def source_program_status(specs: Iterable[SourceProgramSpec]) -> list[dict[str, 
     for spec in specs:
         static = statically_check_candidate(spec)
         record_path = spec.frozen_path.with_suffix(".json")
-        frozen_valid = False
-        frozen_record = None
-        if spec.frozen_path.is_file() and record_path.is_file():
+        frozen_record = {}
+        evidence = []
+        checks = {}
+        state = "not_frozen"
+        if spec.frozen_path.is_file() != record_path.is_file():
+            state = "frozen_file_missing" if not spec.frozen_path.is_file() else "record_missing"
+        elif spec.frozen_path.is_file() and record_path.is_file():
             try:
                 frozen_record = _read_json(record_path)
-            except (OSError, ValueError):
+                if not isinstance(frozen_record, dict):
+                    raise ValueError("Frozen record must be an object")
+                evidence = frozen_record.get("trials", [])
+                seeds = frozen_record.get("validated_seeds", [])
+                if (
+                    not isinstance(evidence, list)
+                    or any(not isinstance(row, dict) for row in evidence)
+                    or not isinstance(seeds, list)
+                    or any(type(seed) is not int for seed in seeds)
+                ):
+                    raise ValueError("Malformed frozen trials or seeds")
+                checks = {
+                    "schema": frozen_record.get("schema") == "frozen_source_program.v2",
+                    "metadata": all(frozen_record.get(key) == value for key, value in {
+                        "task_id": spec.task_id, "env_id": spec.env_id,
+                        "source_robot": spec.source_robot, "control_mode": spec.control_mode,
+                        "max_episode_steps": spec.episode_limit,
+                    }.items()),
+                    "source_hash": frozen_record.get("source_sha256") == _sha256_file(spec.frozen_path),
+                    "support_hash": frozen_record.get("support_code_sha256") == _support_code_sha256(spec),
+                    "contract_hash": frozen_record.get("environment_contract_sha256")
+                    == _sha256_file(REPO_ROOT / "experiment_config.json"),
+                    "seeds": sorted(seeds)
+                    == sorted(load_experiment_contract()["source_program_validation"]["default_seeds"]),
+                    "trial_seeds": [row.get("seed") for row in evidence] == seeds,
+                    "trial_success": bool(evidence) and all(
+                        row.get("success") is True and row.get("official_success") is True
+                        and int(row.get("action_steps") or 0) > 0 for row in evidence
+                    ),
+                }
+                reasons = {
+                    "schema": "unsupported_record", "metadata": "metadata_mismatch",
+                    "source_hash": "frozen_code_changed", "support_hash": "needs_revalidation",
+                    "contract_hash": "needs_revalidation", "seeds": "incomplete_evidence",
+                    "trial_seeds": "incomplete_evidence", "trial_success": "failed_evidence",
+                }
+                state = next((reasons[key] for key, ok in checks.items() if not ok), "ready")
+            except (OSError, ValueError, TypeError):
+                state = "invalid_record"
                 frozen_record = {}
-            evidence = frozen_record.get("trials", [])
-            frozen_valid = (
-                frozen_record.get("schema") == "frozen_source_program.v2"
-                and frozen_record.get("source_sha256") == _sha256_file(spec.frozen_path)
-                and frozen_record.get("support_code_sha256")
-                == _support_code_sha256(spec)
-                and frozen_record.get("environment_contract_sha256")
-                == _sha256_file(REPO_ROOT / "experiment_config.json")
-                and sorted(frozen_record.get("validated_seeds", []))
-                == sorted(load_experiment_contract()["source_program_validation"]["default_seeds"])
-                and [row.get("seed") for row in evidence] == frozen_record.get("validated_seeds")
-                and all(row.get("success") and row.get("official_success")
-                        and int(row.get("action_steps", 0)) > 0 for row in evidence)
-            )
+                evidence, checks = [], {}
+        frozen_valid = state == "ready"
         rows.append(
             {
                 "task_id": spec.task_id,
@@ -703,12 +733,58 @@ def source_program_status(specs: Iterable[SourceProgramSpec]) -> list[dict[str, 
                 "source_robot": spec.source_robot,
                 "candidate_status": static["status"],
                 "frozen": frozen_valid,
+                "freeze_status": state,
+                "failed_checks": [key for key, ok in checks.items() if not ok],
+                "recorded_passes": sum(
+                    row.get("success") is True and row.get("official_success") is True
+                    and int(row.get("action_steps") or 0) > 0 for row in evidence
+                ),
+                "recorded_trials": len(evidence),
                 "validated_seeds": (
                     frozen_record.get("validated_seeds", []) if frozen_valid else []
                 ),
             }
         )
     return rows
+
+
+def refresh_frozen_source_program(
+    spec: SourceProgramSpec,
+    *,
+    output_dir: Path,
+    obs_mode: str,
+    sim_backend: str,
+    render_backend: str,
+) -> dict[str, Any]:
+    """Revalidate exactly the frozen bytes, retaining old evidence on failure."""
+    record_path = spec.frozen_path.with_suffix(".json")
+    record = _read_json(record_path)
+    code = spec.frozen_path.read_bytes()
+    if record.get("source_sha256") != hashlib.sha256(code).hexdigest():
+        raise ValueError("Frozen code changed since validation; refusing to refresh it as the same source.")
+    task_dir = output_dir / spec.task_id
+    task_dir.mkdir(parents=True, exist_ok=False)
+    saved_record = task_dir / "previous_frozen_record.json"
+    shutil.copy2(record_path, saved_record)
+    snapshot = task_dir / "input_source.py"
+    snapshot.write_bytes(code)
+    snapshot_spec = replace(spec, candidate_path=snapshot)
+    policy = load_experiment_contract()["source_program_validation"]
+    validation = validate_source_program(
+        snapshot_spec, seeds=policy["default_seeds"], output_dir=output_dir,
+        obs_mode=obs_mode, sim_backend=sim_backend, render_backend=render_backend,
+        enforce_environment=True,
+    )
+    validation["provenance"] = record.get("provenance", {"kind": "frozen_source"})
+    validation["validation_origin"] = "frozen_source_refresh"
+    validation["previous_frozen_record"] = str(saved_record)
+    if validation.get("success"):
+        if spec.frozen_path.read_bytes() != code or record_path.read_bytes() != saved_record.read_bytes():
+            raise ValueError("Frozen source changed during revalidation; refusing to replace it.")
+        freeze_source_program(snapshot_spec, validation, minimum_seed_count=policy["minimum_seed_count"])
+        validation["frozen"] = True
+    _write_json(task_dir / "summary.json", validation)
+    return validation
 
 
 def _multi_seed_feedback(validation: Mapping[str, Any]) -> dict[str, Any]:

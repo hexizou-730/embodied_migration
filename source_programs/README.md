@@ -85,6 +85,27 @@ An older v1 frozen record is kept but is revalidated once before a v2 freeze is
 written. A two-seed smoke pass is **not** a freeze. Until remote simulation
 reports full passes, these remain candidates, not successful source programs.
 
+## Revalidate Frozen Code
+
+`source.py status` distinguishes `ready`, `needs_revalidation`, missing files,
+changed frozen code, and invalid evidence. `recorded_passes=10/10` describes
+the saved trials; `Currently ready` counts sources whose evidence matches the
+current runtime. A support-code hash mismatch does not mean those trials failed.
+
+If an existing freeze needs revalidation after a dependency/configuration update:
+
+```bash
+python source.py refresh
+```
+
+This foreground command checks every existing frozen code/record pair on all
+required seeds. It executes a snapshot of the frozen file, never a newer
+candidate, and makes no LLM requests. Only a full pass renews the freeze record.
+Old evidence is archived under `results/source_refresh/`; a failed refresh
+leaves the original code and record unchanged. Use `--tasks t01_push_cube` to
+revalidate just one source. Check `phase4_refresh` first if a previous background
+revalidation is still running; a completed refresh need not be repeated.
+
 ## Individual Tasks
 
 Validate the official candidates over all development seeds and freeze only

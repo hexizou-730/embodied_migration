@@ -50,8 +50,16 @@ def frozen_source_specs(
         selected = [by_id[task_id] for task_id in requested]
     invalid = [spec.task_id for spec in selected if not status[spec.task_id]["frozen"]]
     if invalid:
-        raise ValueError("Target migration accepts only valid frozen sources: " + ", ".join(invalid))
+        details = "; ".join(f"{task_id}: {status[task_id].get('freeze_status', 'not_frozen')}" for task_id in invalid)
+        raise ValueError("Target migration accepts only valid frozen sources: " + details)
     if not selected:
+        stale = [row["task_id"] for row in status.values() if row.get("freeze_status") == "needs_revalidation"]
+        if stale:
+            raise ValueError(
+                "Frozen sources need revalidation after dependency/config changes: "
+                + ", ".join(stale)
+                + ". Run python source.py refresh (same frozen code; no LLM repair)."
+            )
         raise ValueError("No valid frozen source programs are available.")
     return selected
 

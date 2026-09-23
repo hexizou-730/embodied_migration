@@ -27,6 +27,14 @@ def run(env, seed=None):
 
 
 class TargetPreparationTests(unittest.TestCase):
+    def test_no_valid_sources_reports_stale_evidence_with_refresh_command(self):
+        _, specs = load_source_program_catalog()
+        with patch("maniskill_backend.target_preparation.source_program_status", return_value=[{
+            "task_id": specs[0].task_id, "frozen": False, "freeze_status": "needs_revalidation",
+        }]):
+            with self.assertRaisesRegex(ValueError, r"python source.py refresh"):
+                frozen_source_specs(specs[:1])
+
     def test_selection_rejects_non_frozen_sources(self):
         _, specs = load_source_program_catalog()
         rows = [

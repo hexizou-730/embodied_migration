@@ -145,6 +145,12 @@ problems, and runtime/API problems. Historical v1 freeze records are preserved
 but require revalidation for the new, evidence-checked v2 format. See
 [`source_programs/README.md`](source_programs/README.md) for remote instructions.
 
+`source.py status` reports historical passes separately from current freeze
+validity. A `needs_revalidation` status means dependency/configuration evidence
+is stale, not that the recorded physical trials failed. `python source.py refresh`
+revalidates the exact frozen code on all required seeds, without LLM calls or
+candidate repair; failed refreshes retain the original frozen code and evidence.
+
 ## Target Migration
 
 Phase 5 consumes only valid frozen sources; it never regenerates or edits them.
