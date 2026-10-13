@@ -49,8 +49,24 @@ class GenerationStabilityTests(unittest.TestCase):
                     "target_action_steps": repetition * 10,
                     "total_tokens": repetition * 100,
                     "llm_cost_usd": repetition / 100,
+                    "llm_calls": repetition,
+                    "accepted_candidates": 1,
+                    "rejected_candidates": max(0, repetition - 1),
                 },
             }
+            adapter = Path(config["output_dir"], "target_adapter.py")
+            adapter.write_text(f"# adapter {repetition}\n")
+            details = Path(config["output_dir"], "dynamic_summary.json")
+            details.write_text(json.dumps({
+                "target_result": {
+                    "official_success": success,
+                    "action_steps": repetition * 10,
+                    "failure_diagnosis": {"reason": "no_contact"},
+                },
+                "target_cycles": [{"model": "test/model"}],
+            }))
+            result["target_adapter"] = str(adapter)
+            result["details"] = str(details)
             Path(config["output_dir"], "worker_result.json").write_text(json.dumps(result))
             return 0, False
 
@@ -68,6 +84,11 @@ class GenerationStabilityTests(unittest.TestCase):
         self.assertEqual(result["total_tokens"], 600)
         self.assertEqual(result["total_llm_cost_usd"], 0.06)
         self.assertEqual(saved["mean_cycles_to_success"], 2.0)
+        self.assertTrue(saved["results"][0]["official_success"])
+        self.assertFalse(saved["results"][1]["official_success"])
+        self.assertEqual(saved["results"][1]["failure_reason"], "no_contact")
+        self.assertEqual(saved["results"][0]["models"], ["test/model"])
+        self.assertEqual(len(saved["results"][0]["adapter_sha256"]), 64)
         self.assertEqual(run_worker.call_count, 3)
         worker_dirs = [Path(call.args[0][-1]).parent.name for call in run_worker.call_args_list]
         self.assertEqual(worker_dirs, ["repetition_001", "repetition_002", "repetition_003"])

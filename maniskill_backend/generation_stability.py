@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -106,6 +107,7 @@ def run_generation_stability(plan: Mapping[str, Any], output_dir: Path) -> dict[
             "details": worker_result.get("details"),
             "target_adapter": worker_result.get("target_adapter"),
         }
+        row.update(_evidence_fields(worker_result))
         summary["results"].append(row)
         summary["current_repetition"] = None
         _checkpoint(output_dir, summary)
@@ -116,6 +118,18 @@ def run_generation_stability(plan: Mapping[str, Any], output_dir: Path) -> dict[
         )
 
     summary.update(state="complete", complete=True, current_repetition=None)
+    _checkpoint(output_dir, summary)
+    return summary
+
+
+def refresh_generation_stability_summary(output_dir: Path) -> dict[str, Any]:
+    """Rebuild compact evidence fields from completed worker artifacts."""
+
+    summary = _read_json(output_dir / "summary.json")
+    for row in summary.get("results", []):
+        result_path = Path(str(row.get("result") or ""))
+        if result_path.is_file():
+            row.update(_evidence_fields(_read_json(result_path)))
     _checkpoint(output_dir, summary)
     return summary
 
@@ -156,12 +170,13 @@ def _write_markdown(path: Path, summary: Mapping[str, Any]) -> None:
         f"- total tokens: `{summary.get('total_tokens', 0)}`",
         f"- total LLM cost: `${float(summary.get('total_llm_cost_usd') or 0.0):.6f}`",
         "",
-        "| repetition | success | status | cycles | repairs | actions | tokens | cost USD |",
-        "|---:|---|---|---:|---:|---:|---:|---:|",
+        "| repetition | success | official | status | cycles | repairs | actions | tokens | cost USD |",
+        "|---:|---|---|---|---:|---:|---:|---:|---:|",
     ]
     for row in summary.get("results", []):
         lines.append(
-            f"| {row['repetition']} | {row['success']} | {row['status']} | "
+            f"| {row['repetition']} | {row['success']} | {row.get('official_success')} | "
+            f"{row['status']} | "
             f"{row['generation_cycles']} | {row['repair_cycles']} | "
             f"{row['target_action_steps']} | {row['total_tokens']} | "
             f"{row['llm_cost_usd']:.6f} |"
@@ -170,7 +185,40 @@ def _write_markdown(path: Path, summary: Mapping[str, Any]) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _evidence_fields(worker_result: Mapping[str, Any]) -> dict[str, Any]:
+    details_path = Path(str(worker_result.get("details") or ""))
+    details = _read_json(details_path) if details_path.is_file() else {}
+    target_result = details.get("target_result")
+    target_result = target_result if isinstance(target_result, Mapping) else {}
+    adapter_path = Path(str(worker_result.get("target_adapter") or ""))
+    adapter_sha256 = None
+    if adapter_path.is_file():
+        adapter_sha256 = hashlib.sha256(adapter_path.read_bytes()).hexdigest()
+    cycles = details.get("target_cycles")
+    cycles = cycles if isinstance(cycles, list) else []
+    models = sorted(
+        {
+            str(cycle.get("model"))
+            for cycle in cycles
+            if isinstance(cycle, Mapping) and cycle.get("model")
+        }
+    )
+    metrics = worker_result.get("metrics")
+    metrics = metrics if isinstance(metrics, Mapping) else {}
+    diagnosis = target_result.get("failure_diagnosis")
+    diagnosis = diagnosis if isinstance(diagnosis, Mapping) else {}
+    return {
+        "official_success": bool(target_result.get("official_success")),
+        "final_trial_action_steps": int(target_result.get("action_steps") or 0),
+        "adapter_sha256": adapter_sha256,
+        "models": models,
+        "llm_calls": int(metrics.get("llm_calls") or 0),
+        "accepted_candidates": int(metrics.get("accepted_candidates") or 0),
+        "rejected_candidates": int(metrics.get("rejected_candidates") or 0),
+        "failure_reason": None if worker_result.get("success") else diagnosis.get("reason"),
+    }
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, dict) else {}
-
