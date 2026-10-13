@@ -27,6 +27,7 @@
 | `source.py` | 准备源程序、多 seed 验证、冻结及复验 |
 | `target.py` | 只使用有效冻结源程序，批量迁移到一个目标机器人 |
 | `migrate.py` | 输入自己的源代码文件，进行单任务迁移 |
+| `accept.py` | 运行一个真实迁移并自动检查端到端证据 |
 
 单文件迁移，不需要在任务目录中注册：
 
@@ -69,11 +70,15 @@ python source.py refresh --tasks t01_push_cube
 此命令前台运行，只复验原冻结代码，不调用 LLM、不修改动作策略。确认 `t01_push_cube` 为 `ready` 后，先跑一个目标迁移：
 
 ```bash
-python target.py migrate xarm6 --tasks t01_push_cube --background
-python target.py status xarm6
+python accept.py xarm6 --task t01_push_cube
 ```
 
-`--background` 可在 SSH 断开后继续。默认使用 seed 0、最多 5 轮目标代码生成；成功后再扩展到其余四个已验证源任务。更多源端操作见 [source_programs/README.md](source_programs/README.md)。
+验收只有在目标代码经过至少一轮生成、执行了真实 action、官方成功为
+True，且 Adapter、运行环境、manifest 和哈希证据齐全时才会输出 `PASS`。
+失败也会生成 `acceptance_report.json`，列出缺失条件。默认使用 seed 0、
+最多 5 轮目标代码生成；通过后再扩展到其余四个已验证源任务。批量迁移
+仍使用 `target.py ... --background`。更多源端操作见
+[source_programs/README.md](source_programs/README.md)。
 
 ## 运行机制
 
