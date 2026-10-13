@@ -180,6 +180,30 @@ def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobo
         self.assertEqual(diagnosis["evidence"]["entity"], "ball")
         self.assertTrue(diagnosis["evidence"]["fell_below_workspace"])
 
+    def test_diagnosis_detects_tcp_motion_without_object_contact(self) -> None:
+        diagnosis = _dynamic_diagnosis(
+            {
+                "success": False,
+                "code_ok": True,
+                "action_steps": 299,
+                "state_trace": [
+                    {
+                        "step": 0,
+                        "tcp": [[-0.018, 0.026, 0.155]],
+                        "entities": {"obj": [[-0.001, 0.054, 0.02]]},
+                    },
+                    {
+                        "step": 299,
+                        "tcp": [[0.075, 0.053, 0.022]],
+                        "entities": {"obj": [[-0.001, 0.054, 0.02]]},
+                    },
+                ],
+            }
+        )
+        self.assertEqual(diagnosis["reason"], "contact_not_established")
+        self.assertGreater(diagnosis["evidence"]["tcp_displacement_m"], 0.03)
+        self.assertEqual(diagnosis["evidence"]["object_displacement_m"], 0.0)
+
     def test_official_success_termination_is_not_reported_as_runtime_failure(self) -> None:
         env = _FakeEnv()
         succeeded = False

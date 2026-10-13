@@ -1268,6 +1268,19 @@ def _dynamic_diagnosis(result: Mapping[str, Any]) -> Dict[str, Any]:
                 "large. Do not repeat one long open-loop push."
             ),
         }
+    stalled_contact = _stalled_contact_evidence(result)
+    if stalled_contact is not None:
+        return {
+            "layer": "contact_geometry",
+            "reason": "contact_not_established",
+            "evidence": stalled_contact,
+            "repair_hint": (
+                "The TCP moved substantially but the manipulated object did not. Do not add "
+                "more steps or repeat the same waypoint. Change the contact side or height, "
+                "verify object motion after a short action pulse, and use a grasp-and-place "
+                "strategy when the observed target gripper supports it."
+            ),
+        }
     if result.get("truncated"):
         return {
             "layer": "skill_adapter",
@@ -1325,6 +1338,64 @@ def _escaped_object_evidence(result: Mapping[str, Any]) -> Dict[str, Any] | None
                 }
             )
     return max(evidence, key=lambda item: item["displacement_m"]) if evidence else None
+
+
+def _stalled_contact_evidence(result: Mapping[str, Any]) -> Dict[str, Any] | None:
+    """Detect substantial TCP motion without corresponding manipulated-object motion."""
+
+    if int(result.get("action_steps") or 0) < 30:
+        return None
+    trace = result.get("state_trace")
+    if not isinstance(trace, list) or len(trace) < 2:
+        return None
+    first = trace[0] if isinstance(trace[0], Mapping) else {}
+    last = trace[-1] if isinstance(trace[-1], Mapping) else {}
+    try:
+        tcp_initial = np.asarray(first.get("tcp"), dtype=np.float64).reshape(-1)[:3]
+        tcp_final = np.asarray(last.get("tcp"), dtype=np.float64).reshape(-1)[:3]
+    except (TypeError, ValueError):
+        return None
+    if tcp_initial.size < 3 or tcp_final.size < 3:
+        return None
+    tcp_displacement = float(np.linalg.norm(tcp_final - tcp_initial))
+    if tcp_displacement < 0.03:
+        return None
+
+    first_entities = first.get("entities")
+    last_entities = last.get("entities")
+    if not isinstance(first_entities, Mapping) or not isinstance(last_entities, Mapping):
+        return None
+    preferred = ("obj", "object", "cube", "ball", "sphere", "peg", "ycb")
+    candidates = [
+        name
+        for name in sorted(set(first_entities) & set(last_entities))
+        if any(token in str(name).lower() for token in preferred)
+        and not any(token in str(name).lower() for token in ("goal", "target", "region", "site"))
+    ]
+    evidence = []
+    for name in candidates:
+        try:
+            initial = np.asarray(first_entities[name], dtype=np.float64).reshape(-1)[:3]
+            final = np.asarray(last_entities[name], dtype=np.float64).reshape(-1)[:3]
+        except (TypeError, ValueError):
+            continue
+        if initial.size < 3 or final.size < 3:
+            continue
+        displacement = float(np.linalg.norm(final - initial))
+        if displacement > 0.005:
+            continue
+        evidence.append(
+            {
+                "entity": str(name),
+                "action_steps": int(result.get("action_steps") or 0),
+                "tcp_displacement_m": round(tcp_displacement, 5),
+                "object_displacement_m": round(displacement, 5),
+                "final_tcp_object_xy_m": round(float(np.linalg.norm(tcp_final[:2] - final[:2])), 5),
+                "initial_position": np.round(initial, 5).tolist(),
+                "final_position": np.round(final, 5).tolist(),
+            }
+        )
+    return min(evidence, key=lambda item: item["object_displacement_m"]) if evidence else None
 
 
 def _read_tcp(agent: Any) -> Any:
