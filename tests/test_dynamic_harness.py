@@ -14,8 +14,12 @@ import numpy as np
 from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
 from maniskill_backend.dynamic_harness import (
     DynamicMigrationSpec,
+    _candidate_quality,
     _dynamic_diagnosis,
+    _is_better_candidate,
     _prompt_trial,
+    _repair_scope,
+    _validate_local_repair,
     extract_task_program,
     looks_like_env_id,
     read_source_actions,
@@ -85,6 +89,63 @@ class _FakeEnv:
 
 
 class DynamicHarnessTests(unittest.TestCase):
+    def test_candidate_quality_prefers_physical_progress_and_success(self) -> None:
+        program_error = _candidate_quality(
+            {
+                "success": False,
+                "code_ok": False,
+                "action_steps": 0,
+                "failure_diagnosis": {"reason": "pre_action_execution_error"},
+            }
+        )
+        contact = _candidate_quality(
+            {
+                "success": False,
+                "code_ok": True,
+                "action_steps": 12,
+                "failure_diagnosis": {"reason": "contact_not_established"},
+            }
+        )
+        success = _candidate_quality(
+            {
+                "success": True,
+                "official_success": True,
+                "code_ok": True,
+                "action_steps": 50,
+            }
+        )
+        self.assertTrue(_is_better_candidate(contact, program_error))
+        self.assertTrue(_is_better_candidate(success, contact))
+        self.assertFalse(_is_better_candidate(program_error, success))
+
+    def test_contact_diagnosis_creates_local_repair_scope(self) -> None:
+        scope = _repair_scope(
+            {"failure_diagnosis": {"reason": "contact_not_established"}}
+        )
+        self.assertEqual(scope["name"], "contact_geometry")
+        self.assertIn("contact side", scope["may_change"])
+        self.assertIn("controller/action mapping", scope["must_preserve"])
+
+    def test_local_repair_preserves_public_api_and_action_mapping(self) -> None:
+        repaired = TARGET_CODE.replace("range(2)", "range(3)")
+        _validate_local_repair(
+            TARGET_CODE,
+            repaired,
+            repair_scope={"name": "contact_geometry"},
+        )
+        changed_mapping = TARGET_CODE.replace(
+            "class GeneratedRobot(ManiSkillDynamicRobot):\n",
+            "class GeneratedRobot(ManiSkillDynamicRobot):\n"
+            "    def _make_action(self, delta_xyz, *, gripper=0.0):\n"
+            "        return super()._make_action(delta_xyz, gripper=gripper)\n\n",
+        )
+        with self.assertRaisesRegex(ValueError, "controller/action-mapping"):
+            _validate_local_repair(
+                TARGET_CODE,
+                changed_mapping,
+                repair_scope={"name": "contact_geometry"},
+            )
+
     def test_generated_loop_without_new_actions_is_interrupted(self) -> None:
         code = '''
 from typing import Any
@@ -746,12 +807,73 @@ def build_robot(env, *, control_mode, robot_uid):
         self.assertIn("Unknown task entity 'cube'", second_prompt)
         self.assertIn('"action_steps": 0', second_prompt)
         self.assertIn('"step": 0', second_prompt)
-        self.assertIn("Current failed target adapter", second_prompt)
+        self.assertIn("Current best target adapter", second_prompt)
         self.assertIn("class GeneratedRobot", second_prompt)
         first, second = result["target_cycles"]
         self.assertNotEqual(first["semantic_sha256"], second["semantic_sha256"])
         self.assertTrue(second["changed_from_previous"])
         self.assertEqual(second["trial"]["action_steps"], 1)
+
+    @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
+    @patch("maniskill_backend.dynamic_harness.discover_environment")
+    @patch("maniskill_backend.dynamic_harness.gen_text")
+    def test_worse_target_candidate_does_not_replace_incumbent(
+        self,
+        generate,
+        discover,
+        run_trial,
+    ) -> None:
+        worse = TARGET_CODE.replace("range(2)", "range(3)")
+        generate.side_effect = [
+            LLMTextResult(TARGET_CODE, True, "test-model", raw_text=TARGET_CODE),
+            LLMTextResult(worse, True, "test-model", raw_text=worse),
+        ]
+        discover.side_effect = [
+            {"robot_uid": "panda", "action_space": {"shape": [4]}},
+            {"robot_uid": "fetch", "action_space": {"shape": [9]}},
+        ]
+        run_trial.side_effect = [
+            {"success": True, "message": "supplied source success"},
+            {
+                "success": False,
+                "message": "goal not reached",
+                "code_ok": True,
+                "action_steps": 50,
+                "failure_diagnosis": {"reason": "official_task_outcome_not_reached"},
+            },
+            {
+                "success": False,
+                "message": "object escaped",
+                "code_ok": True,
+                "action_steps": 10,
+                "failure_diagnosis": {"reason": "manipulated_object_left_workspace"},
+            },
+        ]
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1",
+            task_label="TurnFaucet-v1",
+            source_robot="panda",
+            target_robot="fetch",
+            max_target_cycles=2,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "source.py"
+            source_path.write_text(SOURCE_CODE, encoding="utf-8")
+            result = run_dynamic_agent_migration(
+                spec=spec,
+                run_dir=root / "run",
+                source_actions=read_source_actions(source_path),
+            )
+            accepted_code = (root / "run/dynamic_artifacts/target_adapter.py").read_text()
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["incumbent_cycle"], 1)
+        self.assertEqual(accepted_code.strip(), TARGET_CODE.strip())
+        self.assertTrue(result["target_cycles"][0]["accepted_as_incumbent"])
+        self.assertFalse(result["target_cycles"][1]["accepted_as_incumbent"])
+        self.assertEqual(result["metrics"]["accepted_candidates"], 1)
+        self.assertEqual(result["metrics"]["rejected_candidates"], 1)
 
     @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
     @patch("maniskill_backend.dynamic_harness.discover_environment")

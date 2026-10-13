@@ -52,6 +52,24 @@ _STATE_CALLS = {
 _TRUSTED_ACTION_HELPERS = {"_move_towards", "_repeat_action"}
 _MAX_GENERATED_LINES_WITHOUT_ACTION = 2_000
 _MAX_GENERATED_SECONDS_WITHOUT_ACTION = 5.0
+_LOCAL_REPAIR_PROTECTED_METHODS = {
+    "_make_action",
+    "_validate_action_space",
+    "_world_delta_to_action_delta",
+}
+
+_DIAGNOSIS_PROGRESS_RANK = {
+    "environment_or_generated_module_error": 0,
+    "pre_action_execution_error": 5,
+    "semantic_entity_name_mismatch": 6,
+    "high_level_program_execution_error": 8,
+    "no_action_progress_loop": 10,
+    "manipulated_object_left_workspace": 20,
+    "contact_not_established": 40,
+    "episode_budget_exhausted": 45,
+    "official_task_outcome_not_reached": 60,
+    "adapter_claimed_success_without_official_success": 65,
+}
 
 
 def _success_from_ret_val(ret_val: Any) -> bool:
@@ -751,6 +769,10 @@ def run_dynamic_agent_migration(
                 program=program,
                 adapter_path=candidate_path,
             )
+            if not trial.get("success") and not isinstance(
+                trial.get("failure_diagnosis"), Mapping
+            ):
+                trial["failure_diagnosis"] = _dynamic_diagnosis(trial)
             trial_path = cycle_dir / "trial_result.json"
             _write_json(trial_path, trial)
             record.update(
@@ -797,8 +819,13 @@ def run_dynamic_agent_migration(
         return payload
 
     target_cycles = []
-    target_code = ""
-    target_result: Dict[str, Any] = {}
+    incumbent_code = ""
+    incumbent_result: Dict[str, Any] = {}
+    incumbent_quality: Dict[str, Any] | None = None
+    incumbent_cycle: int | None = None
+    latest_code = ""
+    latest_result: Dict[str, Any] = {}
+    seen_target_semantics: set[str] = set()
     target_success = False
     target_status = "target_budget_exhausted"
     for cycle in range(1, spec.max_target_cycles + 1):
@@ -806,6 +833,8 @@ def run_dynamic_agent_migration(
         cycle_dir = run_dir / f"target_cycle_{cycle:02d}"
         cycle_dir.mkdir(parents=True, exist_ok=True)
         system_prompt = _dynamic_system_prompt(source=False)
+        repair_focus = incumbent_result or latest_result
+        repair_scope = _repair_scope(repair_focus)
         user_prompt = _target_prompt(
             spec,
             source_observation,
@@ -813,8 +842,11 @@ def run_dynamic_agent_migration(
             frozen_program,
             source_code,
             source_result,
-            target_code,
-            target_result,
+            incumbent_code,
+            incumbent_result,
+            latest_code=latest_code if latest_code != incumbent_code else "",
+            latest_result=latest_result if latest_code != incumbent_code else {},
+            repair_scope=repair_scope,
         )
         system_prompt_path = cycle_dir / "system_prompt.txt"
         user_prompt_path = cycle_dir / "user_prompt.txt"
@@ -824,8 +856,9 @@ def run_dynamic_agent_migration(
             generated = gen_text(system=system_prompt, prompt=user_prompt, fallback_text="")
         except Exception as exc:
             target_status = "llm_request_failed"
-            target_result = {"success": False, "message": f"LLM request failed: {type(exc).__name__}"}
-            record = {"cycle": cycle, "valid": False, "error": target_result["message"],
+            latest_result = {"success": False, "message": f"LLM request failed: {type(exc).__name__}"}
+            record = {"cycle": cycle, "valid": False, "error": latest_result["message"],
+                      "repair_scope": repair_scope,
                       "system_prompt": str(system_prompt_path), "user_prompt": str(user_prompt_path)}
             _write_json(cycle_dir / "cycle_record.json", record)
             target_cycles.append(record)
@@ -839,33 +872,45 @@ def run_dynamic_agent_migration(
             "system_prompt": str(system_prompt_path),
             "user_prompt": str(user_prompt_path),
             "prompt_sha256": _sha256_text(system_prompt + "\n" + user_prompt),
+            "repair_scope": repair_scope,
+            "incumbent_cycle_before": incumbent_cycle,
         }
         (cycle_dir / "llm_response.txt").write_text(generated.raw_text or generated.text, encoding="utf-8")
         if not generated.used_llm:
             target_status = "llm_unavailable"
             record["error"] = generated.reason or "LLM unavailable"
-            target_result = {"success": False, "message": record["error"]}
+            latest_result = {"success": False, "message": record["error"]}
             _write_json(cycle_dir / "cycle_record.json", record)
             target_cycles.append(record)
             break
+        candidate = ""
         try:
             candidate = extract_python_module(generated.text)
             candidate_path = cycle_dir / "target_adapter.py"
             candidate_path.write_text(candidate.rstrip() + "\n", encoding="utf-8")
+            semantic_sha256 = _semantic_code_sha256(candidate)
             record.update(
                 adapter=str(candidate_path),
                 adapter_sha256=_sha256_text(candidate.rstrip() + "\n"),
-                semantic_sha256=_semantic_code_sha256(candidate),
+                semantic_sha256=semantic_sha256,
             )
-            previous_code = target_code
-            if previous_code and _semantic_code_sha256(candidate) == _semantic_code_sha256(previous_code):
+            previous_code = incumbent_code or latest_code
+            if semantic_sha256 in seen_target_semantics:
                 raise ValueError(
-                    "Generated target adapter is semantically unchanged from the failed adapter; "
-                    "formatting, comments, or docstrings do not count as a repair."
+                    "Generated target adapter repeats a previously tested candidate and is "
+                    "semantically unchanged; formatting, comments, or docstrings do not count "
+                    "as a repair."
                 )
+            seen_target_semantics.add(semantic_sha256)
             record["changed_from_previous"] = bool(previous_code)
-            target_code = candidate
+            record["changed_from_incumbent"] = bool(incumbent_code)
             validate_dynamic_adapter(candidate, task_program=frozen_program, require_program_constant=False)
+            if incumbent_code:
+                _validate_local_repair(
+                    incumbent_code,
+                    candidate,
+                    repair_scope=repair_scope,
+                )
             report(f"Target round {cycle}: running generated code ({generated.model})...")
             trial = run_dynamic_trial(
                 spec=spec,
@@ -874,22 +919,52 @@ def run_dynamic_agent_migration(
                 program=frozen_program,
                 adapter_path=candidate_path,
             )
+            if not trial.get("success") and not isinstance(
+                trial.get("failure_diagnosis"), Mapping
+            ):
+                trial["failure_diagnosis"] = _dynamic_diagnosis(trial)
             trial_path = cycle_dir / "trial_result.json"
             _write_json(trial_path, trial)
-            record.update(valid=True, trial_result=str(trial_path), trial=trial)
-            target_code, target_result = candidate, trial
-            target_result.pop("implementation_context", None)
-            (artifacts / "target_adapter.py").write_text(candidate.rstrip() + "\n", encoding="utf-8")
+            trial.pop("implementation_context", None)
+            quality = _candidate_quality(trial)
+            accepted = _is_better_candidate(quality, incumbent_quality)
+            record.update(
+                valid=True,
+                trial_result=str(trial_path),
+                trial=trial,
+                candidate_quality=quality,
+                accepted_as_incumbent=accepted,
+            )
+            latest_code, latest_result = candidate, trial
+            if accepted:
+                incumbent_code = candidate
+                incumbent_result = trial
+                incumbent_quality = quality
+                incumbent_cycle = cycle
+                (artifacts / "target_adapter.py").write_text(
+                    candidate.rstrip() + "\n", encoding="utf-8"
+                )
+            else:
+                record["rejection_reason"] = "candidate did not improve the incumbent quality"
             if trial.get("success"):
                 target_success = True
         except Exception as exc:
             record.update(valid=False, error=repr(exc))
-            target_result = {"success": False, "message": repr(exc)}
+            latest_code = candidate
+            latest_result = {"success": False, "message": repr(exc)}
+        record["incumbent_cycle_after"] = incumbent_cycle
+        record["incumbent_quality_after"] = incumbent_quality
         _write_json(cycle_dir / "cycle_record.json", record)
         target_cycles.append(record)
-        report(f"Target round {cycle}: success={target_success}; {target_result.get('message', '')[:180]}")
+        report(
+            f"Target round {cycle}: success={target_success}; "
+            f"accepted={record.get('accepted_as_incumbent', False)}; "
+            f"{latest_result.get('message', '')[:150]}"
+        )
         if target_success:
             break
+
+    target_result = incumbent_result or latest_result
 
     artifact_hashes = {
         name: _sha256_file(path) if path.is_file() else None
@@ -905,6 +980,8 @@ def run_dynamic_agent_migration(
         "success": target_success,
         "source_cycles": len(source_cycles),
         "target_cycles": len(target_cycles),
+        "incumbent_cycle": incumbent_cycle,
+        "incumbent_quality": incumbent_quality,
         "artifact_sha256": artifact_hashes,
         "metrics": metrics,
     }
@@ -931,6 +1008,8 @@ def run_dynamic_agent_migration(
         "target_cycles": target_cycles,
         "source_result": source_result,
         "target_result": target_result,
+        "incumbent_cycle": incumbent_cycle,
+        "incumbent_quality": incumbent_quality,
         "metrics": metrics,
     }
     _write_dynamic_summary(run_dir, payload)
@@ -950,6 +1029,7 @@ def _migration_metrics(
     )
     cost = sum(float((row.get("usage") or {}).get("cost") or 0.0) for row in calls)
     executed = [row for row in target_cycles if isinstance(row.get("trial"), Mapping)]
+    accepted = [row for row in executed if row.get("accepted_as_incumbent") is True]
     return {
         "generation_cycles": len(target_cycles),
         "repair_cycles": max(0, len(target_cycles) - 1),
@@ -962,6 +1042,8 @@ def _migration_metrics(
             int((row.get("trial") or {}).get("action_steps") or 0) for row in source_cycles
         ),
         "target_trials": len(executed),
+        "accepted_candidates": len(accepted),
+        "rejected_candidates": len(executed) - len(accepted),
         "target_action_steps": sum(
             int((row.get("trial") or {}).get("action_steps") or 0) for row in executed
         ),
@@ -1056,6 +1138,158 @@ Latest source execution result, if any:
 """
 
 
+def _candidate_quality(result: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return a deterministic, lexicographically comparable candidate score."""
+
+    diagnosis = result.get("failure_diagnosis")
+    diagnosis = diagnosis if isinstance(diagnosis, Mapping) else {}
+    reason = str(diagnosis.get("reason") or "")
+    action_steps = int(result.get("action_steps") or 0)
+    code_ok = bool(result.get("code_ok", True))
+    official = bool(result.get("official_success"))
+    success = bool(result.get("success"))
+    unsafe = reason in {
+        "environment_or_generated_module_error",
+        "manipulated_object_left_workspace",
+    }
+    evaluation = result.get("official_evaluation")
+    true_signals = 0
+    if isinstance(evaluation, Mapping):
+        true_signals = sum(
+            1
+            for key, value in evaluation.items()
+            if str(key) != "success" and isinstance(value, bool) and value
+        )
+    progress_rank = _DIAGNOSIS_PROGRESS_RANK.get(reason, 30 if code_ok else 0)
+    rank = [
+        int(success),
+        int(official),
+        int(code_ok),
+        int(action_steps > 0),
+        int(not unsafe),
+        progress_rank,
+        true_signals,
+        -action_steps,
+    ]
+    return {
+        "rank": rank,
+        "success": success,
+        "official_success": official,
+        "code_ok": code_ok,
+        "acted": action_steps > 0,
+        "constraint_safe": not unsafe,
+        "diagnosis_reason": reason or None,
+        "official_true_signals": true_signals,
+        "action_steps": action_steps,
+    }
+
+
+def _is_better_candidate(
+    candidate: Mapping[str, Any],
+    incumbent: Mapping[str, Any] | None,
+) -> bool:
+    if incumbent is None:
+        return True
+    return tuple(candidate.get("rank") or ()) > tuple(incumbent.get("rank") or ())
+
+
+def _repair_scope(result: Mapping[str, Any]) -> Dict[str, Any]:
+    """Map a physical failure to the smallest useful code-editing neighborhood."""
+
+    diagnosis = result.get("failure_diagnosis")
+    diagnosis = diagnosis if isinstance(diagnosis, Mapping) else {}
+    reason = str(diagnosis.get("reason") or "")
+    if not result:
+        name = "initial_generation"
+        may_change = "Create the complete target task skill and target action mapping."
+    elif reason in {
+        "environment_or_generated_module_error",
+        "pre_action_execution_error",
+        "semantic_entity_name_mismatch",
+        "high_level_program_execution_error",
+    }:
+        name = "api_and_execution"
+        may_change = "Fix imports, entity names, dimensions, API calls, and the failing statement."
+    elif reason == "contact_not_established":
+        name = "contact_geometry"
+        may_change = (
+            "Change only contact side, contact height/offset, short contact pulses, and "
+            "state checks inside the task skill or its private motion helpers."
+        )
+    elif reason == "manipulated_object_left_workspace":
+        name = "contact_safety"
+        may_change = (
+            "Reduce and stage contact commands, add overshoot guards, and reposition safely."
+        )
+    elif reason in {"no_action_progress_loop", "episode_budget_exhausted"}:
+        name = "control_flow_and_budget"
+        may_change = (
+            "Change bounded loop exits, progress guards, waypoint budgets, and stalled-stage recovery."
+        )
+    elif reason in {
+        "adapter_claimed_success_without_official_success",
+        "official_task_outcome_not_reached",
+    }:
+        name = "task_completion"
+        may_change = (
+            "Change only the unfinished physical task stage and its measured completion guards."
+        )
+    else:
+        name = "skill_policy"
+        may_change = "Change the failed task-skill motion while preserving working interfaces."
+    return {
+        "name": name,
+        "diagnosis_reason": reason or None,
+        "may_change": may_change,
+        "must_preserve": (
+            "Keep the frozen high-level program, public skill signatures, controller/action "
+            "mapping, simulator, official success signal, and unrelated working stages unchanged."
+        ),
+    }
+
+
+def _method_contracts(code: str) -> tuple[Dict[str, str], Dict[str, str]]:
+    tree = ast.parse(code)
+    public: Dict[str, str] = {}
+    protected: Dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for item in node.body:
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            key = f"{node.name}.{item.name}"
+            if not item.name.startswith("_"):
+                public[key] = ast.dump(item.args, include_attributes=False)
+            if item.name in _LOCAL_REPAIR_PROTECTED_METHODS:
+                protected[key] = ast.dump(item, include_attributes=False)
+    return public, protected
+
+
+def _validate_local_repair(
+    incumbent_code: str,
+    candidate_code: str,
+    *,
+    repair_scope: Mapping[str, Any],
+) -> None:
+    """Reject broad rewrites when the diagnosis calls for a local policy repair."""
+
+    if repair_scope.get("name") in {"initial_generation", "api_and_execution"}:
+        return
+    incumbent_public, incumbent_protected = _method_contracts(incumbent_code)
+    candidate_public, candidate_protected = _method_contracts(candidate_code)
+    if candidate_public != incumbent_public:
+        raise ValueError(
+            "Local repair changed public task-skill methods or signatures; preserve the "
+            "incumbent API and modify only the diagnosed policy region."
+        )
+    if candidate_protected != incumbent_protected:
+        raise ValueError(
+            "Local repair changed controller/action-mapping methods; preserve _make_action, "
+            "_validate_action_space, and _world_delta_to_action_delta."
+        )
+
+
 def _target_prompt(
     spec: DynamicMigrationSpec,
     source_observation: Mapping[str, Any],
@@ -1063,8 +1297,12 @@ def _target_prompt(
     program: str,
     source_code: str,
     source_result: Mapping[str, Any],
-    current_code: str,
+    incumbent_code: str,
+    incumbent_result: Mapping[str, Any],
+    *,
+    latest_code: str,
     latest_result: Mapping[str, Any],
+    repair_scope: Mapping[str, Any],
 ) -> str:
     return f"""Migrate the frozen source program to the target robot by writing only the target adapter.
 
@@ -1114,16 +1352,30 @@ Required target module contract:
 
 {_action_api_contract()}
 
-Current failed target adapter, if any:
+Current best target adapter (the incumbent). Preserve it unless the candidate improves it:
 ```python
-{_trim(current_code, 18000)}
+{_trim(incumbent_code, 18000)}
 ```
 
-Latest target execution, including measured state_trace sampled during execution:
+Incumbent execution evidence:
+{_pretty(_prompt_trial(incumbent_result))}
+
+Latest rejected or invalid candidate, if different from the incumbent:
+```python
+{_trim(latest_code, 10000)}
+```
+
+Latest rejected candidate evidence:
 {_pretty(_prompt_trial(latest_result))}
 
+Allowed local repair scope for this round:
+{_pretty(repair_scope)}
+
 Repair requirement for this round:
-- Fix the concrete failure shown above before tuning later motion stages.
+- Return a complete module, but make the smallest semantic change inside the allowed scope.
+- Fix the concrete diagnosed failure before tuning later motion stages.
+- Preserve the incumbent public method signatures and controller/action-mapping methods.
+- Do not repeat the latest rejected change.
 - Make a semantic code change; formatting, comments, or docstrings alone are rejected.
 - If action_steps is 0, remove the reported pre-action exception so the candidate reaches self._step(action).
 """
@@ -1550,14 +1802,16 @@ def _write_dynamic_summary(run_dir: Path, payload: Mapping[str, Any]) -> None:
             "",
             "## Target cycles",
             "",
-            "| cycle | model | valid | official success | action steps | adapter sha | message |",
-            "|---:|---|---|---|---:|---|---|",
+            "| cycle | model | valid | accepted | repair scope | official success | action steps | adapter sha | message |",
+            "|---:|---|---|---|---|---|---:|---|---|",
         ]
     )
     for item in payload.get("target_cycles") or []:
         trial = item.get("trial") or {}
         lines.append(
             f"| {item.get('cycle')} | {item.get('model')} | {item.get('valid')} | "
+            f"{item.get('accepted_as_incumbent')} | "
+            f"{(item.get('repair_scope') or {}).get('name')} | "
             f"{trial.get('official_success')} | {trial.get('action_steps')} | "
             f"{str(item.get('adapter_sha256') or '')[:12]} | "
             f"{str(trial.get('message') or item.get('error') or '').replace('|', '/') } |"

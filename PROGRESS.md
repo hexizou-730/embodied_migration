@@ -13,6 +13,8 @@
 4. 冻结 `t01_push_cube` 的 Panda 源程序，开发 seeds 0-9 全部通过。
 5. 完成一例 Panda 到 xArm6 的目标迁移回归。LLM 生成的 Adapter 在 seed 0
    执行 294 个动作，返回成功，ManiSkill 官方 `success=True`。
+6. 实现最佳候选保存与局部修复：候选只有评分提高才替换 incumbent；诊断结果
+   限制本轮可修改区域，公共技能接口和 action 映射受到结构检查保护。
 
 验收证据位于
 [`evidence/t01_push_cube_panda_to_xarm6_20261013`](evidence/t01_push_cube_panda_to_xarm6_20261013)。
@@ -28,9 +30,9 @@
 
 ## 下一阶段
 
-1. 固定当前成功 Adapter，在目标端运行多 seed，区分代码鲁棒性与生成随机性。
-2. 对同一迁移重复从零生成，报告成功率、轮数、动作数、token 和费用。
-3. 再冻结并迁移 PullCube、PickCube 等任务，形成任务难度和机器人差异对照。
-4. 加入 one-shot、raw-log repair 和人工 Adapter 等基线，再开始论文主实验。
+1. 在远程 ManiSkill 上复验新的 incumbent/局部修复决策记录，不增加无限修复轮数。
+2. 固定当前成功 Adapter，在目标端运行多 seed，区分代码鲁棒性与生成随机性。
+3. 对同一迁移重复从零生成，报告成功率、轮数、动作数、token 和费用。
+4. 再冻结并迁移 PullCube、PickCube，并加入 one-shot、raw-log 和人工 Adapter 基线。
 
 当前不继续无限增加 LLM 修复轮数，也不把失败运行改写为成功。

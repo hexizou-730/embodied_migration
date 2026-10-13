@@ -94,10 +94,16 @@ True，且 Adapter、运行环境、manifest 和哈希证据齐全时才会输�
 → LLM 生成目标 Adapter
 → Adapter 读取状态并执行 env.step(action)
 → 官方 evaluate() + 执行轨迹 + 异常
-→ 失败反馈给 LLM，重新生成并验证，直到成功或预算耗尽
+→ 候选按物理结果评分，只有优于 incumbent 才替换当前最佳 Adapter
+→ 失败定位到局部修复范围，再生成并验证，直到成功或预算耗尽
 ```
 
 TCP 是工具中心点，即用于描述末端位置的参考点。Adapter 在动作循环内读取状态并决定下一步动作；LLM 在外层根据一次执行结果修改代码，不是每个仿真步都调用一次 LLM。
+
+目标修复采用保守接受规则：官方成功、真实动作、约束安全和失败阶段优先，
+动作数仅用于同级候选的成本比较。接触、越界、预算耗尽和代码异常分别映射到
+不同修复范围；非接口故障不得修改公共技能签名或控制器/action 映射。每轮记录
+`accepted_as_incumbent`、候选评分和修复范围，失败候选不会覆盖较好的历史版本。
 
 源文件需声明 `ENV_ID`、`SOURCE_ROBOT`、`CONTROL_MODE`，并提供 `run(env)`；也支持 `TASK_PROGRAM` 加 `build_robot(...)`。程序返回 True 不足以算成功，还必须有实际仿真动作和官方成功信号。静态检查及超时限制不等同于操作系统安全沙箱。
 
@@ -132,4 +138,4 @@ python -m unittest discover -s tests -v
 python -m maniskill_backend.task_catalog
 ```
 
-本次核对：68 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。
+本次核对：72 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。
