@@ -16,12 +16,14 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | 20 个任务目录与 20 份候选源程序 | 已建立，候选不等于成功 |
 | 冻结源程序 | `t01_push_cube` 已同步，Panda seeds 0–9 为 10/10；其余候选尚未纳入当前证据 |
 | 目标迁移 | Panda → xArm6、PushCube、seed 0 已完成一次严格回放验收 |
-| 六档难度、留出 seed 评估 | 配置已定义；难度扰动执行器及正式评估待完成 |
+| 固定 Adapter 留出评估 | xArm6 seeds 100–109 为 5/10；LLM 调用 0、代码修复 0 |
+| 六档难度 | 配置已定义；难度扰动执行器及正式评估待完成 |
 
 当前只把 PushCube 作为已验收结果。证据见
 [evidence/t01_push_cube_panda_to_xarm6_20261013](evidence/t01_push_cube_panda_to_xarm6_20261013)。
 一次成功不代表生成过程稳定：随后一次全新 8 轮生成共执行 122 个目标动作，
-仍因未建立有效接触而失败，因此下一阶段是提高重复生成和多 seed 鲁棒性。
+仍因未建立有效接触而失败。固定成功 Adapter 在未见 seeds 100–109 上取得
+5/10，说明当前策略可以泛化到部分初始状态，但鲁棒性仍不足。
 
 完整的进度、证据边界和下一步见 [PROGRESS.md](PROGRESS.md)。旧实验不作为当前成果引用。
 
@@ -124,7 +126,8 @@ TCP 是工具中心点，即用于描述末端位置的参考点。Adapter 在�
 
 - 固定版本：Python 3.10.20、ManiSkill 3.0.1、SAPIEN 3.0.3；要求驱动报告 CUDA API 13.2。
 - API 配置见 [.env.example](.env.example)，密钥只放本机环境或 `.env`，不要提交 Git。
-- 开发/修复 seeds：0–9。100–109 为留出集，正式评估尚未完成。
+- 开发/修复 seeds：0–9。留出集 100–109 已完成一次固定 Adapter 评估，结果为 5/10；
+  留出结果未反馈给 LLM，也未用于修改该 Adapter。
 - `results/` 保存执行记录、生成代码、prompt 和成本；默认不提交。`git push` 不会自动同步服务器实验。
 - `source_programs/frozen/` 保存冻结代码及校验记录；当前已跟踪 `t01_push_cube`。
 
@@ -149,4 +152,4 @@ python -m unittest discover -s tests -v
 python -m maniskill_backend.task_catalog
 ```
 
-本次核对：72 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。
+本次核对：75 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。
