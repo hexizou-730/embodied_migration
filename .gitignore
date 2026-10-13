@@ -2,13 +2,14 @@ __pycache__/
 *.py[cod]
 *.bak
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 .tmp/
+.pytest_cache/
 .DS_Store
 *.log
 ~$*.docx
-MUJOCO_LOG.TXT
 results/*
 !results/.gitkeep
-docs/rendered_progress_doc/

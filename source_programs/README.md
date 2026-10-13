@@ -17,7 +17,20 @@ bootstrap is generated and repaired on the remote simulator before it can be
 frozen. A source candidate is not evidence of success; the adjacent
 `frozen/*.json` record is.
 
-## Fourth Step: One Remote Command
+## Resume The Five Source Tasks
+
+The active experiment subset is T01, T02, T04, T06 and T07. Their earlier
+remote passes still need current, matching freeze records; this checkout does
+not include those records. Start with `python source.py status --run-name phase4_refresh`,
+not another full 20-task preparation run. See
+[`../PROGRESS.md`](../PROGRESS.md) for the evidence and next steps.
+
+If frozen files exist but only their dependency/configuration evidence is
+stale, use the no-LLM `refresh` command below. Missing files must be recovered
+from the machine where validation ran; a Git pull alone cannot recover
+uncommitted remote results.
+
+## Prepare Additional Source Tasks
 
 In the remote repository, with the existing OpenRouter API key available:
 
@@ -124,5 +137,8 @@ solver:
 python source.py synthesize --tasks t03_roll_ball --max-cycles 5 --freeze
 ```
 
-The default seed set is `0-9`. Results stay below `results/`; only the frozen
-program and its checksum record are tracked.
+The default seed set is `0-9`. Results stay below `results/` and are ignored by
+Git. Frozen programs and their adjacent checksum records are eligible for
+version control, but creation does not commit or upload them automatically.
+Review and commit both files together after real validation; retain raw trial
+artifacts separately. This checkout currently tracks only `frozen/.gitkeep`.

@@ -16,5 +16,12 @@ python -m maniskill_backend.task_catalog
 ```
 
 Difficulty levels 2-6 describe benchmark perturbations that will be applied by
-the variant runtime in a later implementation step. Level 1 uses the official
-environment unchanged.
+the variant runtime in a later implementation step. Level 1 describes the
+official scene with an expanded action budget. The current source/target
+commands use their own episode budget, not these profile multipliers.
+
+Passing the catalog check means that 20 task definitions and their six variant
+descriptions are structurally valid. It does not mean that 120 environments
+were executed, or that any source or target program succeeded. The active
+experimental subset is T01, T02, T04, T06 and T07; the other candidates remain
+available for later expansion.

@@ -1,176 +1,125 @@
 # Embodied Migration
 
-Constraint-guided migration of executable robot code across ManiSkill robot
-embodiments.
+面向 ManiSkill 的机器人代码迁移：输入一份源机器人动作程序和目标机器人 UID，由 LLM 生成目标 Adapter，在仿真中执行，并根据实际失败信息进行有限轮次的修复。
 
-## Scope
+不修改机器人模型、底层控制器、仿真器或官方成功标准。迁移入口不要求预先注册“源机器人 → 目标机器人”组合，但目标机器人仍须能在所选环境中初始化，并具备完成任务所需的能力。
 
-The input is one working source-action Python file and a target ManiSkill robot
-UID. The harness verifies the source actions, discovers the target runtime
-interface, asks an LLM to synthesize a fresh target adapter, executes real
-`env.step(action)` calls, and feeds measured failures into the next repair
-cycle.
+## 当前进度
 
-The migration process does not modify the simulator, controller, task success
-criterion, or robot model. No task/robot migration case must be registered in
-this repository.
+截至 2026-10-13，**代码框架已具备，下一步是恢复远程源程序证据并完成目标迁移实验**。
 
-## Run
+| 内容 | 状态 |
+|---|---|
+| 环境配置、接口读取、生成/执行/诊断/修复流程 | 已实现 |
+| 20 个任务目录与 20 份候选源程序 | 已建立，候选不等于成功 |
+| 5 份源程序通过 seeds 0–9 | 此前远程终端报告通过；冻结文件未同步到本仓库，最新复验结果待确认 |
+| 冻结源程序到目标机器人的批量迁移 | `target.py` 已实现；新实验基线下尚无已归档的目标成功记录 |
+| 六档难度、留出 seed 评估 | 配置已定义；难度扰动执行器及正式评估待完成 |
+
+五个优先任务：PushCube、PullCube、PickCube、LiftPegUpright、StackCube。暂不继续让其余 15 个任务消耗修复预算。
+
+完整的进度、证据边界和下一步见 [PROGRESS.md](PROGRESS.md)。旧实验不作为当前成果引用。
+
+## 三个入口
+
+| 命令 | 用途 |
+|---|---|
+| `source.py` | 准备源程序、多 seed 验证、冻结及复验 |
+| `target.py` | 只使用有效冻结源程序，批量迁移到一个目标机器人 |
+| `migrate.py` | 输入自己的源代码文件，进行单任务迁移 |
+
+单文件迁移，不需要在任务目录中注册：
 
 ```bash
-python migrate.py examples/panda_pull.py xarm6_robotiq
+python migrate.py examples/panda_pull.py xarm6
 ```
 
-Preview the run without ManiSkill or an LLM call:
+只查看计划，不调用 LLM 或仿真：
 
 ```bash
-python migrate.py examples/panda_pull.py xarm6_robotiq --dry-run
+python migrate.py examples/panda_pull.py xarm6 --dry-run
 ```
 
-Generated adapters, prompts, state traces, and results are written below
-`results/migrations/` and are intentionally not tracked by Git.
+真实迁移会调用付费 API 和仿真；`--dry-run` 不代表源端或目标端成功。
 
-## Fixed Experiment Environment
+## 接着上次的实验做
 
-[`experiment_config.json`](experiment_config.json) is the single tracked
-experiment contract. It fixes Python 3.10.20, ManiSkill 3.0.1, SAPIEN 3.0.3,
-CUDA 13.2, the exact OpenRouter/GPT model and generation parameters, the
-controller defaults, and the simulation seed split.
-
-Every invocation writes `runtime_environment.json` before calling the LLM or
-creating a simulator. A real run stops on a contract mismatch. The record
-contains the repository commit and dirty state, exact installed package
-versions, ManiSkill source commit when available, CUDA driver/GPU information,
-LLM parameters, robot UIDs, control modes, and the shared source/target seed.
-
-Migration and repair use development seeds `0-9`. Seeds `100-109` are reserved
-for later held-out evaluation and are never exposed to the repair loop.
-
-Create the pinned Python environment with:
+在已有 ManiSkill 环境的远程服务器上运行，先检查再启动，不要直接重跑全部 20 个任务：
 
 ```bash
-conda env create -f environment.yml
+cd ~/Embodied/embodied_migration
 conda activate em-ms
+git status --short
+git pull --ff-only
+python source.py status --run-name phase4_refresh
 ```
 
-CUDA is supplied by the remote NVIDIA driver rather than Conda; the harness
-requires the driver to report CUDA API 13.2 and records the exact driver and GPU.
+有未提交的更改时先确认并保留，不用强制覆盖。检查输出中的 `Currently ready` 和各任务状态：
 
-## Source File Contract
+- `ready`：冻结证据有效，可以迁移。
+- `needs_revalidation`：依赖或配置与旧证据不一致，不等于过去的仿真失败。
+- `not_frozen` / `record_missing`：当前机器缺少冻结代码或记录。先找回服务器上的文件，不要手工把状态改成 True。
 
-A source file declares the environment, source robot, controller, and existing
-actions:
-
-```python
-ENV_ID = "SomeTask-v1"
-SOURCE_ROBOT = "panda"
-CONTROL_MODE = "pd_ee_delta_pos"
-
-def run(env):
-    # Existing source-robot actions that call env.step(action).
-    ...
-```
-
-Alternatively it may define a fixed `TASK_PROGRAM` and `build_robot(...)`.
-
-## Active Code
-
-```text
-migrate.py                            command-line entrypoint
-llm_client.py                         provider-neutral LLM client
-maniskill_backend/dynamic_harness.py  generate/execute/observe/repair loop
-maniskill_backend/dynamic_adapter.py  task-neutral runtime exposed to adapters
-maniskill_backend/env_adapter.py      lazy ManiSkill environment wrapper
-maniskill_backend/code_validation.py  generated-code safety checks
-maniskill_backend/experiment_environment.py runtime capture and contract check
-maniskill_backend/sim_check.py        environment smoke test
-tests/test_dynamic_harness.py         generic harness regression tests
-```
-
-Historical case-specific adapters, prompts, paper runs, probe snapshots, and
-reported success rates were removed on 2026-09-17. New evidence must be
-generated from this clean baseline.
-
-## Benchmark Tasks
-
-[`benchmark_tasks/catalog.json`](benchmark_tasks/catalog.json) indexes 20
-target-independent ManiSkill source tasks. Every task directory records its
-source robot, required capabilities, official `evaluate()["success"]` signal,
-official episode limit, and six shared difficulty variants. Target robot UIDs
-are supplied only at migration time; there are no Panda-to-xArm6 case entries.
+若没有仍在运行的复验，且已有冻结文件仅需更新验证：
 
 ```bash
-python -m maniskill_backend.task_catalog
+python source.py refresh --tasks t01_push_cube
 ```
 
-## Source Programs
-
-[`source_programs/programs.json`](source_programs/programs.json) assigns one
-source-program path to every task. T01-T11 and T14-T20 use a compatible Panda
-family robot; T12-T13 use Fetch. Eleven candidates wrap the ManiSkill 3.0.1
-reference motion planners. The other nine start from conservative executable
-bootstraps and are synthesized/repaired in the remote simulator when needed.
-
-Candidates and successful sources are intentionally separate. A program moves
-to `source_programs/frozen/` only when the exact same code reaches the official
-success signal on all ten development seeds (0-9); the frozen record includes
-the code hash, seeds, controller, episode budget, and environment-contract hash.
+此命令前台运行，只复验原冻结代码，不调用 LLM、不修改动作策略。确认 `t01_push_cube` 为 `ready` 后，先跑一个目标迁移：
 
 ```bash
-python source.py status
-python source.py prepare --background
-python source.py validate --tasks t01_push_cube,t02_pull_cube --freeze
-python source.py synthesize --tasks t03_roll_ball --max-cycles 5 --freeze
-```
-
-`prepare` defaults to the resumable `phase4` run. It applies the public LLM
-settings from `experiment_config.json` (not API keys), prepares missing assets,
-tries the 11 official candidates first, and repairs failures. New candidates
-must pass a two-seed smoke check before all ten seeds are tested. Only full
-passes are installed and frozen; failed candidates remain in the run artifacts.
-Each task has its own process, timeout, and log. One failure does not stop the
-other tasks. `--background` survives an SSH disconnect; no `tmux` is needed.
-
-Check progress with `python source.py status`. Repeating the same prepare
-command resumes interrupted work without buying the completed LLM generations
-again. Completed failures are retained; `--retry-failed` rechecks them without
-resetting the recorded repair budget. Use a new `--run-name` for changed code,
-configuration, or a fresh budget. Defaults: five repair cycles per task, one
-hour per task, fifteen minutes for asset setup. Downloads may need substantial
-disk space; `--no-download` reports missing assets instead.
-
-This automates source preparation, not a guarantee of 20 successful programs.
-The terminal summary separates full passes, exhausted repair budgets, asset
-problems, and runtime/API problems. Historical v1 freeze records are preserved
-but require revalidation for the new, evidence-checked v2 format. See
-[`source_programs/README.md`](source_programs/README.md) for remote instructions.
-
-`source.py status` reports historical passes separately from current freeze
-validity. A `needs_revalidation` status means dependency/configuration evidence
-is stale, not that the recorded physical trials failed. `python source.py refresh`
-revalidates the exact frozen code on all required seeds, without LLM calls or
-candidate repair; failed refreshes retain the original frozen code and evidence.
-
-## Target Migration
-
-Phase 5 consumes only valid frozen sources; it never regenerates or edits them.
-For each task it first initializes the requested target robot and records the
-control mode, action layout, TCP, and entity aliases. Only a successful
-interface check is followed by bounded LLM generation and real ManiSkill
-execution. Each failed target trial, including its measured state trace, is fed
-to the next repair round. Official `env.unwrapped.evaluate()["success"]`
-remains the sole success authority.
-
-Run every currently frozen source on xArm6 in a disconnect-safe batch:
-
-```bash
-python target.py migrate xarm6 --background
+python target.py migrate xarm6 --tasks t01_push_cube --background
 python target.py status xarm6
 ```
 
-The batch survives SSH disconnects, isolates tasks in separate worker
-processes, and skips completed tasks when resumed. Use `--retry-failed` to give
-completed failures another attempt without overwriting prior evidence. Results
-are written under `results/target_migration/phase5_xarm6_robotiq/`, including
-`target_interface.json`, generated adapters, prompts, physical traces, official
-outcomes, repair cycles, simulator action counts, tokens, and LLM cost.
+`--background` 可在 SSH 断开后继续。默认使用 seed 0、最多 5 轮目标代码生成；成功后再扩展到其余四个已验证源任务。更多源端操作见 [source_programs/README.md](source_programs/README.md)。
+
+## 运行机制
+
+```text
+源代码 + 目标机器人
+→ 校验实验环境与源端成功
+→ 读取目标 action 布局、TCP 和场景状态
+→ LLM 生成目标 Adapter
+→ Adapter 读取状态并执行 env.step(action)
+→ 官方 evaluate() + 执行轨迹 + 异常
+→ 失败反馈给 LLM，重新生成并验证，直到成功或预算耗尽
+```
+
+TCP 是工具中心点，即用于描述末端位置的参考点。Adapter 在动作循环内读取状态并决定下一步动作；LLM 在外层根据一次执行结果修改代码，不是每个仿真步都调用一次 LLM。
+
+源文件需声明 `ENV_ID`、`SOURCE_ROBOT`、`CONTROL_MODE`，并提供 `run(env)`；也支持 `TASK_PROGRAM` 加 `build_robot(...)`。程序返回 True 不足以算成功，还必须有实际仿真动作和官方成功信号。静态检查及超时限制不等同于操作系统安全沙箱。
+
+## 环境与数据
+
+[experiment_config.json](experiment_config.json) 固定关键版本、LLM 请求参数、控制模式及 seed 规则。每次实际运行记录 `runtime_environment.json`，不匹配则停止。新服务器可用 `conda env create -f environment.yml` 安装依赖；GPU 驱动和任务资产需另外准备。
+
+- 固定版本：Python 3.10.20、ManiSkill 3.0.1、SAPIEN 3.0.3；要求驱动报告 CUDA API 13.2。
+- API 配置见 [.env.example](.env.example)，密钥只放本机环境或 `.env`，不要提交 Git。
+- 开发/修复 seeds：0–9。100–109 为留出集，正式评估尚未完成。
+- `results/` 保存执行记录、生成代码、prompt 和成本；默认不提交。`git push` 不会自动同步服务器实验。
+- `source_programs/frozen/` 保存冻结代码及校验记录，必须一起保存；当前仓库只有目录占位文件。
+
+## 文件导航
+
+| 位置 | 作用 |
+|---|---|
+| `maniskill_backend/dynamic_harness.py` | 单任务生成、执行、反馈修复 |
+| `maniskill_backend/dynamic_adapter.py` / `env_adapter.py` | 通用状态/动作接口与 ManiSkill 封装 |
+| `maniskill_backend/source_programs.py` / `source_preparation.py` | 源程序验证、冻结与批量准备 |
+| `maniskill_backend/target_preparation.py` | 目标接口检查、迁移队列和结果汇总 |
+| `llm_client.py` / `maniskill_backend/llm.py` | 模型调用、返回文本及用量 |
+| `lmp/` / `maniskill_backend/code_validation.py` | 代码提取、执行及静态检查 |
+| `benchmark_tasks/` | 20 个任务和六档难度的定义，非 120 个已验证实验 |
+| `source_programs/candidates/` / `vendor/` | 候选源程序及所需参考规划器，保留上游许可 |
+| `tests/` | 不依赖真实机器人成功的框架回归测试 |
+
+安装基础依赖后可运行本地检查，不消耗 LLM 额度：
+
+```bash
+python -m unittest discover -s tests -v
+python -m maniskill_backend.task_catalog
+```
+
+本次核对：63 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。
