@@ -1343,7 +1343,7 @@ def _escaped_object_evidence(result: Mapping[str, Any]) -> Dict[str, Any] | None
 def _stalled_contact_evidence(result: Mapping[str, Any]) -> Dict[str, Any] | None:
     """Detect substantial TCP motion without corresponding manipulated-object motion."""
 
-    if int(result.get("action_steps") or 0) < 30:
+    if int(result.get("action_steps") or 0) < 5:
         return None
     trace = result.get("state_trace")
     if not isinstance(trace, list) or len(trace) < 2:

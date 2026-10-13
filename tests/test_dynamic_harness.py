@@ -204,6 +204,21 @@ def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobo
         self.assertGreater(diagnosis["evidence"]["tcp_displacement_m"], 0.03)
         self.assertEqual(diagnosis["evidence"]["object_displacement_m"], 0.0)
 
+    def test_short_unreachable_contact_attempt_is_still_diagnosed(self) -> None:
+        diagnosis = _dynamic_diagnosis(
+            {
+                "success": False,
+                "code_ok": True,
+                "action_steps": 7,
+                "state_trace": [
+                    {"tcp": [[0.0, 0.0, 0.15]], "entities": {"obj": [[0.0, 0.05, 0.02]]}},
+                    {"tcp": [[0.08, 0.05, 0.03]], "entities": {"obj": [[0.0, 0.05, 0.02]]}},
+                ],
+            }
+        )
+        self.assertEqual(diagnosis["reason"], "contact_not_established")
+        self.assertEqual(diagnosis["evidence"]["action_steps"], 7)
+
     def test_official_success_termination_is_not_reported_as_runtime_failure(self) -> None:
         env = _FakeEnv()
         succeeded = False
