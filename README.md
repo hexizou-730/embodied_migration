@@ -6,17 +6,22 @@
 
 ## 当前进度
 
-截至 2026-10-13，**代码框架已具备，下一步是恢复远程源程序证据并完成目标迁移实验**。
+截至 2026-10-13，框架已经完成一次可复核的端到端验收：冻结的 Panda
+`PushCube-v1` 程序迁移到 `xarm6_robotiq`，LLM 生成的 Adapter 在修复后的
+Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=True`。
 
 | 内容 | 状态 |
 |---|---|
 | 环境配置、接口读取、生成/执行/诊断/修复流程 | 已实现 |
 | 20 个任务目录与 20 份候选源程序 | 已建立，候选不等于成功 |
-| 5 份源程序通过 seeds 0–9 | 此前远程终端报告通过；冻结文件未同步到本仓库，最新复验结果待确认 |
-| 冻结源程序到目标机器人的批量迁移 | `target.py` 已实现；新实验基线下尚无已归档的目标成功记录 |
+| 冻结源程序 | `t01_push_cube` 已同步，Panda seeds 0–9 为 10/10；其余候选尚未纳入当前证据 |
+| 目标迁移 | Panda → xArm6、PushCube、seed 0 已完成一次严格回放验收 |
 | 六档难度、留出 seed 评估 | 配置已定义；难度扰动执行器及正式评估待完成 |
 
-五个优先任务：PushCube、PullCube、PickCube、LiftPegUpright、StackCube。暂不继续让其余 15 个任务消耗修复预算。
+当前只把 PushCube 作为已验收结果。证据见
+[evidence/t01_push_cube_panda_to_xarm6_20261013](evidence/t01_push_cube_panda_to_xarm6_20261013)。
+一次成功不代表生成过程稳定：随后一次全新 8 轮生成共执行 122 个目标动作，
+仍因未建立有效接触而失败，因此下一阶段是提高重复生成和多 seed 鲁棒性。
 
 完整的进度、证据边界和下一步见 [PROGRESS.md](PROGRESS.md)。旧实验不作为当前成果引用。
 
@@ -104,7 +109,7 @@ TCP 是工具中心点，即用于描述末端位置的参考点。Adapter 在�
 - API 配置见 [.env.example](.env.example)，密钥只放本机环境或 `.env`，不要提交 Git。
 - 开发/修复 seeds：0–9。100–109 为留出集，正式评估尚未完成。
 - `results/` 保存执行记录、生成代码、prompt 和成本；默认不提交。`git push` 不会自动同步服务器实验。
-- `source_programs/frozen/` 保存冻结代码及校验记录，必须一起保存；当前仓库只有目录占位文件。
+- `source_programs/frozen/` 保存冻结代码及校验记录；当前已跟踪 `t01_push_cube`。
 
 ## 文件导航
 
@@ -127,4 +132,4 @@ python -m unittest discover -s tests -v
 python -m maniskill_backend.task_catalog
 ```
 
-本次核对：63 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。
+本次核对：68 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。

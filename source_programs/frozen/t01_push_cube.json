@@ -1,0 +1,195 @@
+{
+  "schema": "frozen_source_program.v2",
+  "task_id": "t01_push_cube",
+  "env_id": "PushCube-v1",
+  "source_robot": "panda",
+  "control_mode": "pd_joint_pos",
+  "origin": "maniskill_3.0.1_motionplanning_reference",
+  "provenance": {
+    "kind": "existing_candidate",
+    "catalog_origin": "maniskill_3.0.1_motionplanning_reference"
+  },
+  "frozen_at_utc": "2026-10-13T16:30:40.235467+00:00",
+  "candidate_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/input_source.py",
+  "frozen_path": "frozen/t01_push_cube.py",
+  "source_sha256": "af39c5d6aa327298fd4a64bda04ed113b93f99c4ed48910e7057a04bc58372b1",
+  "support_code_sha256": "18683980120ca3a14437e9eef2797c3459df28abfbc0fbaf7c2d7715b8142fa9",
+  "validated_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "success_rate": 1.0,
+  "max_episode_steps": 1000,
+  "success_authority": "env.unwrapped.evaluate()['success']",
+  "environment_contract_sha256": "f5afbfa1f91f51672a6ca6114848e2749c8fefe0718856511bf5e39fa1d6541e",
+  "trials": [
+    {
+      "seed": 0,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 100,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_000.json"
+    },
+    {
+      "seed": 1,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 102,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_001.json"
+    },
+    {
+      "seed": 2,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 95,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_002.json"
+    },
+    {
+      "seed": 3,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 94,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_003.json"
+    },
+    {
+      "seed": 4,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 96,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_004.json"
+    },
+    {
+      "seed": 5,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 109,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_005.json"
+    },
+    {
+      "seed": 6,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 92,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_006.json"
+    },
+    {
+      "seed": 7,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 100,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_007.json"
+    },
+    {
+      "seed": 8,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 94,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_008.json"
+    },
+    {
+      "seed": 9,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 102,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/acceptance_success_fix_refresh_t01/t01_push_cube/seed_009.json"
+    }
+  ]
+}
