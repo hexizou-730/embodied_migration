@@ -124,7 +124,7 @@ class SourcePreparationTests(unittest.TestCase):
         import os
         with patch.dict(os.environ, {"EM_MODEL": "old-model", "OPENROUTER_API_KEY": "test-secret"}):
             use_contract_llm()
-            self.assertEqual(os.environ["EM_MODEL"], "openai/gpt-5.6-luna")
+            self.assertEqual(os.environ["EM_MODEL"], "deepseek/deepseek-v4-pro")
             self.assertEqual(os.environ["EM_MAX_TOKENS"], "16384")
             self.assertEqual(os.environ["OPENROUTER_API_KEY"], "test-secret")
 
