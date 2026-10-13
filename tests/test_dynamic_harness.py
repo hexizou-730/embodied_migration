@@ -269,6 +269,60 @@ def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobo
         self.assertTrue(result["terminated"])
         self.assertFalse(result["truncated"])
 
+    def test_lmp_adapter_propagates_official_success_past_executor(self) -> None:
+        code = '''
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def solve_task(self) -> bool:
+        self._step(self._make_action(np.zeros(3, dtype=np.float32), gripper=0.0))
+        return False
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+'''
+        env = _FakeEnv()
+        succeeded = False
+
+        def evaluate():
+            return {"success": succeeded}
+
+        def step(action):
+            nonlocal succeeded
+            succeeded = True
+            return {}, 1.0, True, False, {"success": True}
+
+        env.evaluate = evaluate
+        env.step = step
+        spec = DynamicMigrationSpec(
+            env_id="PushCube-v1",
+            task_label="t01_push_cube",
+            source_robot="panda",
+            target_robot="xarm6_robotiq",
+        )
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "maniskill_backend.dynamic_harness.ManiSkillEnvAdapter"
+        ) as adapter_cls:
+            path = Path(tmp) / "target_adapter.py"
+            path.write_text(code)
+            adapter = adapter_cls.return_value
+            adapter.make.return_value = env
+            adapter.reset.return_value = ({}, {})
+            result = run_dynamic_trial(
+                spec=spec,
+                robot_uid="xarm6_robotiq",
+                control_mode="pd_ee_delta_pos",
+                program="ret_val = robot.solve_task()",
+                adapter_path=path,
+            )
+
+        self.assertTrue(result["success"])
+        self.assertTrue(result["code_ok"])
+        self.assertTrue(result["official_success"])
+        self.assertEqual(result["message"], "adapter returned success and official evaluate() returned success")
+
     def test_experiment_contract_detects_runtime_mismatch(self) -> None:
         contract = load_experiment_contract()
         actual = {

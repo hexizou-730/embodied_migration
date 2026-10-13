@@ -357,7 +357,7 @@ class _RecordedEnv:
         return result
 
 
-class _OfficialSuccessReached(RuntimeError):
+class _OfficialSuccessReached(BaseException):
     """Stop a policy cleanly when ManiSkill terminates on official success."""
 
 
