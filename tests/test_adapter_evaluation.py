@@ -85,6 +85,8 @@ class AdapterEvaluationTests(unittest.TestCase):
         self.assertEqual(result["llm_calls"], 0)
         self.assertEqual(result["code_repairs"], 0)
         self.assertEqual(summary["failure_reasons"], {"contact_not_established": 1})
+        self.assertEqual(summary["results"][0]["failure_layer"], "success")
+        self.assertEqual(summary["results"][0]["failure_reason"], "success")
         self.assertEqual([call.kwargs["spec"].seed for call in run_trial.call_args_list], [100, 101])
         self.assertEqual(
             len({str(call.kwargs["adapter_path"]) for call in run_trial.call_args_list}),

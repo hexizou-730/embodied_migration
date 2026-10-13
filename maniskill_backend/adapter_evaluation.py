@@ -100,15 +100,16 @@ def evaluate_fixed_adapter(
         _write_json(trial_path, trial)
         diagnosis = trial.get("failure_diagnosis")
         diagnosis = diagnosis if isinstance(diagnosis, Mapping) else {}
+        succeeded = bool(trial.get("success"))
         row = {
             "seed": seed,
-            "success": bool(trial.get("success")),
+            "success": succeeded,
             "official_success": bool(trial.get("official_success")),
             "action_steps": int(trial.get("action_steps") or 0),
             "terminated": bool(trial.get("terminated")),
             "truncated": bool(trial.get("truncated")),
-            "failure_layer": diagnosis.get("layer"),
-            "failure_reason": diagnosis.get("reason"),
+            "failure_layer": "success" if succeeded else diagnosis.get("layer"),
+            "failure_reason": "success" if succeeded else diagnosis.get("reason"),
             "message": trial.get("message"),
             "trial": str(trial_path),
         }
