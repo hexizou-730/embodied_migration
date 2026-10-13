@@ -36,6 +36,7 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | `migrate.py` | 输入自己的源代码文件，进行单任务迁移 |
 | `accept.py` | 运行一个真实迁移并自动检查端到端证据 |
 | `evaluate.py` | 固定成功 Adapter，在未见 seed 上评估，不调用 LLM 或修复代码 |
+| `stability.py` | 多次从零生成 Adapter，统计生成成功率、动作、token 和费用 |
 
 单文件迁移，不需要在任务目录中注册：
 
@@ -97,6 +98,15 @@ python evaluate.py
 默认运行 held-out seeds 100–109，输出写入 `results/adapter_evaluation/`。
 该命令校验 Adapter 哈希并记录官方结果，但不会调用 LLM，也不会根据测试失败
 修改代码。可用 `--seeds development` 做开发集回放，正式泛化结果使用默认值。
+
+第七步生成稳定性实验使用：
+
+```bash
+python stability.py run xarm6 --background
+python stability.py status --run-name <命令输出的名称>
+```
+
+默认只运行 3 次独立生成，每次最多 8 轮；各次之间不共享 Adapter 或 incumbent。
 
 ## 运行机制
 
