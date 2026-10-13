@@ -8,6 +8,8 @@ import importlib.util
 import inspect
 import json
 import re
+import sys
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Sequence
@@ -48,6 +50,8 @@ _STATE_CALLS = {
     "_snapshot",
 }
 _TRUSTED_ACTION_HELPERS = {"_move_towards", "_repeat_action"}
+_MAX_GENERATED_LINES_WITHOUT_ACTION = 2_000
+_MAX_GENERATED_SECONDS_WITHOUT_ACTION = 5.0
 
 
 def _success_from_ret_val(ret_val: Any) -> bool:
@@ -357,6 +361,54 @@ class _OfficialSuccessReached(RuntimeError):
     """Stop a policy cleanly when ManiSkill terminates on official success."""
 
 
+class _NoActionProgress(RuntimeError):
+    """Stop generated policy loops that never advance the simulator."""
+
+
+def _run_with_action_progress_watchdog(
+    callback: Callable[[], Any],
+    *,
+    adapter_path: Path,
+    action_counter: Callable[[], int],
+) -> Any:
+    """Interrupt generated-code loops that repeatedly run without an action."""
+
+    watched_file = str(adapter_path.resolve())
+    last_steps = int(action_counter())
+    lines_without_action = 0
+    last_progress = time.monotonic()
+    previous_trace = sys.gettrace()
+
+    def trace(frame: Any, event: str, arg: Any) -> Any:
+        nonlocal last_steps, lines_without_action, last_progress
+        if event != "line" or str(Path(frame.f_code.co_filename).resolve()) != watched_file:
+            return trace
+        steps = int(action_counter())
+        if steps != last_steps:
+            last_steps = steps
+            lines_without_action = 0
+            last_progress = time.monotonic()
+            return trace
+        lines_without_action += 1
+        idle_seconds = time.monotonic() - last_progress
+        if (
+            lines_without_action > _MAX_GENERATED_LINES_WITHOUT_ACTION
+            or idle_seconds > _MAX_GENERATED_SECONDS_WITHOUT_ACTION
+        ):
+            raise _NoActionProgress(
+                "Generated adapter loop made no simulator progress: "
+                f"action_steps stayed at {steps} for {lines_without_action} generated-code lines. "
+                "Every loop iteration must execute self._step(action) or break/return."
+            )
+        return trace
+
+    sys.settrace(trace)
+    try:
+        return callback()
+    finally:
+        sys.settrace(previous_trace)
+
+
 def run_dynamic_trial(
     *,
     spec: DynamicMigrationSpec,
@@ -396,10 +448,14 @@ def run_dynamic_trial(
                     raise ValueError("Generated module must define callable build_robot(...).")
                 robot = build_robot(recorded, control_mode=control_mode, robot_uid=robot_uid)
                 scene = ManiSkillSceneAdapter()
-                code_ok, code_message, locals_dict = execute_lmp(
-                    program,
-                    {"scene": scene, "robot": robot},
-                    verbose=False,
+                code_ok, code_message, locals_dict = _run_with_action_progress_watchdog(
+                    lambda: execute_lmp(
+                        program,
+                        {"scene": scene, "robot": robot},
+                        verbose=False,
+                    ),
+                    adapter_path=adapter_path,
+                    action_counter=lambda: recorded.steps,
                 )
                 ret_val = locals_dict.get("ret_val")
         except _OfficialSuccessReached:
@@ -1050,6 +1106,7 @@ Required target module contract:
 - Adapt action layout, reach, gripper/base channels, contact geometry, timing and state branches to the observed target.
 - Execute actions through self._step(action), or inherited _move_towards/_repeat_action helpers.
 - Read measured state and use bounded loops; inherited action helpers already check _early_stop().
+- Every loop iteration must execute a simulator action or break/return; a runtime watchdog rejects no-action loops.
 - Do not modify TASK_PROGRAM, simulator state, object poses, controller internals, or official success.
 - Returning True is insufficient: the harness independently checks env.unwrapped.evaluate()['success'].
 
@@ -1168,6 +1225,17 @@ def _dynamic_diagnosis(result: Mapping[str, Any]) -> Dict[str, Any]:
             "repair_hint": "Fix environment compatibility, module structure, or the observed action mapping before task motion.",
         }
     if not result.get("code_ok", True):
+        if "no simulator progress" in execution_error.lower():
+            return {
+                "layer": "skill_adapter",
+                "reason": "no_action_progress_loop",
+                "evidence": _concise_execution_error(execution_error),
+                "repair_hint": (
+                    "A bounded loop can still hang when an action helper returns without stepping. "
+                    "Record action_steps at the start of each iteration and break, reposition, or "
+                    "send a bounded explicit action when the counter does not advance."
+                ),
+            }
         if int(result.get("action_steps") or 0) == 0 and "task entity" in execution_error.lower():
             return {
                 "layer": "interface_contract",

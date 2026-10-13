@@ -85,6 +85,49 @@ class _FakeEnv:
 
 
 class DynamicHarnessTests(unittest.TestCase):
+    def test_generated_loop_without_new_actions_is_interrupted(self) -> None:
+        code = '''
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def solve_task(self) -> bool:
+        self._step(self._make_action(np.zeros(3, dtype=np.float32), gripper=0.0))
+        while not self._official_success():
+            self._tcp_pos()
+        return True
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+'''
+        env = _FakeEnv()
+        spec = DynamicMigrationSpec(
+            env_id="PushCube-v1",
+            task_label="t01_push_cube",
+            source_robot="panda",
+            target_robot="xarm6_robotiq",
+        )
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "maniskill_backend.dynamic_harness.ManiSkillEnvAdapter"
+        ) as adapter_cls:
+            path = Path(tmp) / "target_adapter.py"
+            path.write_text(code)
+            adapter = adapter_cls.return_value
+            adapter.make.return_value = env
+            adapter.reset.return_value = ({}, {})
+            result = run_dynamic_trial(
+                spec=spec,
+                robot_uid="xarm6_robotiq",
+                control_mode="pd_ee_delta_pos",
+                program="ret_val = robot.solve_task()",
+                adapter_path=path,
+            )
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["action_steps"], 1)
+        self.assertEqual(result["failure_diagnosis"]["reason"], "no_action_progress_loop")
+
     def test_multi_seed_prompt_keeps_bounded_physical_counterexamples(self) -> None:
         failure = {
             "seed": 0,
