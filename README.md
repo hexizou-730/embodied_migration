@@ -33,6 +33,7 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | `target.py` | 只使用有效冻结源程序，批量迁移到一个目标机器人 |
 | `migrate.py` | 输入自己的源代码文件，进行单任务迁移 |
 | `accept.py` | 运行一个真实迁移并自动检查端到端证据 |
+| `evaluate.py` | 固定成功 Adapter，在未见 seed 上评估，不调用 LLM 或修复代码 |
 
 单文件迁移，不需要在任务目录中注册：
 
@@ -84,6 +85,16 @@ True，且 Adapter、运行环境、manifest 和哈希证据齐全时才会输�
 最多 5 轮目标代码生成；通过后再扩展到其余四个已验证源任务。批量迁移
 仍使用 `target.py ... --background`。更多源端操作见
 [source_programs/README.md](source_programs/README.md)。
+
+固定 Adapter 的第六步评估使用：
+
+```bash
+python evaluate.py
+```
+
+默认运行 held-out seeds 100–109，输出写入 `results/adapter_evaluation/`。
+该命令校验 Adapter 哈希并记录官方结果，但不会调用 LLM，也不会根据测试失败
+修改代码。可用 `--seeds development` 做开发集回放，正式泛化结果使用默认值。
 
 ## 运行机制
 
