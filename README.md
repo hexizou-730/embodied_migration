@@ -39,6 +39,7 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | `accept.py` | 运行一个真实迁移并自动检查端到端证据 |
 | `evaluate.py` | 固定成功 Adapter，在未见 seed 上评估，不调用 LLM 或修复代码 |
 | `stability.py` | 多次从零生成 Adapter，统计生成成功率、动作、token 和费用 |
+| `benchmark.py` | 在同一任务和预算下比较四种生成/修复方法 |
 
 单文件迁移，不需要在任务目录中注册：
 
@@ -110,6 +111,17 @@ python stability.py status --run-name <命令输出的名称>
 
 默认只运行 3 次独立生成，每次最多 8 轮；各次之间不共享 Adapter 或 incumbent。
 
+第八步方法对照实验使用：
+
+```bash
+python benchmark.py run xarm6 --task t01_push_cube --repetitions 1 --background
+python benchmark.py status --run-name <命令输出的名称>
+```
+
+默认依次比较 `one_shot`、`raw_log`、`diagnosis` 和 `ours`。四种方法共用冻结源程序、
+模型、seed、环境步数和修复轮数上限，只改变反馈内容与候选管理策略。先用每种方法
+1 次检查流程；正式结果再提高重复次数，不能把单次 pilot 当作稳定结论。
+
 ## 运行机制
 
 ```text
@@ -164,4 +176,4 @@ python -m unittest discover -s tests -v
 python -m maniskill_backend.task_catalog
 ```
 
-本次核对：75 项测试通过。测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。
+测试中的模拟环境与模拟 API 返回不能当作真实 ManiSkill 实验结果。

@@ -334,6 +334,7 @@ def migrate_task(config: dict[str, Any]) -> dict[str, Any]:
                 "success_rate": source_record["success_rate"],
             },
             enforce_environment=True,
+            method_id=str(plan.get("method_id") or "ours"),
             progress=lambda message: print(message, flush=True),
         )
         return {

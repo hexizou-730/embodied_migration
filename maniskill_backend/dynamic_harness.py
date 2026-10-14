@@ -101,6 +101,33 @@ class DynamicMigrationSpec:
 
 
 @dataclass(frozen=True)
+class RepairMethodPolicy:
+    """Ablation policy for target-side generation and repair."""
+
+    method_id: str
+    structured_diagnosis: bool
+    local_repair: bool
+    preserve_incumbent: bool
+    one_shot: bool = False
+
+
+REPAIR_METHODS: Dict[str, RepairMethodPolicy] = {
+    "one_shot": RepairMethodPolicy("one_shot", False, False, False, True),
+    "raw_log": RepairMethodPolicy("raw_log", False, False, False),
+    "diagnosis": RepairMethodPolicy("diagnosis", True, True, False),
+    "ours": RepairMethodPolicy("ours", True, True, True),
+}
+
+
+def repair_method_policy(method_id: str) -> RepairMethodPolicy:
+    try:
+        return REPAIR_METHODS[method_id]
+    except KeyError as exc:
+        choices = ", ".join(REPAIR_METHODS)
+        raise ValueError(f"Unknown repair method {method_id!r}; choose one of: {choices}.") from exc
+
+
+@dataclass(frozen=True)
 class SourceActions:
     """An existing source action module, inspected without executing its imports."""
 
@@ -589,9 +616,11 @@ def run_dynamic_agent_migration(
     progress: Callable[[str], None] | None = None,
     enforce_environment: bool = False,
     source_provenance: Mapping[str, Any] | None = None,
+    method_id: str = "ours",
 ) -> Dict[str, Any]:
     """Validate supplied source actions (or synthesize them), then migrate."""
 
+    policy = repair_method_policy(method_id)
     report = progress or (lambda message: None)
     run_dir.mkdir(parents=True, exist_ok=True)
     artifacts = run_dir / "dynamic_artifacts"
@@ -606,6 +635,8 @@ def run_dynamic_agent_migration(
     manifest: Dict[str, Any] = {
         "schema": "dynamic_migration_manifest.v1",
         **asdict(spec),
+        "method_id": policy.method_id,
+        "method_policy": asdict(policy),
         "registered_case": False,
         "success_authority": "env.unwrapped.evaluate()['success']",
         "llm_may_modify": ["source task program before source success", "source adapter", "target adapter"],
@@ -828,13 +859,20 @@ def run_dynamic_agent_migration(
     seen_target_semantics: set[str] = set()
     target_success = False
     target_status = "target_budget_exhausted"
-    for cycle in range(1, spec.max_target_cycles + 1):
-        report(f"Target round {cycle}/{spec.max_target_cycles}: requesting LLM code...")
+    target_cycle_budget = 1 if policy.one_shot else spec.max_target_cycles
+    for cycle in range(1, target_cycle_budget + 1):
+        report(f"Target round {cycle}/{target_cycle_budget}: requesting LLM code...")
         cycle_dir = run_dir / f"target_cycle_{cycle:02d}"
         cycle_dir.mkdir(parents=True, exist_ok=True)
         system_prompt = _dynamic_system_prompt(source=False)
-        repair_focus = incumbent_result or latest_result
-        repair_scope = _repair_scope(repair_focus)
+        reference_code = incumbent_code if policy.preserve_incumbent else latest_code
+        reference_result = incumbent_result if policy.preserve_incumbent else latest_result
+        repair_focus = reference_result
+        repair_scope = (
+            _repair_scope(repair_focus)
+            if policy.structured_diagnosis
+            else {"name": "raw_execution_feedback" if repair_focus else "initial_generation"}
+        )
         user_prompt = _target_prompt(
             spec,
             source_observation,
@@ -842,11 +880,20 @@ def run_dynamic_agent_migration(
             frozen_program,
             source_code,
             source_result,
-            incumbent_code,
-            incumbent_result,
-            latest_code=latest_code if latest_code != incumbent_code else "",
-            latest_result=latest_result if latest_code != incumbent_code else {},
+            reference_code,
+            reference_result,
+            latest_code=(
+                latest_code
+                if policy.preserve_incumbent and latest_code != incumbent_code
+                else ""
+            ),
+            latest_result=(
+                latest_result
+                if policy.preserve_incumbent and latest_code != incumbent_code
+                else {}
+            ),
             repair_scope=repair_scope,
+            policy=policy,
         )
         system_prompt_path = cycle_dir / "system_prompt.txt"
         user_prompt_path = cycle_dir / "user_prompt.txt"
@@ -873,6 +920,7 @@ def run_dynamic_agent_migration(
             "user_prompt": str(user_prompt_path),
             "prompt_sha256": _sha256_text(system_prompt + "\n" + user_prompt),
             "repair_scope": repair_scope,
+            "method_id": policy.method_id,
             "incumbent_cycle_before": incumbent_cycle,
         }
         (cycle_dir / "llm_response.txt").write_text(generated.raw_text or generated.text, encoding="utf-8")
@@ -894,7 +942,7 @@ def run_dynamic_agent_migration(
                 adapter_sha256=_sha256_text(candidate.rstrip() + "\n"),
                 semantic_sha256=semantic_sha256,
             )
-            previous_code = incumbent_code or latest_code
+            previous_code = reference_code
             if semantic_sha256 in seen_target_semantics:
                 raise ValueError(
                     "Generated target adapter repeats a previously tested candidate and is "
@@ -903,11 +951,11 @@ def run_dynamic_agent_migration(
                 )
             seen_target_semantics.add(semantic_sha256)
             record["changed_from_previous"] = bool(previous_code)
-            record["changed_from_incumbent"] = bool(incumbent_code)
+            record["changed_from_incumbent"] = bool(reference_code)
             validate_dynamic_adapter(candidate, task_program=frozen_program, require_program_constant=False)
-            if incumbent_code:
+            if policy.local_repair and reference_code:
                 _validate_local_repair(
-                    incumbent_code,
+                    reference_code,
                     candidate,
                     repair_scope=repair_scope,
                 )
@@ -927,7 +975,11 @@ def run_dynamic_agent_migration(
             _write_json(trial_path, trial)
             trial.pop("implementation_context", None)
             quality = _candidate_quality(trial)
-            accepted = _is_better_candidate(quality, incumbent_quality)
+            accepted = (
+                _is_better_candidate(quality, incumbent_quality)
+                if policy.preserve_incumbent
+                else True
+            )
             record.update(
                 valid=True,
                 trial_result=str(trial_path),
@@ -1000,6 +1052,8 @@ def run_dynamic_agent_migration(
         "runtime_environment": str(runtime_environment_path),
         "run_dir": str(run_dir),
         "spec": asdict(spec),
+        "method_id": policy.method_id,
+        "method_policy": asdict(policy),
         "frozen_program": str(artifacts / "task_program.py"),
         "source_adapter": str(artifacts / "source_adapter.py"),
         "target_adapter": str(artifacts / "target_adapter.py") if (artifacts / "target_adapter.py").is_file() else "",
@@ -1303,7 +1357,33 @@ def _target_prompt(
     latest_code: str,
     latest_result: Mapping[str, Any],
     repair_scope: Mapping[str, Any],
+    policy: RepairMethodPolicy,
 ) -> str:
+    diagnosis_label = (
+        "Structured execution evidence with failure diagnosis"
+        if policy.structured_diagnosis
+        else "Raw execution evidence (no diagnosis or repair hint)"
+    )
+    reference_label = (
+        "Current best target adapter (the preserved incumbent)"
+        if policy.preserve_incumbent
+        else "Most recent target adapter"
+    )
+    if policy.one_shot:
+        repair_instructions = """This is a one-shot baseline:
+- Generate one target adapter from source evidence and target interfaces.
+- No target execution feedback or repair round will be provided."""
+    elif policy.local_repair:
+        repair_instructions = """Repair requirement for this round:
+- Return a complete module, but make the smallest semantic change inside the allowed scope.
+- Fix the concrete diagnosed failure before tuning later motion stages.
+- Preserve public method signatures and controller/action-mapping methods.
+- Make a semantic code change; formatting, comments, or docstrings alone are rejected."""
+    else:
+        repair_instructions = """Repair requirement for this round:
+- Use only the raw execution evidence below to revise the complete target adapter.
+- Preserve the required module contract and make a semantic code change.
+- Do not assume a diagnosis or repair hint that is not present in the raw evidence."""
     return f"""Migrate the frozen source program to the target robot by writing only the target adapter.
 
 Task request:
@@ -1329,7 +1409,7 @@ Source action-policy reference. It may omit module-level imports; do not paste i
 {json.dumps(source_result.get('implementation_context') or {}, ensure_ascii=False)}
 
 Source success evidence:
-{_pretty(_prompt_trial(source_result))}
+{_pretty(_prompt_trial(source_result, include_diagnosis=policy.structured_diagnosis))}
 
 Generic runtime API available to your adapter (contains no task policy):
 {_source_of(ManiSkillDynamicRobot, 16000)}
@@ -1352,13 +1432,15 @@ Required target module contract:
 
 {_action_api_contract()}
 
-Current best target adapter (the incumbent). Preserve it unless the candidate improves it:
+Method under evaluation: {policy.method_id}
+
+{reference_label}:
 ```python
 {_trim(incumbent_code, 18000)}
 ```
 
-Incumbent execution evidence:
-{_pretty(_prompt_trial(incumbent_result))}
+{diagnosis_label}:
+{_pretty(_prompt_trial(incumbent_result, include_diagnosis=policy.structured_diagnosis))}
 
 Latest rejected or invalid candidate, if different from the incumbent:
 ```python
@@ -1366,17 +1448,13 @@ Latest rejected or invalid candidate, if different from the incumbent:
 ```
 
 Latest rejected candidate evidence:
-{_pretty(_prompt_trial(latest_result))}
+{_pretty(_prompt_trial(latest_result, include_diagnosis=policy.structured_diagnosis))}
 
 Allowed local repair scope for this round:
 {_pretty(repair_scope)}
 
-Repair requirement for this round:
-- Return a complete module, but make the smallest semantic change inside the allowed scope.
-- Fix the concrete diagnosed failure before tuning later motion stages.
-- Preserve the incumbent public method signatures and controller/action-mapping methods.
+{repair_instructions}
 - Do not repeat the latest rejected change.
-- Make a semantic code change; formatting, comments, or docstrings alone are rejected.
 - If action_steps is 0, remove the reported pre-action exception so the candidate reaches self._step(action).
 """
 
@@ -1395,7 +1473,9 @@ def _prompt_observation(observation: Mapping[str, Any]) -> Dict[str, Any]:
     return compact
 
 
-def _prompt_trial(result: Mapping[str, Any]) -> Dict[str, Any]:
+def _prompt_trial(
+    result: Mapping[str, Any], *, include_diagnosis: bool = True
+) -> Dict[str, Any]:
     """Bound feedback size while retaining physical counterexamples."""
 
     keys = (
@@ -1404,6 +1484,9 @@ def _prompt_trial(result: Mapping[str, Any]) -> Dict[str, Any]:
         "execution_error", "failure_layer", "failure_diagnosis",
     )
     compact = {key: result.get(key) for key in keys if key in result}
+    if not include_diagnosis:
+        compact.pop("failure_layer", None)
+        compact.pop("failure_diagnosis", None)
     snapshot = result.get("runtime_snapshot")
     if isinstance(snapshot, Mapping):
         compact["runtime_snapshot"] = _prompt_snapshot(snapshot)

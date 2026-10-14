@@ -86,6 +86,7 @@ class TargetPreparationTests(unittest.TestCase):
                 "render_backend": "gpu",
                 "download_assets": True,
                 "asset_timeout": 5,
+                "method_id": "diagnosis",
             }
             result_payload = {
                 "success": True,
@@ -144,6 +145,7 @@ class TargetPreparationTests(unittest.TestCase):
                 migrate.call_args.kwargs["source_provenance"]["kind"],
                 "frozen_source_program.v2",
             )
+            self.assertEqual(migrate.call_args.kwargs["method_id"], "diagnosis")
             interface = json.loads((root / "out" / "target_interface.json").read_text())
             self.assertEqual(interface["action_space"]["shape"], [4])
 

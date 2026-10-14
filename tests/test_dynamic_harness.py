@@ -817,6 +817,149 @@ def build_robot(env, *, control_mode, robot_uid):
     @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
     @patch("maniskill_backend.dynamic_harness.discover_environment")
     @patch("maniskill_backend.dynamic_harness.gen_text")
+    def test_one_shot_method_executes_exactly_one_target_generation(
+        self,
+        generate,
+        discover,
+        run_trial,
+    ) -> None:
+        generate.return_value = LLMTextResult(
+            TARGET_CODE, True, "test-model", raw_text=TARGET_CODE
+        )
+        discover.side_effect = [
+            {"robot_uid": "panda", "action_space": {"shape": [4]}},
+            {"robot_uid": "fetch", "action_space": {"shape": [9]}},
+        ]
+        run_trial.side_effect = [
+            {"success": True, "message": "supplied source success"},
+            {"success": False, "message": "target failed", "action_steps": 2},
+        ]
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1", task_label="TurnFaucet-v1",
+            source_robot="panda", target_robot="fetch", max_target_cycles=8,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "source.py"
+            source_path.write_text(SOURCE_CODE, encoding="utf-8")
+            result = run_dynamic_agent_migration(
+                spec=spec,
+                run_dir=Path(tmp) / "run",
+                source_actions=read_source_actions(source_path),
+                method_id="one_shot",
+            )
+        self.assertFalse(result["success"])
+        self.assertEqual(result["method_id"], "one_shot")
+        self.assertEqual(len(result["target_cycles"]), 1)
+        self.assertEqual(generate.call_count, 1)
+
+    @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
+    @patch("maniskill_backend.dynamic_harness.discover_environment")
+    @patch("maniskill_backend.dynamic_harness.gen_text")
+    def test_raw_log_method_hides_structured_diagnosis(
+        self,
+        generate,
+        discover,
+        run_trial,
+    ) -> None:
+        repaired = TARGET_CODE.replace("range(2)", "range(3)")
+        generate.side_effect = [
+            LLMTextResult(TARGET_CODE, True, "test-model", raw_text=TARGET_CODE),
+            LLMTextResult(repaired, True, "test-model", raw_text=repaired),
+        ]
+        discover.side_effect = [
+            {"robot_uid": "panda", "action_space": {"shape": [4]}},
+            {"robot_uid": "fetch", "action_space": {"shape": [9]}},
+        ]
+        run_trial.side_effect = [
+            {"success": True, "message": "supplied source success"},
+            {
+                "success": False,
+                "message": "raw contact failure",
+                "action_steps": 4,
+                "failure_diagnosis": {
+                    "reason": "secret_reason",
+                    "repair_hint": "SECRET_REPAIR_HINT",
+                },
+            },
+            {"success": True, "message": "target success", "action_steps": 1},
+        ]
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1", task_label="TurnFaucet-v1",
+            source_robot="panda", target_robot="fetch", max_target_cycles=2,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            source_path = Path(tmp) / "source.py"
+            source_path.write_text(SOURCE_CODE, encoding="utf-8")
+            result = run_dynamic_agent_migration(
+                spec=spec,
+                run_dir=Path(tmp) / "run",
+                source_actions=read_source_actions(source_path),
+                method_id="raw_log",
+            )
+        second_prompt = generate.call_args_list[1].kwargs["prompt"]
+        self.assertTrue(result["success"])
+        self.assertIn("raw contact failure", second_prompt)
+        self.assertNotIn("secret_reason", second_prompt)
+        self.assertNotIn("SECRET_REPAIR_HINT", second_prompt)
+
+    @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
+    @patch("maniskill_backend.dynamic_harness.discover_environment")
+    @patch("maniskill_backend.dynamic_harness.gen_text")
+    def test_diagnosis_method_does_not_preserve_better_incumbent(
+        self,
+        generate,
+        discover,
+        run_trial,
+    ) -> None:
+        worse = TARGET_CODE.replace("range(2)", "range(3)")
+        generate.side_effect = [
+            LLMTextResult(TARGET_CODE, True, "test-model", raw_text=TARGET_CODE),
+            LLMTextResult(worse, True, "test-model", raw_text=worse),
+        ]
+        discover.side_effect = [
+            {"robot_uid": "panda", "action_space": {"shape": [4]}},
+            {"robot_uid": "fetch", "action_space": {"shape": [9]}},
+        ]
+        run_trial.side_effect = [
+            {"success": True, "message": "supplied source success"},
+            {
+                "success": False,
+                "message": "goal not reached",
+                "code_ok": True,
+                "action_steps": 50,
+                "failure_diagnosis": {"reason": "official_task_outcome_not_reached"},
+            },
+            {
+                "success": False,
+                "message": "object escaped",
+                "code_ok": True,
+                "action_steps": 10,
+                "failure_diagnosis": {"reason": "manipulated_object_left_workspace"},
+            },
+        ]
+        spec = DynamicMigrationSpec(
+            env_id="TurnFaucet-v1", task_label="TurnFaucet-v1",
+            source_robot="panda", target_robot="fetch", max_target_cycles=2,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path = root / "source.py"
+            source_path.write_text(SOURCE_CODE, encoding="utf-8")
+            result = run_dynamic_agent_migration(
+                spec=spec,
+                run_dir=root / "run",
+                source_actions=read_source_actions(source_path),
+                method_id="diagnosis",
+            )
+            accepted_code = (root / "run/dynamic_artifacts/target_adapter.py").read_text()
+        self.assertFalse(result["success"])
+        self.assertEqual(result["incumbent_cycle"], 2)
+        self.assertEqual(accepted_code.strip(), worse.strip())
+        self.assertTrue(result["target_cycles"][1]["accepted_as_incumbent"])
+
+    @patch("maniskill_backend.dynamic_harness.run_dynamic_trial")
+    @patch("maniskill_backend.dynamic_harness.discover_environment")
+    @patch("maniskill_backend.dynamic_harness.gen_text")
     def test_worse_target_candidate_does_not_replace_incumbent(
         self,
         generate,
