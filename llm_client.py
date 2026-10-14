@@ -95,6 +95,25 @@ def generation_temperature() -> float:
     return value
 
 
+def request_timeout_seconds() -> float:
+    value = float(
+        os.environ.get(
+            "EM_LLM_TIMEOUT_SECONDS",
+            EXPERIMENT_LLM.get("request_timeout_seconds", 180),
+        )
+    )
+    if value <= 0:
+        raise ValueError("EM_LLM_TIMEOUT_SECONDS must be positive.")
+    return value
+
+
+def request_max_retries() -> int:
+    value = int(os.environ.get("EM_LLM_MAX_RETRIES", EXPERIMENT_LLM.get("max_retries", 0)))
+    if value < 0:
+        raise ValueError("EM_LLM_MAX_RETRIES must be non-negative.")
+    return value
+
+
 def deepseek_thinking_mode() -> str:
     """Use non-thinking output by default so code modules are not truncated."""
 
@@ -167,6 +186,8 @@ def make_client(provider: str | None = None) -> OpenAI:
     return OpenAI(
         base_url=PROVIDER_CONFIG[provider]["base_url"],
         api_key=api_key,
+        timeout=request_timeout_seconds(),
+        max_retries=request_max_retries(),
         default_headers=(
             {"X-OpenRouter-Metadata": "enabled"}
             if provider == PROVIDER_OPENROUTER

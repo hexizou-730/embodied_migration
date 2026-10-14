@@ -23,6 +23,8 @@ from llm_client import (
     openrouter_allow_fallbacks,
     openrouter_exclude_reasoning,
     openrouter_reasoning_effort,
+    request_max_retries,
+    request_timeout_seconds,
     openrouter_upstream_provider,
 )
 
@@ -69,6 +71,8 @@ def capture_experiment_environment(
             "model": default_model(),
             "temperature": generation_temperature(),
             "max_tokens": completion_token_limit(),
+            "request_timeout_seconds": request_timeout_seconds(),
+            "max_retries": request_max_retries(),
             "reasoning_effort": openrouter_reasoning_effort(),
             "exclude_reasoning_from_response": openrouter_exclude_reasoning(),
             "seed": llm_seed(),
@@ -122,6 +126,8 @@ def compare_with_contract(
         "model",
         "temperature",
         "max_tokens",
+        "request_timeout_seconds",
+        "max_retries",
         "reasoning_effort",
         "exclude_reasoning_from_response",
         "seed",

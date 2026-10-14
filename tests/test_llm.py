@@ -4,13 +4,28 @@ import unittest
 from unittest.mock import patch
 
 from maniskill_backend.llm import gen_code, gen_text
-from llm_client import openrouter_upstream_provider
+from llm_client import make_client, openrouter_upstream_provider
 
 
 class LLMTests(unittest.TestCase):
     def test_openrouter_provider_name_is_normalized_to_routing_slug(self) -> None:
         with patch.dict("os.environ", {"EM_OPENROUTER_PROVIDER": "DeepSeek"}):
             self.assertEqual(openrouter_upstream_provider(), "deepseek")
+
+    @patch("llm_client.OpenAI")
+    def test_client_uses_bounded_timeout_without_hidden_retries(self, client) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "EM_LLM_PROVIDER": "openrouter",
+                "OPENROUTER_API_KEY": "test-key",
+                "EM_LLM_TIMEOUT_SECONDS": "12",
+                "EM_LLM_MAX_RETRIES": "0",
+            },
+        ):
+            make_client()
+        self.assertEqual(client.call_args.kwargs["timeout"], 12.0)
+        self.assertEqual(client.call_args.kwargs["max_retries"], 0)
 
     @patch("maniskill_backend.llm.has_api_key", return_value=True)
     @patch("maniskill_backend.llm.make_client")

@@ -26,6 +26,8 @@ def use_contract_llm() -> None:
     fields = {
         "provider": "EM_LLM_PROVIDER", "model": "EM_MODEL",
         "temperature": "EM_TEMPERATURE", "max_tokens": "EM_MAX_TOKENS",
+        "request_timeout_seconds": "EM_LLM_TIMEOUT_SECONDS",
+        "max_retries": "EM_LLM_MAX_RETRIES",
         "reasoning_effort": "EM_REASONING_EFFORT",
         "exclude_reasoning_from_response": "EM_EXCLUDE_REASONING",
         "seed": "EM_LLM_SEED", "upstream_provider": "EM_OPENROUTER_PROVIDER",
