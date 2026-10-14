@@ -9,11 +9,11 @@
     "kind": "existing_candidate",
     "catalog_origin": "maniskill_3.0.1_motionplanning_reference"
   },
-  "frozen_at_utc": "2026-10-13T21:31:38.961752+00:00",
-  "candidate_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/input_source.py",
+  "frozen_at_utc": "2026-10-14T03:01:18.947240+00:00",
+  "candidate_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/input_source.py",
   "frozen_path": "frozen/t01_push_cube.py",
   "source_sha256": "af39c5d6aa327298fd4a64bda04ed113b93f99c4ed48910e7057a04bc58372b1",
-  "support_code_sha256": "a90bcfaa7ab5f3995f77da2de6b604b902264dba0715a13484407dba925406c1",
+  "support_code_sha256": "dcc8978f664d5db4a8bb241a98855ac268f560424057bf94eab49bf7242550c1",
   "validated_seeds": [
     0,
     1,
@@ -29,7 +29,7 @@
   "success_rate": 1.0,
   "max_episode_steps": 1000,
   "success_authority": "env.unwrapped.evaluate()['success']",
-  "environment_contract_sha256": "f5afbfa1f91f51672a6ca6114848e2749c8fefe0718856511bf5e39fa1d6541e",
+  "environment_contract_sha256": "555c6ef7aac9608aa6be4545c893172ec0c9df217402daf3fcdafa8fef0dd837",
   "trials": [
     {
       "seed": 0,
@@ -45,7 +45,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_000.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_000.json"
     },
     {
       "seed": 1,
@@ -61,7 +61,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_001.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_001.json"
     },
     {
       "seed": 2,
@@ -77,7 +77,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_002.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_002.json"
     },
     {
       "seed": 3,
@@ -93,7 +93,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_003.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_003.json"
     },
     {
       "seed": 4,
@@ -109,7 +109,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_004.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_004.json"
     },
     {
       "seed": 5,
@@ -125,7 +125,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_005.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_005.json"
     },
     {
       "seed": 6,
@@ -141,7 +141,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_006.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_006.json"
     },
     {
       "seed": 7,
@@ -157,7 +157,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_007.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_007.json"
     },
     {
       "seed": 8,
@@ -173,7 +173,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_008.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_008.json"
     },
     {
       "seed": 9,
@@ -189,7 +189,7 @@
         "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
         "message": "source actions reached official success"
       },
-      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/incumbent_local_repair_refresh/t01_push_cube/seed_009.json"
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_refresh/phase8_source_refresh_timeout_20261014/t01_push_cube/seed_009.json"
     }
   ]
 }

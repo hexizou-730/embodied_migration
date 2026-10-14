@@ -1,0 +1,1288 @@
+[
+  {
+    "method_id": "one_shot",
+    "cycle": 1,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 2117,
+      "prompt_tokens": 15397,
+      "total_tokens": 17514,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1499,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 11325,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.008835916185,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.008835916185,
+        "upstream_inference_prompt_cost": 0.004791345345,
+        "upstream_inference_completions_cost": 0.00404457084
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, attempts=2, selected=StreamLake",
+        "attempt": 2,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 43882,
+        "attempts": [
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 429
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 200
+          }
+        ]
+      },
+      "provider": "StreamLake"
+    },
+    "valid": true,
+    "error": null,
+    "adapter_sha256": "d41142ab7e4b931d9650798bda03c2ed69f3e41c83d4e4d5eefad80ba89d3e5e",
+    "semantic_sha256": "0e540961ca5d98b1e2125fc84d3597bf70ae275dbf172a5b48c35fefde727b33",
+    "accepted_as_incumbent": true,
+    "candidate_quality": {
+      "rank": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        60,
+        0,
+        -20
+      ],
+      "success": true,
+      "official_success": true,
+      "code_ok": true,
+      "acted": true,
+      "constraint_safe": true,
+      "diagnosis_reason": "official_task_outcome_not_reached",
+      "official_true_signals": 0,
+      "action_steps": 20
+    },
+    "repair_scope": {
+      "name": "initial_generation"
+    },
+    "trial": {
+      "success": true,
+      "official_success": true,
+      "action_steps": 20,
+      "message": "adapter returned success and official evaluate() returned success",
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "adapter returned success and official evaluate() returned success"
+      }
+    }
+  },
+  {
+    "method_id": "raw_log",
+    "cycle": 1,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 3039,
+      "prompt_tokens": 15419,
+      "total_tokens": 18458,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 2475,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 11908,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.01010792448,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.01010792448,
+        "upstream_inference_prompt_cost": 0.0043018542,
+        "upstream_inference_completions_cost": 0.00580607028
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, attempts=2, selected=StreamLake",
+        "attempt": 2,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 59061,
+        "attempts": [
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 429
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 200
+          }
+        ]
+      },
+      "provider": "StreamLake"
+    },
+    "valid": true,
+    "error": null,
+    "adapter_sha256": "d2708d0c4ae31a18543c0c89c6dbd7f3243cd8fa099667333c65e68aebb48453",
+    "semantic_sha256": "3be8068cad4421148f73f92e1e3da672f58bd3d803534ba609ed542b25d2c4a2",
+    "accepted_as_incumbent": true,
+    "candidate_quality": {
+      "rank": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        60,
+        0,
+        -29
+      ],
+      "success": true,
+      "official_success": true,
+      "code_ok": true,
+      "acted": true,
+      "constraint_safe": true,
+      "diagnosis_reason": "official_task_outcome_not_reached",
+      "official_true_signals": 0,
+      "action_steps": 29
+    },
+    "repair_scope": {
+      "name": "initial_generation"
+    },
+    "trial": {
+      "success": true,
+      "official_success": true,
+      "action_steps": 29,
+      "message": "adapter returned success and official evaluate() returned success",
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "adapter returned success and official evaluate() returned success"
+      }
+    }
+  },
+  {
+    "method_id": "diagnosis",
+    "cycle": 1,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 2283,
+      "prompt_tokens": 15472,
+      "total_tokens": 17755,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1920,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 10865,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.009627508305,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.009627508305,
+        "upstream_inference_prompt_cost": 0.005265791145,
+        "upstream_inference_completions_cost": 0.00436171716
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, attempts=2, selected=StreamLake",
+        "attempt": 2,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 45157,
+        "attempts": [
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 429
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 200
+          }
+        ]
+      },
+      "provider": "StreamLake"
+    },
+    "valid": false,
+    "error": "ValueError('Generated adapter must contain a measured runtime branch.')",
+    "adapter_sha256": "cfb033e4b97320141c3ffe0b90ceb795ab1b488cd0ad898eff5de4fffa259d13",
+    "semantic_sha256": "90024d086073398919c49b28492e71d33312b414aa448552325150121350d2a7",
+    "accepted_as_incumbent": null,
+    "candidate_quality": null,
+    "repair_scope": {
+      "name": "initial_generation",
+      "diagnosis_reason": null,
+      "may_change": "Create the complete target task skill and target action mapping.",
+      "must_preserve": "Keep the frozen high-level program, public skill signatures, controller/action mapping, simulator, official success signal, and unrelated working stages unchanged."
+    },
+    "trial": null
+  },
+  {
+    "method_id": "diagnosis",
+    "cycle": 2,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 1802,
+      "prompt_tokens": 15855,
+      "total_tokens": 17657,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1250,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 12429,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.007704888345,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.007704888345,
+        "upstream_inference_prompt_cost": 0.004262131305,
+        "upstream_inference_completions_cost": 0.00344275704
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, attempts=2, selected=StreamLake",
+        "attempt": 2,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 38259,
+        "attempts": [
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 429
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 200
+          }
+        ]
+      },
+      "provider": "StreamLake"
+    },
+    "valid": true,
+    "error": null,
+    "adapter_sha256": "256e526b926b85a3cfec01fd91d03fb552ae9ebe13b42bc7d9e025db9b00f376",
+    "semantic_sha256": "9d5e9b9379866066093c04ee5999c07df3108a6b9267ca58abf3f0702b039f13",
+    "accepted_as_incumbent": true,
+    "candidate_quality": {
+      "rank": [
+        0,
+        0,
+        1,
+        1,
+        1,
+        60,
+        0,
+        -300
+      ],
+      "success": false,
+      "official_success": false,
+      "code_ok": true,
+      "acted": true,
+      "constraint_safe": true,
+      "diagnosis_reason": "official_task_outcome_not_reached",
+      "official_true_signals": 0,
+      "action_steps": 300
+    },
+    "repair_scope": {
+      "name": "skill_policy",
+      "diagnosis_reason": null,
+      "may_change": "Change the failed task-skill motion while preserving working interfaces.",
+      "must_preserve": "Keep the frozen high-level program, public skill signatures, controller/action mapping, simulator, official success signal, and unrelated working stages unchanged."
+    },
+    "trial": {
+      "success": false,
+      "official_success": false,
+      "action_steps": 300,
+      "message": "task program returned failure",
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "task program returned failure"
+      }
+    }
+  },
+  {
+    "method_id": "diagnosis",
+    "cycle": 3,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 2890,
+      "prompt_tokens": 24776,
+      "total_tokens": 27666,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 2323,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 18980,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.01256899266,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.01256899266,
+        "upstream_inference_prompt_cost": 0.00704758986,
+        "upstream_inference_completions_cost": 0.0055214028
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, attempts=2, selected=StreamLake",
+        "attempt": 2,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 56333,
+        "attempts": [
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 429
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 200
+          }
+        ]
+      },
+      "provider": "StreamLake"
+    },
+    "valid": true,
+    "error": null,
+    "adapter_sha256": "dcb463d9e06ee69146562c9728fc287c8aade93a9884ae6894d4842dd1568377",
+    "semantic_sha256": "43282ed5ea7df9a95f4b8bc6a5ba73c60cbf82f9ba2373db223fbb18b0522ecb",
+    "accepted_as_incumbent": true,
+    "candidate_quality": {
+      "rank": [
+        0,
+        0,
+        1,
+        1,
+        1,
+        40,
+        0,
+        -271
+      ],
+      "success": false,
+      "official_success": false,
+      "code_ok": true,
+      "acted": true,
+      "constraint_safe": true,
+      "diagnosis_reason": "contact_not_established",
+      "official_true_signals": 0,
+      "action_steps": 271
+    },
+    "repair_scope": {
+      "name": "task_completion",
+      "diagnosis_reason": "official_task_outcome_not_reached",
+      "may_change": "Change only the unfinished physical task stage and its measured completion guards.",
+      "must_preserve": "Keep the frozen high-level program, public skill signatures, controller/action mapping, simulator, official success signal, and unrelated working stages unchanged."
+    },
+    "trial": {
+      "success": false,
+      "official_success": false,
+      "action_steps": 271,
+      "message": "task program returned failure",
+      "failure_diagnosis": {
+        "layer": "contact_geometry",
+        "reason": "contact_not_established",
+        "evidence": {
+          "entity": "obj",
+          "action_steps": 271,
+          "tcp_displacement_m": 0.16414,
+          "object_displacement_m": 0.0,
+          "final_tcp_object_xy_m": 0.07162,
+          "initial_position": [
+            -0.00075,
+            0.05364,
+            0.02
+          ],
+          "final_position": [
+            -0.00075,
+            0.05364,
+            0.02
+          ]
+        },
+        "repair_hint": "The TCP moved substantially but the manipulated object did not. Do not add more steps or repeat the same waypoint. Change the contact side or height, verify object motion after a short action pulse, and use a grasp-and-place strategy when the observed target gripper supports it."
+      }
+    }
+  },
+  {
+    "method_id": "ours",
+    "cycle": 1,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 1681,
+      "prompt_tokens": 15476,
+      "total_tokens": 17157,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1299,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 11288,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.00811079424,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.00811079424,
+        "upstream_inference_prompt_cost": 0.00489921012,
+        "upstream_inference_completions_cost": 0.00321158412
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, attempts=2, selected=StreamLake",
+        "attempt": 2,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 43272,
+        "attempts": [
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 429
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 200
+          }
+        ]
+      },
+      "provider": "StreamLake"
+    },
+    "valid": false,
+    "error": "ValueError('Generated adapter must contain a measured runtime branch.')",
+    "adapter_sha256": "db786468c9061c8512c73cd363885a89dfb9b6c3c4fa8dbb7619bfc2ebcc7463",
+    "semantic_sha256": "9765a7d85382b09557d2c4bfe77cf8606288d0e7aeffb93ef103d992d2efe2d7",
+    "accepted_as_incumbent": null,
+    "candidate_quality": null,
+    "repair_scope": {
+      "name": "initial_generation",
+      "diagnosis_reason": null,
+      "may_change": "Create the complete target task skill and target action mapping.",
+      "must_preserve": "Keep the frozen high-level program, public skill signatures, controller/action mapping, simulator, official success signal, and unrelated working stages unchanged."
+    },
+    "trial": null
+  },
+  {
+    "method_id": "ours",
+    "cycle": 2,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 2070,
+      "prompt_tokens": 15877,
+      "total_tokens": 17947,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 1599,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.01434825,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.01434825,
+        "upstream_inference_prompt_cost": 0.00714465,
+        "upstream_inference_completions_cost": 0.0072036
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, selected=Parasail",
+        "attempt": 1,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 58225
+      },
+      "provider": "Parasail"
+    },
+    "valid": false,
+    "error": "ValueError('Generated adapter must check self._early_stop() directly or use a trusted inherited action helper that checks it.')",
+    "adapter_sha256": "04fca52aeefeb3d2dc592c81f6b9fb00b6636fd68143cb06671c0741de579c0a",
+    "semantic_sha256": "4a59eecef3fe68bbbad3465aa3676dd6c3d6e8fb0e07abb3ff71d0663558d1b1",
+    "accepted_as_incumbent": null,
+    "candidate_quality": null,
+    "repair_scope": {
+      "name": "initial_generation",
+      "diagnosis_reason": null,
+      "may_change": "Create the complete target task skill and target action mapping.",
+      "must_preserve": "Keep the frozen high-level program, public skill signatures, controller/action mapping, simulator, official success signal, and unrelated working stages unchanged."
+    },
+    "trial": null
+  },
+  {
+    "method_id": "ours",
+    "cycle": 3,
+    "used_llm": true,
+    "model": "deepseek/deepseek-v4-pro",
+    "usage": {
+      "completion_tokens": 1281,
+      "prompt_tokens": 16043,
+      "total_tokens": 17324,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": null,
+        "audio_tokens": 0,
+        "reasoning_tokens": 902,
+        "rejected_prediction_tokens": null,
+        "image_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 12057,
+        "cache_write_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost": 0.007214839965,
+      "is_byok": false,
+      "cost_details": {
+        "upstream_inference_cost": 0.007214839965,
+        "upstream_inference_prompt_cost": 0.004767463845,
+        "upstream_inference_completions_cost": 0.00244737612
+      },
+      "openrouter_metadata": {
+        "requested": "deepseek/deepseek-v4-pro",
+        "strategy": "direct",
+        "region": "CDG",
+        "summary": "available=15, attempts=2, selected=StreamLake",
+        "attempt": 2,
+        "is_byok": false,
+        "endpoints": {
+          "total": 15,
+          "available": [
+            {
+              "provider": "Parasail",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "StreamLake",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": true
+            },
+            {
+              "provider": "GMICloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DigitalOcean",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Reka",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Cloudflare",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "DeepInfra",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "SiliconFlow",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Alibaba",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Novita",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Venice",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "AtlasCloud",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Baidu",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            },
+            {
+              "provider": "Azure",
+              "model": "deepseek/deepseek-v4-pro-20260423",
+              "selected": false
+            }
+          ]
+        },
+        "generation_time": 25976,
+        "attempts": [
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 429
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4-pro-20260423",
+            "status": 200
+          }
+        ]
+      },
+      "provider": "StreamLake"
+    },
+    "valid": false,
+    "error": "ValueError('Generated adapter must contain a measured runtime branch.')",
+    "adapter_sha256": "d0fa27d8f8026b8ec673c260103b58034b5c9efe125d15225257f41dd6418d1f",
+    "semantic_sha256": "e1fa80ca146442ed7eb6603582a6ada93eb0c1bb470ced9f7653d939645e588d",
+    "accepted_as_incumbent": null,
+    "candidate_quality": null,
+    "repair_scope": {
+      "name": "initial_generation",
+      "diagnosis_reason": null,
+      "may_change": "Create the complete target task skill and target action mapping.",
+      "must_preserve": "Keep the frozen high-level program, public skill signatures, controller/action mapping, simulator, official success signal, and unrelated working stages unchanged."
+    },
+    "trial": null
+  }
+]
