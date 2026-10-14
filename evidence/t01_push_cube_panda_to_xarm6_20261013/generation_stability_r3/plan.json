@@ -1,0 +1,27 @@
+{
+  "schema": "generation_stability_plan.v1",
+  "task_id": "t01_push_cube",
+  "source_robot": "panda",
+  "target_robot": "xarm6_robotiq",
+  "target_control_mode": "pd_ee_delta_pos",
+  "seed": 0,
+  "repetitions": 3,
+  "max_cycles": 8,
+  "max_episode_steps": 1000,
+  "task_timeout": 3600,
+  "asset_timeout": 900,
+  "download_assets": true,
+  "obs_mode": "state",
+  "sim_backend": "auto",
+  "render_backend": "gpu",
+  "source_hashes": {
+    "t01_push_cube": "af39c5d6aa327298fd4a64bda04ed113b93f99c4ed48910e7057a04bc58372b1"
+  },
+  "contract_sha256": "f5afbfa1f91f51672a6ca6114848e2749c8fefe0718856511bf5e39fa1d6541e",
+  "runner_hashes": {
+    "stability.py": "ad3ae26a6cea8d164d6ae9e6fc893dbaf9f7004fef44cdf65619cd0d96614d83",
+    "maniskill_backend/generation_stability.py": "325df4b924d33bf38702dfc279fdcd6174fd7ff3e21f506eb04f87cd59448195",
+    "maniskill_backend/target_preparation.py": "eef3e1f0358c3ca97b5a23a24d557fe4f70817f3377684bf3b9eb3316cf40468",
+    "maniskill_backend/dynamic_harness.py": "be6e9d5e9dc672fe0e5670c47961b521551c655f1b5704ea72fd6395a67128b3"
+  }
+}

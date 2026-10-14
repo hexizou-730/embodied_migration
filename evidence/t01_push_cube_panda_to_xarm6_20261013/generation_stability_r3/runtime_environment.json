@@ -1,0 +1,169 @@
+{
+  "schema": "embodied_migration_runtime.v1",
+  "recorded_at_utc": "2026-10-13T21:59:31.880075+00:00",
+  "contract_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/experiment_config.json",
+  "contract_sha256": "f5afbfa1f91f51672a6ca6114848e2749c8fefe0718856511bf5e39fa1d6541e",
+  "contract": {
+    "schema": "embodied_migration_experiment.v1",
+    "runtime": {
+      "python_version": "3.10.20",
+      "packages": {
+        "mani_skill": "3.0.1",
+        "sapien": "3.0.3"
+      },
+      "cuda_driver_api": "13.2"
+    },
+    "llm": {
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4-pro",
+      "temperature": 0.0,
+      "max_tokens": 16384,
+      "reasoning_effort": "low",
+      "exclude_reasoning_from_response": true,
+      "seed": 0,
+      "upstream_provider": "deepseek",
+      "allow_provider_fallbacks": true
+    },
+    "migration_defaults": {
+      "source_control_mode": "pd_ee_delta_pos",
+      "target_control_mode": "pd_ee_delta_pos",
+      "obs_mode": "state",
+      "sim_backend": "auto",
+      "render_backend": "gpu",
+      "max_episode_steps": 500
+    },
+    "robot_uid_policy": {
+      "source": "source_file_or_explicit_override",
+      "target": "required_cli_argument",
+      "normalize_aliases": {
+        "franka": "panda",
+        "franka_panda": "panda",
+        "xarm6": "xarm6_robotiq"
+      }
+    },
+    "seed_policy": {
+      "simulation_default": 0,
+      "llm_seed": 0,
+      "same_seed_for_source_and_target": true,
+      "development_seeds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "held_out_seeds": [
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109
+      ],
+      "repair_uses_development_seeds_only": true
+    },
+    "source_program_validation": {
+      "minimum_seed_count": 10,
+      "default_seeds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "required_success_rate": 1.0,
+      "max_episode_steps": 1000,
+      "freeze_requires_environment_contract": true,
+      "success_authority": "env.unwrapped.evaluate()['success']"
+    }
+  },
+  "actual": {
+    "repository": {
+      "commit": "cd667a00da6bc48833a4df1a5ec5430dd62f64ba",
+      "dirty": true,
+      "status": [
+        "?? source_programs/frozen/t02_pull_cube.json",
+        "?? source_programs/frozen/t02_pull_cube.py",
+        "?? source_programs/frozen/t04_pick_cube.json",
+        "?? source_programs/frozen/t04_pick_cube.py",
+        "?? source_programs/frozen/t06_lift_peg_upright.json",
+        "?? source_programs/frozen/t06_lift_peg_upright.py",
+        "?? source_programs/frozen/t07_stack_cube.json",
+        "?? source_programs/frozen/t07_stack_cube.py"
+      ]
+    },
+    "python": {
+      "version": "3.10.20",
+      "major_minor": "3.10",
+      "implementation": "CPython",
+      "executable": "/users/eleves-b/2025/hexi.zou/.conda/envs/em-ms/bin/python",
+      "platform": "Linux-5.14.0-687.54.1.el9_8.x86_64-x86_64-with-glibc2.34"
+    },
+    "packages": {
+      "mani_skill": {
+        "version": "3.0.1",
+        "module_path": "/users/eleves-b/2025/hexi.zou/.conda/envs/em-ms/lib/python3.10/site-packages/mani_skill/__init__.py",
+        "git_commit": null
+      },
+      "sapien": {
+        "version": "3.0.3",
+        "module_path": "/users/eleves-b/2025/hexi.zou/.conda/envs/em-ms/lib/python3.10/site-packages/sapien/__init__.py",
+        "git_commit": null
+      },
+      "numpy": {
+        "version": "1.26.4"
+      },
+      "torch": {
+        "version": "2.12.0"
+      },
+      "openai": {
+        "version": "2.37.0"
+      }
+    },
+    "cuda": {
+      "driver_api": "13.2",
+      "driver_version": "595.104.02",
+      "gpus": [
+        "NVIDIA RTX A4000, 595.104.02"
+      ],
+      "nvcc": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Tue_Jun_09_02:43:40_PM_PDT_2026\nCuda compilation tools, release 13.3, V13.3.73\nBuild cuda_13.3.r13.3/compiler.38244171_0"
+    },
+    "llm": {
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4-pro",
+      "temperature": 0.0,
+      "max_tokens": 16384,
+      "reasoning_effort": "low",
+      "exclude_reasoning_from_response": true,
+      "seed": 0,
+      "upstream_provider": "deepseek",
+      "allow_provider_fallbacks": true
+    },
+    "migration": {
+      "phase": "generation_stability",
+      "task_id": "t01_push_cube",
+      "source_robot": "panda",
+      "target_robot": "xarm6_robotiq",
+      "seed": 0,
+      "repetitions": 3
+    }
+  },
+  "validation": {
+    "ok": true,
+    "mismatches": []
+  }
+}
