@@ -1,0 +1,103 @@
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # ---- helpers -------------------------------------------------------
+    def _safe_move(self, target, gripper, steps):
+        if self._early_stop():
+            return False
+        self._move_towards(np.asarray(target, dtype=np.float64),
+                           gripper=float(gripper), steps=int(steps))
+        return not self._early_stop()
+
+    def _safe_repeat(self, delta, gripper, steps):
+        if self._early_stop():
+            return False
+        self._repeat_action(np.asarray(delta, dtype=np.float64),
+                            gripper=float(gripper), steps=int(steps))
+        return not self._early_stop()
+
+    def _hold_gripper(self, gripper, steps):
+        return self._safe_repeat(np.zeros(3), gripper, steps)
+
+    # ---- policy --------------------------------------------------------
+    def run_source_actions(self) -> bool:
+        # Measured state only.
+        cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).ravel()
+        cubeB = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).ravel()
+
+        # Approximate cube half-size from observed resting height (z ~ 0.02).
+        half = 0.02
+        grasp_z = cubeA[2] + half + 0.005  # slightly above center for top grasp
+        approach_z = grasp_z + 0.10
+        lift_z = grasp_z + 0.12
+        place_z = cubeB[2] + 2.0 * half + 0.005
+
+        # 1) Open gripper and move above cubeA.
+        if not self._hold_gripper(0.0, 8):
+            return False
+        above_A = np.array([cubeA[0], cubeA[1], approach_z])
+        if not self._safe_move(above_A, 0.0, 40):
+            return False
+
+        # 2) Descend to grasp pose.
+        grasp_A = np.array([cubeA[0], cubeA[1], grasp_z])
+        if not self._safe_move(grasp_A, 0.0, 40):
+            return False
+
+        # 3) Close gripper.
+        if not self._hold_gripper(0.81, 20):
+            return False
+        if not self._is_grasping_entity("cubeA"):
+            # small nudge down and retry close
+            if not self._safe_repeat(np.array([0.0, 0.0, -0.01]), 0.81, 10):
+                return False
+            if not self._hold_gripper(0.81, 15):
+                return False
+            if not self._is_grasping_entity("cubeA"):
+                return False
+
+        # 4) Lift.
+        lift_A = np.array([cubeA[0], cubeA[1], lift_z])
+        if not self._safe_move(lift_A, 0.81, 40):
+            return False
+
+        # 5) Move above cubeB.
+        above_B = np.array([cubeB[0], cubeB[1], lift_z])
+        if not self._safe_move(above_B, 0.81, 60):
+            return False
+
+        # 6) Descend to place height.
+        place_A = np.array([cubeB[0], cubeB[1], place_z])
+        if not self._safe_move(place_A, 0.81, 40):
+            return False
+
+        # 7) Open gripper to release.
+        if not self._hold_gripper(0.0, 20):
+            return False
+
+        # 8) Retreat upward to let cube settle.
+        retreat = np.array([cubeB[0], cubeB[1], place_z + 0.12])
+        if not self._safe_move(retreat, 0.0, 40):
+            return False
+
+        # 9) Settle and verify official success.
+        if not self._hold_gripper(0.0, 20):
+            return False
+
+        ev = self._official_evaluation()
+        try:
+            return bool(ev.get("success", False))
+        except Exception:
+            return False
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)

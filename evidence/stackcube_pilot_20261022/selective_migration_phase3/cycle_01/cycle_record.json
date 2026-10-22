@@ -1,0 +1,259 @@
+{
+  "cycle": 1,
+  "model": "deepseek/deepseek-v4.1-flash",
+  "used_llm": true,
+  "usage": {
+    "completion_tokens": 1367,
+    "prompt_tokens": 8547,
+    "total_tokens": 9914,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": null,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": null,
+      "image_tokens": 0
+    },
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 8320,
+      "cache_write_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost": 0.00076595,
+    "is_byok": false,
+    "cost_details": {
+      "upstream_inference_cost": 0.00076595,
+      "upstream_inference_prompt_cost": 8.245e-05,
+      "upstream_inference_completions_cost": 0.0006835
+    },
+    "openrouter_metadata": {
+      "requested": "deepseek/deepseek-v4.1-flash",
+      "strategy": "direct",
+      "region": "CDG",
+      "summary": "available=36, attempts=2, selected=Relace",
+      "attempt": 2,
+      "is_byok": false,
+      "endpoints": {
+        "total": 38,
+        "available": [
+          {
+            "provider": "OpenInference",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Relace",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": true
+          },
+          {
+            "provider": "Decart",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Sail Research",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Sail Research",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "InferenceNet",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "InferenceNet",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Reka",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "AtlasCloud",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "DeepInfra",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "StreamLake",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "CoreWeave",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "GMICloud",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Wafer",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Novita",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "DeepInfra",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Fireworks",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Phala",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "DigitalOcean",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Morph",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Makora",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Crusoe",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Google",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Nebius",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "PrimeIntellect",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Baidu",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "BaseTen",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Together",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "SiliconFlow",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Modal",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "BaseTen",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Parasail",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Fireworks",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Venice",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "Alibaba",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          },
+          {
+            "provider": "BaseTen",
+            "model": "deepseek/deepseek-v4.1-flash-20260910",
+            "selected": false
+          }
+        ]
+      },
+      "generation_time": 9587,
+      "attempts": [
+        {
+          "provider": "OpenInference",
+          "model": "deepseek/deepseek-v4.1-flash-20260910",
+          "status": 429
+        },
+        {
+          "provider": "Relace",
+          "model": "deepseek/deepseek-v4.1-flash-20260910",
+          "status": 200
+        }
+      ]
+    },
+    "provider": "Relace"
+  },
+  "allowed_stage": null,
+  "locked_stages_before": [],
+  "valid": true,
+  "adapter": "results/selective_migration/phase3_pilot_v7/cycle_01/target_adapter.py",
+  "method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "88540d29ce406fdc8164caf592b9b3fc9095d5e0d85de60e075f9d85bb5ce8d5",
+    "_stage_approach": "86c585205075ab0e683588b9944f4231674ffde73de54a78632f2af4795caaf9",
+    "_stage_grasp": "d00551050d7392278325e262c766ef5ddc2f7371227b615a28920a773ad23ade",
+    "_stage_lift": "d17264a9ffe866209674c216fe197cad88558e3a6edc848f71dfb0de51ee6eb2",
+    "_stage_align": "281ce5e51f3a9316c8c2bec6fb042c36d025b41ddebe2c343c940fffcfd4d7e0",
+    "_stage_release": "7cda72d615dc1daefc9e3f49823db2e079452621fafec1d5c79c8e8b80a355bb",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "trial_result": "results/selective_migration/phase3_pilot_v7/cycle_01/trial_result.json",
+  "success": false,
+  "action_steps": 6,
+  "failed_stage": "grasp",
+  "completed_stages": [
+    "approach"
+  ],
+  "message": "task program returned failure"
+}

@@ -1,0 +1,185 @@
+```python
+from typing import Any
+import numpy as np
+
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    """Target adapter for StackCube-v1 with xarm6_robotiq in pd_ee_delta_pose.
+
+    Strategy: top-down grasp of cubeA, lift, translate above cubeB, descend,
+    release, retreat. Uses only measured state and bounded actions.
+    """
+
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(
+            env,
+            control_mode=control_mode,
+            robot_uid=robot_uid,
+            gripper_open=0.81,
+            gripper_close=0.0,
+            move_steps=30,
+            settle_steps=12,
+            max_delta_m=0.04,
+        )
+        # TCP-to-flange offset observed in the source evidence (gripper tip
+        # sits ~0.155 m below the flange along -Z when pointing down).
+        self._tcp_offset_z = 0.155
+        # Cube half-size from task state.
+        self._cube_half = 0.02
+
+    # ------------------------------------------------------------------ #
+    # low-level helpers
+    # ------------------------------------------------------------------ #
+    def _tcp(self) -> np.ndarray:
+        return np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+
+    def _entity(self, name: str) -> np.ndarray:
+        return np.asarray(self._entity_pos(name), dtype=np.float64).reshape(3)
+
+    def _goto(self, target, gripper, tol=0.006, max_iters=60, pulse=8):
+        """Drive TCP to a world target with bounded deltas and early stop."""
+        target = np.asarray(target, dtype=np.float64).reshape(3)
+        for _ in range(max_iters):
+            if self._early_stop():
+                return False
+            cur = self._tcp()
+            delta = target - cur
+            dist = float(np.linalg.norm(delta))
+            if dist <= tol:
+                return True
+            step = np.clip(delta, -self.max_delta_m, self.max_delta_m)
+            self._repeat_action(step, gripper=gripper, steps=pulse)
+        # final correction pass
+        for _ in range(8):
+            if self._early_stop():
+                return False
+            cur = self._tcp()
+            delta = target - cur
+            if float(np.linalg.norm(delta)) <= tol:
+                return True
+            step = np.clip(delta, -self.max_delta_m, self.max_delta_m)
+            self._repeat_action(step, gripper=gripper, steps=4)
+        return True
+
+    def _descend_until_contact(self, gripper, max_steps=40, dz=-0.004):
+        """Descend in small pulses until the TCP stops making progress or a
+        grasp is detected. Returns True if a grasp is detected."""
+        prev = self._tcp()
+        for _ in range(max_steps):
+            if self._early_stop():
+                return False
+            self._repeat_action(
+                np.array([0.0, 0.0, dz]), gripper=gripper, steps=4
+            )
+            if self._is_grasping_entity("cubeA"):
+                return True
+            cur = self._tcp()
+            # If we stopped descending (blocked), stop.
+            if abs(cur[2] - prev[2]) < 0.0005 and dz < 0:
+                return self._is_grasping_entity("cubeA")
+            prev = cur
+        return self._is_grasping_entity("cubeA")
+
+    # ------------------------------------------------------------------ #
+    # main policy
+    # ------------------------------------------------------------------ #
+    def run_source_actions(self) -> bool:
+        # ---- read measured state ------------------------------------- #
+        cubeA = self._entity("cubeA")
+        cubeB = self._entity("cubeB")
+
+        # ---- approach: hover above cubeA ----------------------------- #
+        hover = np.array(
+            [cubeA[0], cubeA[1], cubeA[2] + self._tcp_offset_z + 0.08],
+            dtype=np.float64,
+        )
+        if not self._goto(hover, gripper=self.gripper_open):
+            return False
+
+        # ---- descend to grasp height --------------------------------- #
+        grasp_z = cubeA[2] + self._tcp_offset_z - 0.005
+        grasp_target = np.array([cubeA[0], cubeA[1], grasp_z], dtype=np.float64)
+        if not self._goto(grasp_target, gripper=self.gripper_open, tol=0.004):
+            return False
+
+        # ---- close gripper and verify grasp -------------------------- #
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=20)
+        if self._early_stop():
+            return False
+
+        if not self._is_grasping_entity("cubeA"):
+            # Nudge down and try again.
+            self._descend_until_contact(self.gripper_close)
+            self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=12)
+            if not self._is_grasping_entity("cubeA"):
+                # Small vertical wiggle while closing to seat the fingers.
+                for _ in range(3):
+                    if self._early_stop():
+                        return False
+                    self._repeat_action(
+                        np.array([0.0, 0.0, -self.max_delta_m]),
+                        gripper=self.gripper_close,
+                        steps=6,
+                    )
+                    self._repeat_action(
+                        np.array([0.0, 0.0, self.max_delta_m]),
+                        gripper=self.gripper_close,
+                        steps=4,
+                    )
+                if not self._is_grasping_entity("cubeA"):
+                    return False
+
+        # ---- lift ---------------------------------------------------- #
+        lift_target = self._tcp().copy()
+        lift_target[2] += 0.12
+        if not self._goto(lift_target, gripper=self.gripper_close):
+            return False
+
+        # ---- align above cubeB --------------------------------------- #
+        cubeB = self._entity("cubeB")
+        cubeA_now = self._entity("cubeA")
+        # Desired cubeA center: directly above cubeB by one cube height.
+        desired_A = np.array(
+            [cubeB[0], cubeB[1], cubeB[2] + 2.0 * self._cube_half],
+            dtype=np.float64,
+        )
+        # TCP-to-held-object offset in world frame.
+        offset = cubeA_now - self._tcp()
+        align_target = desired_A - offset
+        # Approach from above with clearance.
+        align_target[2] += 0.03
+        if not self._goto(align_target, gripper=self.gripper_close):
+            return False
+
+        # ---- descend to place ---------------------------------------- #
+        place_target = desired_A - offset
+        if not self._goto(place_target, gripper=self.gripper_close, tol=0.004):
+            return False
+
+        # ---- release ------------------------------------------------- #
+        self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=20)
+        if self._early_stop():
+            return False
+
+        # ---- retreat ------------------------------------------------- #
+        retreat = self._tcp().copy()
+        retreat[2] += 0.10
+        self._goto(retreat, gripper=self.gripper_open)
+
+        # ---- settle and verify --------------------------------------- #
+        for _ in range(25):
+            if self._early_stop():
+                break
+            self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=6)
+            ev = self._official_evaluation()
+            if bool(ev.get("success", False)):
+                return True
+
+        return bool(self._official_evaluation().get("success", False))
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```

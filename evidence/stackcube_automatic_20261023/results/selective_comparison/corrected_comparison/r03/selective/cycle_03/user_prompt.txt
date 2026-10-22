@@ -1,0 +1,378 @@
+Repair one failed target method for StackCube-v1, panda -> xarm6_robotiq.
+Return exactly one Python function: def _stage_release(self) -> bool.
+The harness will insert it into the saved adapter. Do not output the class, imports, or other methods.
+All other methods and the stage order are preserved by the harness. Retained stages: ['align', 'approach', 'grasp', 'lift'].
+The replacement must change executable logic; copying the current body or editing comments is rejected.
+
+Source-derived relation and successful source-stage observation:
+{
+  "stage_id": "release",
+  "source_lines": [
+    90,
+    90
+  ],
+  "operations": [
+    "open_gripper"
+  ],
+  "source_calls": [
+    "planner.open_gripper()"
+  ],
+  "target_symbol": null,
+  "target_expression": null,
+  "entities": [
+    "cubeA",
+    "cubeB"
+  ],
+  "dependency_expressions": [],
+  "completion_check": "official success: cubeA is on cubeB, static, and not grasped",
+  "transferable_relation": "release cubeA on cubeB and satisfy the unchanged official success predicate",
+  "preserve": [
+    "stage order",
+    "object-relative task relation",
+    "completion semantics"
+  ],
+  "adaptation_obligations": [
+    "map target open command",
+    "wait for official static and released conditions"
+  ],
+  "runtime": {
+    "action_count": 2,
+    "first_action_step": 102,
+    "last_action_step": 103,
+    "source_line_counts": {
+      "90": 2
+    },
+    "final_state": {
+      "step": 103,
+      "tcp": [
+        [
+          -0.047568000853061676,
+          0.10873299837112427,
+          0.06042899936437607
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.04627734422683716,
+            0.11028970032930374,
+            0.05999899283051491
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03921497240662575,
+            0.10743801295757294,
+            0.020000355318188667
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": true,
+        "success": true
+      }
+    }
+  }
+}
+
+Target control mode: pd_ee_delta_pose
+Action bounds: {"repr": "Box([-1. -1. -1. -1. -1. -1.  0.], [1.   1.   1.   1.   1.   1.   0.81], (7,), float32)", "shape": [7], "dtype": "float32", "low": {"min": -1.0, "max": 0.0, "values": [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0]}, "high": {"min": 0.8100000023841858, "max": 1.0, "values": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8100000023841858]}}
+Official evaluation implementation:
+    def evaluate(self):
+        pos_A = self.cubeA.pose.p
+        pos_B = self.cubeB.pose.p
+        offset = pos_A - pos_B
+        xy_flag = (
+            torch.linalg.norm(offset[..., :2], axis=1)
+            <= torch.linalg.norm(self.cube_half_size[:2]) + 0.005
+        )
+        z_flag = torch.abs(offset[..., 2] - self.cube_half_size[..., 2] * 2) <= 0.005
+        is_cubeA_on_cubeB = torch.logical_and(xy_flag, z_flag)
+        # NOTE (stao): GPU sim can be fast but unstable. Angular velocity is rather high despite it not really rotating
+        is_cubeA_static = self.cubeA.is_static(lin_thresh=1e-2, ang_thresh=0.5)
+        is_cubeA_grasped = self.agent.is_grasping(self.cubeA)
+        success = is_cubeA_on_cubeB * is_cubeA_static * (~is_cubeA_grasped)
+        return {
+            "is_cubeA_grasped": is_cubeA_grasped,
+            "is_cubeA_on_cubeB": is_cubeA_on_cubeB,
+            "is_cubeA_static": is_cubeA_static,
+            "success": success.bool(),
+        }
+
+
+Available inherited API (np is already imported):
+- self._entity_pos(name) and self._tcp_pos(): flat xyz numpy arrays, in world coordinates.
+- self._official_evaluation(): official boolean fields; self._official_success(): task success bool.
+- self._is_grasping_entity(name): actual target grasp detector.
+- self._make_action(normalized_world_xyz, gripper=value): maps to the controller frame, leaves rotation zero.
+- self._step(action): sends a real simulator action and updates termination.
+- self._move_towards(world_target, gripper=value, steps=count): translates TCP, stops within 1 cm.
+- self._repeat_action(normalized_world_xyz, gripper=value, steps=count): repeats real commands.
+- self._early_stop(): episode ended. Check it in explicit bounded loops.
+Motion helper arguments gripper and steps are keyword-only. No tol argument exists.
+For opening/closing in place use _repeat_action(np.zeros(3), gripper=..., steps=...).
+Never modify the simulator, object poses, controller, official evaluator, runtime methods, or other stages.
+
+Current initialization (read-only context):
+def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+Current method to replace:
+def _stage_release(self) -> bool:
+        for _ in range(4):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_open, steps=self.settle_steps)
+            ev = self._official_evaluation()
+            if bool(ev.get("is_cubeA_on_cubeB", False)) and bool(ev.get("is_cubeA_static", False)) \
+                    and not bool(ev.get("is_cubeA_grasped", True)):
+                return True
+        ev = self._official_evaluation()
+        return bool(ev.get("is_cubeA_on_cubeB", False)) and bool(ev.get("is_cubeA_static", False)) \
+            and not bool(ev.get("is_cubeA_grasped", True))
+
+Real execution evidence:
+{
+  "success": false,
+  "message": "task program returned failure",
+  "execution_error": "",
+  "action_steps": 77,
+  "official_evaluation": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": true,
+    "success": false
+  },
+  "repair_localization": {
+    "runtime_failed_stage": "release",
+    "repair_stage": "release",
+    "reason": "runtime_failed_stage"
+  },
+  "stage_boundary_states": {
+    "approach": {
+      "step": 3,
+      "tcp": [
+        [
+          -0.08130700141191483,
+          -0.09296400099992752,
+          0.11993099749088287
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.0830530896782875,
+            -0.0935426577925682,
+            0.019999898970127106
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926442563533783,
+            0.10727579891681671,
+            0.019999992102384567
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    },
+    "grasp": {
+      "step": 18,
+      "tcp": [
+        [
+          -0.08242800086736679,
+          -0.09378699958324432,
+          0.024708999320864677
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.08253037184476852,
+            -0.09318209439516068,
+            0.02000621147453785
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926438093185425,
+            0.10727570205926895,
+            0.02000001072883606
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "lift": {
+      "step": 21,
+      "tcp": [
+        [
+          -0.08128999918699265,
+          -0.0933310016989708,
+          0.12016300112009048
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.08100511133670807,
+            -0.09300605207681656,
+            0.11431611329317093
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926438093185425,
+            0.10727570205926895,
+            0.02000001072883606
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "align": {
+      "step": 29,
+      "tcp": [
+        [
+          -0.00939400028437376,
+          0.0963210016489029,
+          0.04191799834370613
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.03666463866829872,
+            0.10449172556400299,
+            0.06872495263814926
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.035567402839660645,
+            0.1050834134221077,
+            0.023800499737262726
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "release": {
+      "step": 77,
+      "tcp": [
+        [
+          -0.009083000011742115,
+          0.09601200371980667,
+          0.042040999978780746
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.04179814085364342,
+            0.142287015914917,
+            0.019999925047159195
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.020855968818068504,
+            0.06933963298797607,
+            0.024634946137666702
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    }
+  },
+  "final_state": {
+    "tcp": [
+      -0.009083000011742115,
+      0.09601200371980667,
+      0.042040999978780746
+    ],
+    "task_state": {
+      "robot_init_qpos_noise": 0.02,
+      "num_envs": 1,
+      "reconfiguration_freq": 0,
+      "cube_half_size": [
+        0.019999999552965164,
+        0.019999999552965164,
+        0.019999999552965164
+      ]
+    },
+    "entities": {
+      "cubeA": {
+        "position": [
+          [
+            -0.041797999292612076,
+            0.1422870010137558,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.27448898553848267,
+            -0.2744959890842438,
+            0.6516579985618591,
+            0.6516519784927368
+          ]
+        ]
+      },
+      "cubeB": {
+        "position": [
+          [
+            -0.02085600048303604,
+            0.06933999806642532,
+            0.02463500015437603
+          ]
+        ],
+        "quaternion": [
+          [
+            0.4172469973564148,
+            0.515142023563385,
+            -0.31687700748443604,
+            0.678322970867157
+          ]
+        ]
+      }
+    }
+  }
+}
+
+Each candidate restarts from reset and replays retained stages. The final failed snapshot is not the
+entry state of this method: use the measured preceding-stage boundary and re-read state at runtime.
+Use the source object-relative relation to meet the official predicates; TCP arrival alone does not
+establish the object's pose. Return True only after measuring this stage's completion.
+Latest validation error: 
+Return only the replacement function.

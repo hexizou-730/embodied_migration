@@ -1,0 +1,35 @@
+def _stage_align(self) -> bool:
+        cubeB = self._entity_pos("cubeB")
+        cubeA = self._entity_pos("cubeA")
+        # Official predicate: cubeA center must be one full cube height above cubeB center,
+        # with XY within half-size + 0.005. Cube half-size is 0.02, so stack_z = cubeB.z + 0.04.
+        stack_z = float(cubeB[2]) + 0.04
+        # Move the held cube in XY over cubeB while keeping it above stack height.
+        for _ in range(8):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+            if xy_err <= 0.004:
+                break
+            # Command the held cube's XY toward cubeB, keeping current height.
+            goal = np.array([cubeB[0], cubeB[1], float(cubeA[2])], dtype=np.float32)
+            self._move_towards(goal, gripper=self.gripper_close, steps=self.move_steps)
+        # Descend so the held cube's center reaches stack height above cubeB.
+        for _ in range(10):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+            z_err = abs(float(cubeA[2]) - stack_z)
+            if xy_err <= 0.004 and z_err <= 0.004:
+                break
+            goal = np.array([cubeB[0], cubeB[1], stack_z], dtype=np.float32)
+            self._move_towards(goal, gripper=self.gripper_close, steps=self.move_steps)
+        # Measure completion against the official stack geometry, not TCP arrival.
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        offset = cubeA - cubeB
+        xy_ok = bool(np.linalg.norm(offset[:2]) <= 0.025)
+        z_ok = bool(abs(float(offset[2]) - 0.04) <= 0.005)
+        return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))

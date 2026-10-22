@@ -1,0 +1,103 @@
+{
+  "schema": "source_program_validation.v1",
+  "task": {
+    "task_id": "t07_stack_cube",
+    "env_id": "StackCube-v1",
+    "source_robot": "panda",
+    "control_mode": "pd_joint_pos",
+    "candidate_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/source_programs/frozen/t07_stack_cube.py",
+    "frozen_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/source_programs/frozen/t07_stack_cube.py",
+    "origin": "maniskill_3.0.1_motionplanning_reference",
+    "episode_limit": 1000
+  },
+  "candidate": {
+    "ok": true,
+    "status": "candidate_ready",
+    "entrypoint": "run",
+    "sha256": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895"
+  },
+  "seeds": [
+    0,
+    1
+  ],
+  "trials": [
+    {
+      "seed": 0,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 103,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "contact_geometry",
+        "reason": "contact_not_established",
+        "evidence": {
+          "entity": "cubeB",
+          "action_steps": 103,
+          "tcp_displacement_m": 0.15296,
+          "object_displacement_m": 0.00017,
+          "final_tcp_object_xy_m": 0.00845,
+          "initial_position": [
+            -0.03926,
+            0.10728,
+            0.02
+          ],
+          "final_position": [
+            -0.03921,
+            0.10744,
+            0.02
+          ]
+        },
+        "repair_hint": "The TCP moved substantially but the manipulated object did not. Do not add more steps or repeat the same waypoint. Change the contact side or height, verify object motion after a short action pulse, and use a grasp-and-place strategy when the observed target gripper supports it."
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/stackcube_pilot/preflight_20261021_224739/t07_stack_cube/seed_000.json"
+    },
+    {
+      "seed": 1,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 89,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "contact_geometry",
+        "reason": "contact_not_established",
+        "evidence": {
+          "entity": "cubeB",
+          "action_steps": 89,
+          "tcp_displacement_m": 0.11894,
+          "object_displacement_m": 2e-05,
+          "final_tcp_object_xy_m": 0.00247,
+          "initial_position": [
+            -0.04262,
+            0.07581,
+            0.02
+          ],
+          "final_position": [
+            -0.04263,
+            0.07581,
+            0.02
+          ]
+        },
+        "repair_hint": "The TCP moved substantially but the manipulated object did not. Do not add more steps or repeat the same waypoint. Change the contact side or height, verify object motion after a short action pulse, and use a grasp-and-place strategy when the observed target gripper supports it."
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/stackcube_pilot/preflight_20261021_224739/t07_stack_cube/seed_001.json"
+    }
+  ],
+  "success": true,
+  "frozen": false,
+  "provenance": {
+    "kind": "existing_candidate",
+    "catalog_origin": "maniskill_3.0.1_motionplanning_reference"
+  },
+  "runtime_environment": "results/stackcube_pilot/preflight_20261021_224739/t07_stack_cube/runtime_environment.json",
+  "environment_contract_sha256": "555c6ef7aac9608aa6be4545c893172ec0c9df217402daf3fcdafa8fef0dd837",
+  "environment_valid": true,
+  "support_code_sha256": "dcc8978f664d5db4a8bb241a98855ac268f560424057bf94eab49bf7242550c1",
+  "status": "validated",
+  "num_success": 2,
+  "num_trials": 2,
+  "success_rate": 1.0
+}

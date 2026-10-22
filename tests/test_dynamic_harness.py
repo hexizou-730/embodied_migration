@@ -17,6 +17,7 @@ from maniskill_backend.dynamic_harness import (
     _candidate_quality,
     _dynamic_diagnosis,
     _is_better_candidate,
+    _RecordedEnv,
     _prompt_trial,
     _repair_scope,
     _validate_local_repair,
@@ -89,6 +90,30 @@ class _FakeEnv:
 
 
 class DynamicHarnessTests(unittest.TestCase):
+    def test_recorded_env_attributes_actions_to_source_lines(self) -> None:
+        recorded = _RecordedEnv(_FakeEnv(), 10, source_path=Path(__file__))
+        expected_line = sys._getframe().f_lineno + 1
+        recorded.step(np.zeros(4, dtype=np.float32))
+        recorded.finalize_source_trace()
+        self.assertEqual(recorded.source_action_trace[0]["step"], 1)
+        self.assertEqual(recorded.source_action_trace[0]["source_line"], expected_line)
+        self.assertEqual(
+            recorded.source_action_trace[0]["source_function"],
+            "test_recorded_env_attributes_actions_to_source_lines",
+        )
+        self.assertIn("state_after", recorded.source_action_trace[0])
+
+    def test_recorded_env_captures_state_when_source_stage_changes(self) -> None:
+        recorded = _RecordedEnv(_FakeEnv(), 10, source_path=Path(__file__))
+        recorded.step(np.zeros(4, dtype=np.float32))
+        recorded.step(np.zeros(4, dtype=np.float32))
+        self.assertNotEqual(
+            recorded.source_action_trace[0]["source_line"],
+            recorded.source_action_trace[1]["source_line"],
+        )
+        self.assertIn("state_after", recorded.source_action_trace[0])
+
+
     def test_candidate_quality_prefers_physical_progress_and_success(self) -> None:
         program_error = _candidate_quality(
             {
@@ -240,6 +265,30 @@ def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobo
         self.assertEqual(diagnosis["reason"], "manipulated_object_left_workspace")
         self.assertEqual(diagnosis["evidence"]["entity"], "ball")
         self.assertTrue(diagnosis["evidence"]["fell_below_workspace"])
+
+    def test_successful_stack_is_not_diagnosed_from_stationary_base_cube(self) -> None:
+        result = {
+            "success": True,
+            "official_success": True,
+            "code_ok": True,
+            "action_steps": 103,
+            "state_trace": [
+                {"tcp": [[0.0, 0.0, 0.2]], "entities": {"cubeB": [[0.0, 0.1, 0.02]]}},
+                {"tcp": [[0.0, 0.1, 0.08]], "entities": {"cubeB": [[0.0, 0.1, 0.02]]}},
+            ],
+        }
+        self.assertEqual(_dynamic_diagnosis(result), {
+            "layer": "success", "reason": "official_task_success", "repair_hint": "",
+        })
+        result["success"] = False
+        result["official_success"] = False
+        self.assertEqual(_dynamic_diagnosis(result)["reason"], "contact_not_established")
+
+    def test_diagnosis_does_not_accept_unverified_success_claim(self) -> None:
+        result = {"success": True, "ret_val": True, "official_success": False, "action_steps": 1}
+        self.assertEqual(
+            _dynamic_diagnosis(result)["reason"], "adapter_claimed_success_without_official_success"
+        )
 
     def test_diagnosis_detects_tcp_motion_without_object_contact(self) -> None:
         diagnosis = _dynamic_diagnosis(

@@ -6,6 +6,33 @@
 
 ## 当前进度
 
+2026-10-23 的研究主线是 **StackCube：Panda → xArm6 的源程序阶段保留与局部修复**。
+单方法修复已经获得真实官方成功：LLM 只输出待修的 `_stage_align`，Harness 拼回
+原 Adapter 并校验其余方法不变。下面的 PushCube 数字保留为早期基础设施证据。
+已有候选自动修复为 3/3 成功；从零生成对照中，三种方法均为 2/3 成功，局部修复
+本组使用的动作和 tokens 更少，尚无成功率优势结论。最新细节以
+[PROGRESS.md](PROGRESS.md) 和 [StackCube 实验记录](evidence/stackcube_automatic_20261023/README.md) 为准。
+
+当前研究入口：
+
+```bash
+python selective.py --run-name stackcube_auto --max-cycles 3
+python phase4.py --run-name stackcube_comparison --max-cycles 3 --repetitions 3
+```
+
+第一条从源阶段表示生成目标 Adapter，失败后只生成诊断指定的方法；第二条自动运行
+三种方法各三次的从零生成对照并汇总，最多 27 次 LLM 请求。环境 seed 固定，重复时
+改变 LLM 的采样 seed。两条命令均需要 ManiSkill 环境和有效 API 配置，会产生实际费用。
+`--resume-adapter` 只用于已有候选的重放续修；续修结果不能混入从零生成对照。
+
+本次 StackCube 实验使用以下环境配置（API key 由本机 `.env` 或环境变量提供）：
+
+```bash
+export EM_LLM_PROVIDER=openrouter EM_MODEL=deepseek/deepseek-v4.1-flash
+export EM_OPENROUTER_PROVIDER=deepseek EM_OPENROUTER_ALLOW_FALLBACKS=true
+export EM_MAX_TOKENS=6000 EM_REASONING_EFFORT=none EM_EXCLUDE_REASONING=true
+```
+
 截至 2026-10-14，框架已经完成一次可复核的端到端验收：冻结的 Panda
 `PushCube-v1` 程序迁移到 `xarm6_robotiq`，LLM 生成的 Adapter 在修复后的
 Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=True`。
@@ -21,7 +48,7 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | 四方法对照 | 统一入口和单次真实 pilot 已完成；样本量不足，暂不比较优劣 |
 | 六档难度 | 配置已定义；难度扰动执行器及正式评估待完成 |
 
-当前只把 PushCube 作为已验收结果。证据见
+在上述早期阶段，PushCube 是已验收案例。证据见
 [evidence/t01_push_cube_panda_to_xarm6_20261013](evidence/t01_push_cube_panda_to_xarm6_20261013)。
 一次成功不代表生成过程稳定：随后一次全新 8 轮生成共执行 122 个目标动作，
 仍因未建立有效接触而失败。固定成功 Adapter 在未见 seeds 100–109 上取得
@@ -44,6 +71,8 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | `evaluate.py` | 固定成功 Adapter，在未见 seed 上评估，不调用 LLM 或修复代码 |
 | `stability.py` | 多次从零生成 Adapter，统计生成成功率、动作、token 和费用 |
 | `benchmark.py` | 在同一任务和预算下比较四种生成/修复方法 |
+| `selective.py` | StackCube 五阶段生成与单方法修复；可重放已有候选后续修 |
+| `phase4.py` | StackCube 三方法从零生成对照、独立重复和自动汇总 |
 
 单文件迁移，不需要在任务目录中注册：
 

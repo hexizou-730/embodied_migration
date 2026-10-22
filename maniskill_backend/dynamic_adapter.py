@@ -225,6 +225,9 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
     def __init__(self, env: Any, *, control_mode: str, robot_uid: str, **kwargs: Any) -> None:
         self.robot_uid = robot_uid
         self.action_steps = 0
+        self.active_stage: Optional[str] = None
+        self.completed_stages: List[str] = []
+        self.failed_stage: Optional[str] = None
         super().__init__(env, control_mode=control_mode, **kwargs)
 
     def _step(self, action: Any) -> None:
@@ -349,6 +352,66 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
         result = self._official_evaluation()
         return _scalar_bool(result.get("success", False))
 
+    def _run_stage(self, stage_id: str, callback: Any) -> bool:
+        """Execute one generated stage while preserving machine-readable blame."""
+
+        stage_id = str(stage_id)
+        if not callable(callback):
+            raise TypeError(f"Stage {stage_id!r} callback is not callable.")
+        start_action_steps = self.action_steps
+        self.active_stage = stage_id
+        self.failed_stage = None
+        self._record_state("stage_start", stage_id=stage_id, action_steps=self.action_steps)
+        try:
+            returned = bool(callback())
+        except BaseException:
+            official_success = False
+            try:
+                official_success = self._official_success()
+            except Exception:
+                pass
+            if official_success:
+                if stage_id not in self.completed_stages:
+                    self.completed_stages.append(stage_id)
+                self.active_stage = None
+                self._record_state(
+                    "stage_end",
+                    stage_id=stage_id,
+                    ok=True,
+                    action_steps=self.action_steps,
+                    official_success=True,
+                )
+            else:
+                self.failed_stage = stage_id
+                self._record_state(
+                    "stage_end",
+                    stage_id=stage_id,
+                    ok=False,
+                    action_steps=self.action_steps,
+                    exception=True,
+                )
+            raise
+
+        official_success = self._official_success()
+        stage_action_steps = self.action_steps - start_action_steps
+        ok = bool(official_success or (returned and stage_action_steps > 0))
+        if ok:
+            if stage_id not in self.completed_stages:
+                self.completed_stages.append(stage_id)
+            self.active_stage = None
+        else:
+            self.failed_stage = stage_id
+        self._record_state(
+            "stage_end",
+            stage_id=stage_id,
+            ok=ok,
+            action_steps=self.action_steps,
+            stage_action_steps=stage_action_steps,
+            zero_action_return=bool(returned and stage_action_steps == 0 and not official_success),
+            official_success=official_success,
+        )
+        return ok
+
     def _snapshot(self) -> Dict[str, Any]:
         entities = {}
         for name, actor in self._entity_catalog().items():
@@ -370,6 +433,11 @@ class ManiSkillDynamicRobot(ManiSkillDeltaEERobot):
             "entities": entities,
             "entity_aliases": self._entity_aliases(self._entity_catalog()),
             "official_evaluation": _jsonable(self._official_evaluation()),
+            "stage_runtime": {
+                "active_stage": self.active_stage,
+                "completed_stages": list(self.completed_stages),
+                "failed_stage": self.failed_stage,
+            },
             "terminated": bool(self.terminated),
             "truncated": bool(self.truncated),
         }

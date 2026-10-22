@@ -1,0 +1,46 @@
+def _stage_release(self) -> bool:
+    # First, open the gripper in place to release the cube.
+    for _ in range(3):
+        if self._early_stop():
+            return False
+        self._repeat_action(np.zeros(3, dtype=np.float32),
+                            gripper=self.gripper_open, steps=self.settle_steps)
+        ev = self._official_evaluation()
+        if not bool(ev.get("is_cubeA_grasped", True)):
+            break
+
+    # Measure the actual object poses and correct the cube placement relative to cubeB.
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    half = 0.02
+    target_xy = cubeB[:2]
+    target_z = cubeB[2] + 2.0 * half
+
+    # Move TCP above the cube to nudge it toward cubeB if needed.
+    for _ in range(6):
+        if self._early_stop():
+            return False
+        ev = self._official_evaluation()
+        if bool(ev.get("is_cubeA_on_cubeB", False)) and bool(ev.get("is_cubeA_static", False)) \
+                and not bool(ev.get("is_cubeA_grasped", True)):
+            return True
+
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        offset = cubeA - cubeB
+        # Desired cubeA position: centered on cubeB in xy, stacked in z.
+        desired = np.array([cubeB[0], cubeB[1], cubeB[2] + 2.0 * half], dtype=np.float32)
+        delta = desired - cubeA
+        # Approach from above the cube, then push gently toward desired xy.
+        tcp = self._tcp_pos()
+        above = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.06], dtype=np.float32)
+        if np.linalg.norm(tcp[:2] - above[:2]) > 0.01 or tcp[2] < above[2] - 0.01:
+            self._move_towards(above, gripper=self.gripper_open, steps=8)
+        else:
+            push = np.array([delta[0], delta[1], 0.0], dtype=np.float32)
+            push = np.clip(push, -0.03, 0.03)
+            self._repeat_action(push, gripper=self.gripper_open, steps=4)
+
+    ev = self._official_evaluation()
+    return bool(ev.get("is_cubeA_on_cubeB", False)) and bool(ev.get("is_cubeA_static", False)) \
+        and not bool(ev.get("is_cubeA_grasped", True))

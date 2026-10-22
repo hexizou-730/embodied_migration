@@ -1,0 +1,119 @@
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # ---- helpers -------------------------------------------------------
+    def _safe_move(self, target, gripper, steps):
+        self._move_towards(np.asarray(target, dtype=np.float64),
+                           gripper=float(gripper), steps=int(steps))
+        return bool(self._early_stop())
+
+    def _safe_repeat(self, delta, gripper, steps):
+        self._repeat_action(np.asarray(delta, dtype=np.float64),
+                            gripper=float(gripper), steps=int(steps))
+        return bool(self._early_stop())
+
+    def _above(self, pos, dz):
+        p = np.array(pos, dtype=np.float64).reshape(3)
+        return np.array([p[0], p[1], p[2] + dz], dtype=np.float64)
+
+    def _entity_xy(self, name):
+        p = np.array(self._entity_pos(name), dtype=np.float64).reshape(3)
+        return p
+
+    def _tcp_xy(self):
+        return np.array(self._tcp_pos(), dtype=np.float64).reshape(3)
+
+    def _success(self):
+        try:
+            ev = self._official_evaluation()
+            return bool(ev.get("success", False))
+        except Exception:
+            return False
+
+    def _grasped(self):
+        try:
+            return bool(self._is_grasping_entity("cubeA"))
+        except Exception:
+            return False
+
+    # ---- policy --------------------------------------------------------
+    def run_source_actions(self) -> bool:
+        open_g = 0.0
+        close_g = 0.81
+
+        # Measure initial positions
+        posA = self._entity_xy("cubeA")
+        posB = self._entity_xy("cubeB")
+
+        # 1. Move above cubeA (open gripper)
+        approach_A = self._above(posA, 0.15)
+        if self._safe_move(approach_A, open_g, 40):
+            return False
+
+        # 2. Descend to just above cubeA top (grasp height)
+        # cube half size ~0.02, so grasp at posA.z + 0.02 + small clearance
+        grasp_A = np.array([posA[0], posA[1], posA[2] + 0.025], dtype=np.float64)
+        if self._safe_move(grasp_A, open_g, 40):
+            return False
+
+        # 3. Close gripper to grasp
+        if self._safe_repeat(np.zeros(3), close_g, 25):
+            return False
+
+        # 4. Verify grasp; if not grasped, try slight descent and re-close
+        if not self._grasped():
+            grasp_A2 = np.array([posA[0], posA[1], posA[2] + 0.015], dtype=np.float64)
+            if self._safe_move(grasp_A2, open_g, 20):
+                return False
+            if self._safe_repeat(np.zeros(3), close_g, 25):
+                return False
+
+        # 5. Lift cubeA
+        lift_A = self._above(posA, 0.20)
+        if self._safe_move(lift_A, close_g, 40):
+            return False
+
+        # Re-measure positions after lift (cubeB may be static)
+        posB = self._entity_xy("cubeB")
+
+        # 6. Move above cubeB
+        approach_B = self._above(posB, 0.20)
+        if self._safe_move(approach_B, close_g, 60):
+            return False
+
+        # 7. Descend to place height: cubeB top + cubeA half height + clearance
+        place_B = np.array([posB[0], posB[1], posB[2] + 0.045], dtype=np.float64)
+        if self._safe_move(place_B, close_g, 40):
+            return False
+
+        # 8. Release gripper
+        if self._safe_repeat(np.zeros(3), open_g, 25):
+            return False
+
+        # 9. Retreat upward to clear the stack
+        retreat = self._above(posB, 0.25)
+        if self._safe_move(retreat, open_g, 40):
+            return False
+
+        # 10. Settle and verify official success
+        for _ in range(8):
+            if self._safe_repeat(np.zeros(3), open_g, 10):
+                return False
+            if self._success():
+                return True
+
+        return self._success()
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```

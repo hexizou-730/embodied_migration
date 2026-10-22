@@ -1,0 +1,1877 @@
+Generate a target adapter for this controlled baseline.
+
+Method: whole_rewrite
+Experiment: {
+  "env_id": "StackCube-v1",
+  "task_label": "t07_stack_cube",
+  "source_robot": "panda",
+  "target_robot": "xarm6_robotiq",
+  "source_control_mode": "pd_joint_pos",
+  "target_control_mode": "pd_ee_delta_pose",
+  "seed": 0,
+  "max_episode_steps": 1000,
+  "max_source_cycles": 2,
+  "max_target_cycles": 3,
+  "obs_mode": "state",
+  "sim_backend": "auto",
+  "render_backend": "gpu"
+}
+Target interface: {
+  "env_id": "StackCube-v1",
+  "robot_uid": "xarm6_robotiq",
+  "control_mode": "pd_ee_delta_pose",
+  "supported_robots": [
+    "panda_wristcam",
+    "panda",
+    "fetch"
+  ],
+  "action_space": {
+    "repr": "Box([-1. -1. -1. -1. -1. -1.  0.], [1.   1.   1.   1.   1.   1.   0.81], (7,), float32)",
+    "shape": [
+      7
+    ],
+    "dtype": "float32",
+    "low": {
+      "min": -1.0,
+      "max": 0.0,
+      "values": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        0.0
+      ]
+    },
+    "high": {
+      "min": 0.8100000023841858,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.8100000023841858
+      ]
+    }
+  },
+  "controller_action_mapping": {
+    "arm": [
+      0,
+      6
+    ],
+    "gripper_active": [
+      6,
+      7
+    ],
+    "gripper_passive": [
+      7,
+      7
+    ]
+  },
+  "tcp": [
+    [
+      -0.018338000401854515,
+      0.02566399984061718,
+      0.15515799820423126
+    ]
+  ],
+  "pose_entities": {
+    "cubeA": {
+      "position": [
+        [
+          -0.08305300027132034,
+          -0.09354300051927567,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.138947993516922,
+          0.0,
+          0.0,
+          0.9902999997138977
+        ]
+      ]
+    },
+    "cubeB": {
+      "position": [
+        [
+          -0.039264000952243805,
+          0.10727600008249283,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.3038809895515442,
+          0.0,
+          0.0,
+          0.952709972858429
+        ]
+      ]
+    },
+    "segmentation_id_map[10]": {
+      "position": [
+        [
+          -0.008479000069200993,
+          0.020188000053167343,
+          0.304733008146286
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[11]": {
+      "position": [
+        [
+          -0.018338000401854515,
+          0.02566399984061718,
+          0.15515799820423126
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[12]": {
+      "position": [
+        [
+          -0.013001999817788601,
+          0.05275699868798256,
+          0.2511639893054962
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03245000168681145,
+          -0.015877999365329742,
+          0.9993039965629578,
+          0.009279999881982803
+        ]
+      ]
+    },
+    "segmentation_id_map[13]": {
+      "position": [
+        [
+          -0.013716000132262707,
+          0.08416400104761124,
+          0.2558709979057312
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03245000168681145,
+          -0.015877999365329742,
+          0.9993039965629578,
+          0.009279999881982803
+        ]
+      ]
+    },
+    "segmentation_id_map[14]": {
+      "position": [
+        [
+          -0.01697400026023388,
+          0.09108500182628632,
+          0.20899799466133118
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03242700174450874,
+          -0.01592399924993515,
+          0.9993159770965576,
+          0.007840000092983246
+        ]
+      ]
+    },
+    "segmentation_id_map[15]": {
+      "position": [
+        [
+          -0.018394000828266144,
+          0.06955300271511078,
+          0.17628200352191925
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03242700174450874,
+          -0.01592399924993515,
+          0.9993159770965576,
+          0.007840000092983246
+        ]
+      ]
+    },
+    "segmentation_id_map[16]": {
+      "position": [
+        [
+          -0.012896000407636166,
+          0.03511499986052513,
+          0.24397599697113037
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03262300044298172,
+          -0.01551899965852499,
+          0.9991409778594971,
+          0.02028599940240383
+        ]
+      ]
+    },
+    "segmentation_id_map[17]": {
+      "position": [
+        [
+          -0.011172999627888203,
+          -0.00837200041860342,
+          0.2488050013780594
+        ]
+      ],
+      "quaternion": [
+        [
+          0.01774200052022934,
+          -0.9991899728775024,
+          -0.015602000057697296,
+          0.032582998275756836
+        ]
+      ]
+    },
+    "segmentation_id_map[18]": {
+      "position": [
+        [
+          -0.009957999922335148,
+          -0.03997800126671791,
+          0.25174498558044434
+        ]
+      ],
+      "quaternion": [
+        [
+          0.01774200052022934,
+          -0.9991899728775024,
+          -0.015602000057697296,
+          0.032582998275756836
+        ]
+      ]
+    },
+    "segmentation_id_map[19]": {
+      "position": [
+        [
+          -0.012868000194430351,
+          -0.04444900155067444,
+          0.20455199480056763
+        ]
+      ],
+      "quaternion": [
+        [
+          0.03227100148797035,
+          -0.9988260269165039,
+          -0.015127000398933887,
+          0.03280699998140335
+        ]
+      ]
+    },
+    "segmentation_id_map[1]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[20]": {
+      "position": [
+        [
+          -0.015643000602722168,
+          -0.020426999777555466,
+          0.17371100187301636
+        ]
+      ],
+      "quaternion": [
+        [
+          0.03227100148797035,
+          -0.9988260269165039,
+          -0.015127000398933887,
+          0.03280699998140335
+        ]
+      ]
+    },
+    "segmentation_id_map[21]": {
+      "position": [
+        [
+          -0.012136000208556652,
+          0.009744999930262566,
+          0.24299800395965576
+        ]
+      ],
+      "quaternion": [
+        [
+          0.02287600003182888,
+          -0.999085009098053,
+          -0.015434999950230122,
+          0.032662998884916306
+        ]
+      ]
+    },
+    "segmentation_id_map[22]": {
+      "position": [
+        [
+          -0.11999999731779099,
+          0.0,
+          -0.919642984867096
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7071070075035095,
+          0.0,
+          0.0,
+          0.7071070075035095
+        ]
+      ]
+    },
+    "segmentation_id_map[23]": {
+      "position": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[24]": {
+      "position": [
+        [
+          -0.08305300027132034,
+          -0.09354300051927567,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.138947993516922,
+          0.0,
+          0.0,
+          0.9902999997138977
+        ]
+      ]
+    },
+    "segmentation_id_map[25]": {
+      "position": [
+        [
+          -0.039264000952243805,
+          0.10727600008249283,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.3038809895515442,
+          0.0,
+          0.0,
+          0.952709972858429
+        ]
+      ]
+    },
+    "segmentation_id_map[2]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[3]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.2669999897480011
+        ]
+      ],
+      "quaternion": [
+        [
+          0.9998440146446228,
+          0.0,
+          -0.0,
+          0.017640000209212303
+        ]
+      ]
+    },
+    "segmentation_id_map[4]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.2669999897480011
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7009869813919067,
+          -0.703827977180481,
+          0.06803199648857117,
+          0.09281600266695023
+        ]
+      ]
+    },
+    "segmentation_id_map[5]": {
+      "position": [
+        [
+          -0.4056510031223297,
+          0.004108000081032515,
+          0.532043993473053
+        ]
+      ],
+      "quaternion": [
+        [
+          0.6292849779129028,
+          -0.6175209879875183,
+          -0.34448501467704773,
+          -0.3224869966506958
+        ]
+      ]
+    },
+    "segmentation_id_map[6]": {
+      "position": [
+        [
+          -0.07793500274419785,
+          0.01567400060594082,
+          0.4064210057258606
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018882999196648598,
+          -0.8817520141601562,
+          0.0042050001211464405,
+          -0.47131600975990295
+        ]
+      ]
+    },
+    "segmentation_id_map[7]": {
+      "position": [
+        [
+          -0.07793500274419785,
+          0.01567400060594082,
+          0.4064210057258606
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7196450233459473,
+          -0.6935439705848694,
+          0.019076000899076462,
+          0.027282999828457832
+        ]
+      ]
+    },
+    "segmentation_id_map[8]": {
+      "position": [
+        [
+          -0.008479000069200993,
+          0.020188000053167343,
+          0.304733008146286
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[9]": {
+      "position": [
+        [
+          0.041391000151634216,
+          0.02180499956011772,
+          0.3015049993991852
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7175289988517761,
+          -0.009775999933481216,
+          0.03632599860429764,
+          -0.6955119967460632
+        ]
+      ]
+    }
+  },
+  "entity_aliases": {},
+  "official_evaluation": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": true,
+    "success": false
+  },
+  "evaluate_source": "    def evaluate(self):\n        pos_A = self.cubeA.pose.p\n        pos_B = self.cubeB.pose.p\n        offset = pos_A - pos_B\n        xy_flag = (\n            torch.linalg.norm(offset[..., :2], axis=1)\n            <= torch.linalg.norm(self.cube_half_size[:2]) + 0.005\n        )\n        z_flag = torch.abs(offset[..., 2] - self.cube_half_size[..., 2] * 2) <= 0.005\n        is_cubeA_on_cubeB = torch.logical_and(xy_flag, z_flag)\n        # NOTE (stao): GPU sim can be fast but unstable. Angular velocity is rather high despite it not really rotating\n        is_cubeA_static = self.cubeA.is_static(lin_thresh=1e-2, ang_thresh=0.5)\n        is_cubeA_grasped = self.agent.is_grasping(self.cubeA)\n        success = is_cubeA_on_cubeB * is_cubeA_static * (~is_cubeA_grasped)\n        return {\n            \"is_cubeA_grasped\": is_cubeA_grasped,\n            \"is_cubeA_on_cubeB\": is_cubeA_on_cubeB,\n            \"is_cubeA_static\": is_cubeA_static,\n            \"success\": success.bool(),\n        }\n"
+}
+
+Successful Panda source program:
+```python
+"""ManiSkill 3.0.1 reference source program for T07_STACK_CUBE."""
+
+ENV_ID = 'StackCube-v1'
+SOURCE_ROBOT = 'panda'
+CONTROL_MODE = 'pd_joint_pos'
+
+import argparse
+import gymnasium as gym
+import numpy as np
+import sapien
+from transforms3d.euler import euler2quat
+
+from mani_skill.envs.tasks import StackCubeEnv
+from source_programs.vendor.mani_skill_motionplanning.panda.motionplanner import \
+    PandaArmMotionPlanningSolver
+from source_programs.vendor.mani_skill_motionplanning.base_motionplanner.utils import (
+    compute_grasp_info_by_obb, get_actor_obb)
+from mani_skill.utils.wrappers.record import RecordEpisode
+
+def run(env: StackCubeEnv, seed=None, debug=False, vis=False):
+    env.reset(seed=seed)
+    assert env.unwrapped.control_mode in [
+        "pd_joint_pos",
+        "pd_joint_pos_vel",
+    ], env.unwrapped.control_mode
+    planner = PandaArmMotionPlanningSolver(
+        env,
+        debug=debug,
+        vis=vis,
+        base_pose=env.unwrapped.agent.robot.pose,
+        visualize_target_grasp_pose=vis,
+        print_env_info=False,
+    )
+    FINGER_LENGTH = 0.025
+    env = env.unwrapped
+    obb = get_actor_obb(env.cubeA)
+
+    approaching = np.array([0, 0, -1])
+    target_closing = env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()
+    grasp_info = compute_grasp_info_by_obb(
+        obb,
+        approaching=approaching,
+        target_closing=target_closing,
+        depth=FINGER_LENGTH,
+    )
+    closing, center = grasp_info["closing"], grasp_info["center"]
+    grasp_pose = env.agent.build_grasp_pose(approaching, closing, center)
+
+    # Search a valid pose
+    angles = np.arange(0, np.pi * 2 / 3, np.pi / 2)
+    angles = np.repeat(angles, 2)
+    angles[1::2] *= -1
+    for angle in angles:
+        delta_pose = sapien.Pose(q=euler2quat(0, 0, angle))
+        grasp_pose2 = grasp_pose * delta_pose
+        res = planner.move_to_pose_with_screw(grasp_pose2, dry_run=True)
+        if res == -1:
+            continue
+        grasp_pose = grasp_pose2
+        break
+    else:
+        print("Fail to find a valid grasp pose")
+
+    # -------------------------------------------------------------------------- #
+    # Reach
+    # -------------------------------------------------------------------------- #
+    reach_pose = grasp_pose * sapien.Pose([0, 0, -0.05])
+    planner.move_to_pose_with_screw(reach_pose)
+
+    # -------------------------------------------------------------------------- #
+    # Grasp
+    # -------------------------------------------------------------------------- #
+    planner.move_to_pose_with_screw(grasp_pose)
+    planner.close_gripper()
+
+    # -------------------------------------------------------------------------- #
+    # Lift
+    # -------------------------------------------------------------------------- #
+    lift_pose = sapien.Pose([0, 0, 0.1]) * grasp_pose
+    planner.move_to_pose_with_screw(lift_pose)
+
+    # -------------------------------------------------------------------------- #
+    # Stack
+    # -------------------------------------------------------------------------- #
+    goal_pose = env.cubeB.pose * sapien.Pose([0, 0, (env.cube_half_size[2] * 2).item()])
+    offset = (goal_pose.p - env.cubeA.pose.p).cpu().numpy()[0] # remember that all data in ManiSkill is batched and a torch tensor
+    align_pose = sapien.Pose(lift_pose.p + offset, lift_pose.q)
+    planner.move_to_pose_with_screw(align_pose)
+
+    res = planner.open_gripper()
+    planner.close()
+    return res
+
+```
+
+Deterministic representation derived from that same successful source execution:
+{
+  "schema": "source_stage_program.v1",
+  "task_id": "t07_stack_cube",
+  "source_program": "evidence/stackcube_pilot_20261022/source_stack_cube.py",
+  "source_sha256": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895",
+  "entrypoint": "run",
+  "source_robot": "panda",
+  "source_control_mode": "pd_joint_pos",
+  "stage_order": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "stages": [
+    {
+      "stage_id": "approach",
+      "source_lines": [
+        68,
+        68
+      ],
+      "operations": [
+        "move_tcp_to_pose"
+      ],
+      "source_calls": [
+        "planner.move_to_pose_with_screw(reach_pose)"
+      ],
+      "target_symbol": "reach_pose",
+      "target_expression": "reach_pose",
+      "entities": [
+        "cubeA"
+      ],
+      "dependency_expressions": [
+        "(grasp_info['closing'], grasp_info['center'])",
+        "0.025",
+        "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+        "env.agent.build_grasp_pose(approaching, closing, center)",
+        "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+        "env.unwrapped",
+        "get_actor_obb(env.cubeA)",
+        "grasp_pose * delta_pose",
+        "grasp_pose * sapien.Pose([0, 0, -0.05])",
+        "grasp_pose2",
+        "np.array([0, 0, -1])",
+        "sapien.Pose(q=euler2quat(0, 0, angle))"
+      ],
+      "completion_check": "tcp reaches the source-derived pregrasp pose",
+      "transferable_relation": "derive a collision-clear pregrasp pose from cubeA",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "replace Panda planner motion",
+        "check target pregrasp reachability"
+      ],
+      "runtime": {
+        "action_count": 30,
+        "first_action_step": 1,
+        "last_action_step": 30,
+        "source_line_counts": {
+          "68": 30
+        },
+        "final_state": {
+          "step": 30,
+          "tcp": [
+            [
+              -0.08674100041389465,
+              -0.09421200305223465,
+              0.07182200253009796
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08305289596319199,
+                -0.09354167431592941,
+                0.019999882206320763
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": true,
+            "success": false
+          }
+        }
+      }
+    },
+    {
+      "stage_id": "grasp",
+      "source_lines": [
+        73,
+        74
+      ],
+      "operations": [
+        "move_tcp_to_pose",
+        "close_gripper"
+      ],
+      "source_calls": [
+        "planner.move_to_pose_with_screw(grasp_pose)",
+        "planner.close_gripper()"
+      ],
+      "target_symbol": "grasp_pose",
+      "target_expression": "grasp_pose",
+      "entities": [
+        "cubeA"
+      ],
+      "dependency_expressions": [
+        "(grasp_info['closing'], grasp_info['center'])",
+        "0.025",
+        "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+        "env.agent.build_grasp_pose(approaching, closing, center)",
+        "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+        "env.unwrapped",
+        "get_actor_obb(env.cubeA)",
+        "grasp_pose * delta_pose",
+        "grasp_pose2",
+        "np.array([0, 0, -1])",
+        "sapien.Pose(q=euler2quat(0, 0, angle))"
+      ],
+      "completion_check": "official is_cubeA_grasped is true",
+      "transferable_relation": "close the target gripper around cubeA and establish a verified grasp",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "adapt grasp orientation and TCP offset to the target gripper",
+        "map target close command",
+        "verify official grasp state"
+      ],
+      "runtime": {
+        "action_count": 21,
+        "first_action_step": 31,
+        "last_action_step": 51,
+        "source_line_counts": {
+          "73": 15,
+          "74": 6
+        },
+        "final_state": {
+          "step": 51,
+          "tcp": [
+            [
+              -0.08598899841308594,
+              -0.09497299790382385,
+              0.02106899954378605
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08378530293703079,
+                -0.09585413336753845,
+                0.020487381145358086
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        }
+      }
+    },
+    {
+      "stage_id": "lift",
+      "source_lines": [
+        80,
+        80
+      ],
+      "operations": [
+        "move_tcp_to_pose"
+      ],
+      "source_calls": [
+        "planner.move_to_pose_with_screw(lift_pose)"
+      ],
+      "target_symbol": "lift_pose",
+      "target_expression": "lift_pose",
+      "entities": [
+        "cubeA"
+      ],
+      "dependency_expressions": [
+        "(grasp_info['closing'], grasp_info['center'])",
+        "0.025",
+        "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+        "env.agent.build_grasp_pose(approaching, closing, center)",
+        "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+        "env.unwrapped",
+        "get_actor_obb(env.cubeA)",
+        "grasp_pose * delta_pose",
+        "grasp_pose2",
+        "np.array([0, 0, -1])",
+        "sapien.Pose([0, 0, 0.1]) * grasp_pose",
+        "sapien.Pose(q=euler2quat(0, 0, angle))"
+      ],
+      "completion_check": "cubeA height increases while grasp remains true",
+      "transferable_relation": "increase cubeA height while retaining the grasp",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "replace Panda planner motion",
+        "guard against loss of grasp during transport"
+      ],
+      "runtime": {
+        "action_count": 24,
+        "first_action_step": 52,
+        "last_action_step": 75,
+        "source_line_counts": {
+          "80": 24
+        },
+        "final_state": {
+          "step": 75,
+          "tcp": [
+            [
+              -0.08609499782323837,
+              -0.09316500276327133,
+              0.12016300112009048
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08388680219650269,
+                -0.09403831511735916,
+                0.11958961933851242
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        }
+      }
+    },
+    {
+      "stage_id": "align",
+      "source_lines": [
+        88,
+        88
+      ],
+      "operations": [
+        "move_tcp_to_pose"
+      ],
+      "source_calls": [
+        "planner.move_to_pose_with_screw(align_pose)"
+      ],
+      "target_symbol": "align_pose",
+      "target_expression": "align_pose",
+      "entities": [
+        "cubeA",
+        "cubeB"
+      ],
+      "dependency_expressions": [
+        "(goal_pose.p - env.cubeA.pose.p).cpu().numpy()[0]",
+        "(grasp_info['closing'], grasp_info['center'])",
+        "0.025",
+        "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+        "env.agent.build_grasp_pose(approaching, closing, center)",
+        "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+        "env.cubeB.pose * sapien.Pose([0, 0, (env.cube_half_size[2] * 2).item()])",
+        "env.unwrapped",
+        "get_actor_obb(env.cubeA)",
+        "grasp_pose * delta_pose",
+        "grasp_pose2",
+        "np.array([0, 0, -1])",
+        "sapien.Pose([0, 0, 0.1]) * grasp_pose",
+        "sapien.Pose(lift_pose.p + offset, lift_pose.q)",
+        "sapien.Pose(q=euler2quat(0, 0, angle))"
+      ],
+      "completion_check": "cubeA is aligned above cubeB before release",
+      "transferable_relation": "place cubeA above cubeB using the source object-relative stack geometry",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "replace Panda planner motion",
+        "account for the target TCP-to-held-object transform",
+        "preserve cubeA-to-cubeB placement geometry"
+      ],
+      "runtime": {
+        "action_count": 26,
+        "first_action_step": 76,
+        "last_action_step": 101,
+        "source_line_counts": {
+          "88": 26
+        },
+        "final_state": {
+          "step": 101,
+          "tcp": [
+            [
+              -0.04747600108385086,
+              0.10791900008916855,
+              0.060394998639822006
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.0452897734940052,
+                0.10699792206287384,
+                0.05990515649318695
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03924059867858887,
+                0.10736323893070221,
+                0.019996285438537598
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": true,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        }
+      }
+    },
+    {
+      "stage_id": "release",
+      "source_lines": [
+        90,
+        90
+      ],
+      "operations": [
+        "open_gripper"
+      ],
+      "source_calls": [
+        "planner.open_gripper()"
+      ],
+      "target_symbol": null,
+      "target_expression": null,
+      "entities": [
+        "cubeA",
+        "cubeB"
+      ],
+      "dependency_expressions": [],
+      "completion_check": "official success: cubeA is on cubeB, static, and not grasped",
+      "transferable_relation": "release cubeA on cubeB and satisfy the unchanged official success predicate",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "map target open command",
+        "wait for official static and released conditions"
+      ],
+      "runtime": {
+        "action_count": 2,
+        "first_action_step": 102,
+        "last_action_step": 103,
+        "source_line_counts": {
+          "90": 2
+        },
+        "final_state": {
+          "step": 103,
+          "tcp": [
+            [
+              -0.047568000853061676,
+              0.10873299837112427,
+              0.06042899936437607
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.04627734422683716,
+                0.11028970032930374,
+                0.05999899283051491
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03921497240662575,
+                0.10743801295757294,
+                0.020000355318188667
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": true,
+            "is_cubeA_static": true,
+            "success": true
+          }
+        }
+      }
+    }
+  ],
+  "source_assumptions": {
+    "robot_specific_imports": [
+      "from source_programs.vendor.mani_skill_motionplanning.panda.motionplanner import PandaArmMotionPlanningSolver"
+    ],
+    "controller": "pd_joint_pos",
+    "planner_symbols": [
+      "planner.close",
+      "planner.close_gripper",
+      "planner.move_to_pose_with_screw",
+      "planner.open_gripper"
+    ],
+    "pre_action_robot_geometry_calls": [
+      "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+      "env.agent.build_grasp_pose(approaching, closing, center)",
+      "get_actor_obb(env.cubeA)",
+      "planner.move_to_pose_with_screw(grasp_pose2, dry_run=True)"
+    ]
+  },
+  "official_evaluation_at_trace_end": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": true,
+    "is_cubeA_static": true,
+    "success": true
+  },
+  "trace_summary": {
+    "action_count": 103,
+    "mapped_action_count": 103,
+    "unmapped_action_count": 0,
+    "unmapped_source_lines": {}
+  },
+  "provenance": {
+    "stage_boundaries": "AST action calls",
+    "entity_dependencies": "recursive AST assignment dependencies",
+    "action_counts": "successful runtime source-line attribution",
+    "completion_checks": "operation templates plus official evaluate fields",
+    "llm_used": false
+  }
+}
+
+Use this evidence, but rewrite the complete target adapter globally each round. No stage is locked.
+
+Required module contract:
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    def run_source_actions(self) -> bool:
+        # Implement the complete target policy here using measured state and bounded actions.
+        ...
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```
+
+Use only Python standard-library modules and numpy. Do not import torch, sapien, mani_skill,
+gymnasium, motion planners, or controllers. Do not override _step, _run_stage, _snapshot,
+_official_evaluation, _official_success, _entity_catalog, _robot_root_quat, or
+	_world_delta_to_action_delta. Runtime values are flat numpy vectors. The inherited API is:
+	- self._entity_pos("cubeA") / self._entity_pos("cubeB") -> flat xyz arrays
+	- self._tcp_pos() -> flat TCP xyz array
+	- self._official_evaluation() -> official task booleans
+	- self._is_grasping_entity("cubeA") -> target grasp detector
+	- self._move_towards(world_target, gripper=value, steps=count)
+	- self._repeat_action(delta_xyz, gripper=value, steps=count)
+	Do not call _entity_catalog() or subscript Actor objects. Both motion helpers require gripper and
+	steps as keyword-only arguments and neither accepts tol. Check self._early_stop() in explicit loops.
+	Measured gripper mapping: 0.0 opens, 0.81 closes. _move_towards returns immediately within
+	1 cm of its target, so stationary open/close must use _repeat_action(np.zeros(3), gripper=..., steps=...).
+	Never mutate object poses, simulator state, controller internals, or official success.
+Returning True is insufficient; the harness independently requires official evaluate()['success'].
+
+Current complete candidate, empty on the first round:
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # ---- helpers -------------------------------------------------------
+    def _safe_move(self, target, gripper, steps, tol=0.008, max_iters=40):
+        target = np.asarray(target, dtype=np.float64).reshape(3)
+        for _ in range(max_iters):
+            if self._early_stop():
+                return False
+            cur = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+            if np.linalg.norm(cur - target) <= tol:
+                return True
+            self._move_towards(target, gripper=gripper, steps=steps)
+        return True
+
+    def _hold(self, gripper, steps):
+        for _ in range(max(1, steps // 6)):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3), gripper=gripper, steps=6)
+        return True
+
+    def _grasp_pose_for(self, cube_pos):
+        # Top-down grasp: TCP directly above cube, gripper closing along y.
+        cube_pos = np.asarray(cube_pos, dtype=np.float64).reshape(3)
+        # TCP offset: approach from above, finger length ~0.025, cube half ~0.02
+        grasp_z = cube_pos[2] + 0.025 + 0.02
+        return np.array([cube_pos[0], cube_pos[1], grasp_z], dtype=np.float64)
+
+    # ---- main policy ---------------------------------------------------
+    def run_source_actions(self) -> bool:
+        # Stage 0: read initial measured state
+        cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).reshape(3)
+        cubeB = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).reshape(3)
+
+        grasp_pose = self._grasp_pose_for(cubeA)
+        pregrasp = grasp_pose.copy()
+        pregrasp[2] += 0.06
+
+        # ---- approach --------------------------------------------------
+        if not self._safe_move(pregrasp, gripper=0.0, steps=self.move_steps):
+            return False
+        if not self._safe_move(grasp_pose, gripper=0.0, steps=self.move_steps):
+            return False
+        if not self._hold(0.0, self.settle_steps):
+            return False
+
+        # ---- grasp -----------------------------------------------------
+        if not self._hold(0.81, self.settle_steps):
+            return False
+        # verify grasp; if not, nudge down and retry once
+        if not self._is_grasping_entity("cubeA"):
+            cur = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+            nudge = cur.copy()
+            nudge[2] -= 0.01
+            self._safe_move(nudge, gripper=0.81, steps=self.move_steps)
+            self._hold(0.81, self.settle_steps)
+        if not self._is_grasping_entity("cubeA"):
+            return False
+
+        # ---- lift ------------------------------------------------------
+        cur = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+        lift_target = cur.copy()
+        lift_target[2] += 0.12
+        if not self._safe_move(lift_target, gripper=0.81, steps=self.move_steps):
+            return False
+        if not self._hold(0.81, self.settle_steps):
+            return False
+        if not self._is_grasping_entity("cubeA"):
+            return False
+
+        # ---- align above cubeB ----------------------------------------
+        # Re-measure cubeB and current held cubeA to compute placement offset.
+        cubeB_now = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).reshape(3)
+        cubeA_now = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).reshape(3)
+        tcp_now = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+
+        # Desired cubeA position: directly above cubeB by 2*half_size (~0.04)
+        stack_height = 0.04
+        desired_A = np.array([cubeB_now[0], cubeB_now[1], cubeB_now[2] + stack_height],
+                             dtype=np.float64)
+        # TCP-to-cubeA offset in world frame (preserve grasp geometry)
+        offset = tcp_now - cubeA_now
+        align_target = desired_A + offset
+        # Slight overshoot in z to ensure contact, then settle
+        align_target[2] += 0.005
+
+        if not self._safe_move(align_target, gripper=0.81, steps=self.move_steps):
+            return False
+        if not self._hold(0.81, self.settle_steps):
+            return False
+
+        # ---- release ---------------------------------------------------
+        if not self._hold(0.0, self.settle_steps):
+            return False
+        # retreat upward to clear the stack
+        cur = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+        retreat = cur.copy()
+        retreat[2] += 0.08
+        self._safe_move(retreat, gripper=0.0, steps=self.move_steps)
+        self._hold(0.0, self.settle_steps)
+
+        # Final verification loop: wait for official success (static + on cubeB + not grasped)
+        for _ in range(60):
+            if self._early_stop():
+                break
+            ev = self._official_evaluation()
+            if bool(ev.get("success", False)):
+                return True
+            self._repeat_action(np.zeros(3), gripper=0.0, steps=4)
+
+        ev = self._official_evaluation()
+        return bool(ev.get("success", False))
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```
+
+Latest real execution evidence:
+{
+  "success": false,
+  "message": "task program returned failure",
+  "execution_error": "",
+  "official_success": false,
+  "official_evaluation": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": true,
+    "success": false
+  },
+  "action_steps": 42,
+  "runtime_snapshot": {
+    "task_state": {
+      "robot_init_qpos_noise": 0.02,
+      "num_envs": 1,
+      "reconfiguration_freq": 0,
+      "cube_half_size": [
+        0.019999999552965164,
+        0.019999999552965164,
+        0.019999999552965164
+      ]
+    },
+    "entity_velocities": {
+      "cubeA": {
+        "linear_velocity": [
+          -0.0001539999939268455,
+          -0.00022400000307243317,
+          -0.00013299999409355223
+        ],
+        "angular_velocity": [
+          0.0010679999832063913,
+          -0.002297000028192997,
+          0.0006680000224150717
+        ]
+      },
+      "cubeB": {
+        "linear_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "angular_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "robot_state": {
+      "qpos": [
+        [
+          -0.21775388717651367,
+          0.24191398918628693,
+          -0.8962637782096863,
+          0.03238431364297867,
+          0.7214240431785583,
+          -0.27824312448501587,
+          0.8099994659423828,
+          0.8099992871284485,
+          0.8099992275238037,
+          0.8099988102912903,
+          -0.8099998831748962,
+          -0.810001790523529
+        ]
+      ],
+      "qvel": [
+        [
+          3.8567987692417205e-10,
+          -7.142533231530024e-10,
+          1.4083055832614377e-09,
+          5.754947185465653e-09,
+          -6.884507186555311e-09,
+          -6.46970521600565e-09,
+          1.1589070709305815e-05,
+          1.0481355275260285e-05,
+          2.343822234252002e-05,
+          1.9040493498323485e-05,
+          -6.285649305937113e-06,
+          8.357757906196639e-06
+        ]
+      ],
+      "root_position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "root_quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "tcp": [
+      -0.08250200003385544,
+      -0.09372799843549728,
+      0.05431000143289566
+    ],
+    "entities": {
+      "cubeA": {
+        "position": [
+          [
+            -0.08305300027132034,
+            -0.09354300051927567,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.13894900679588318,
+            -9.999999974752427e-07,
+            7.000000096013537e-06,
+            0.9902999997138977
+          ]
+        ]
+      },
+      "cubeB": {
+        "position": [
+          [
+            -0.039264000952243805,
+            0.10727600008249283,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.3038809895515442,
+            -3.999999989900971e-06,
+            -1.9999999949504854e-06,
+            0.952709972858429
+          ]
+        ]
+      },
+      "segmentation_id_map[22]": {
+        "position": [
+          [
+            -0.11999999731779099,
+            0.0,
+            -0.919642984867096
+          ]
+        ],
+        "quaternion": [
+          [
+            0.7071070075035095,
+            0.0,
+            0.0,
+            0.7071070075035095
+          ]
+        ]
+      },
+      "segmentation_id_map[23]": {
+        "position": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "quaternion": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "segmentation_id_map[24]": {
+        "position": [
+          [
+            -0.08305300027132034,
+            -0.09354300051927567,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.13894900679588318,
+            -9.999999974752427e-07,
+            7.000000096013537e-06,
+            0.9902999997138977
+          ]
+        ]
+      },
+      "segmentation_id_map[25]": {
+        "position": [
+          [
+            -0.039264000952243805,
+            0.10727600008249283,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.3038809895515442,
+            -3.999999989900971e-06,
+            -1.9999999949504854e-06,
+            0.952709972858429
+          ]
+        ]
+      },
+      "segmentation_id_map[1]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.0
+          ]
+        ],
+        "quaternion": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "segmentation_id_map[2]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.0
+          ]
+        ],
+        "quaternion": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "segmentation_id_map[3]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.2669999897480011
+          ]
+        ],
+        "quaternion": [
+          [
+            0.9940789937973022,
+            -0.0,
+            -0.0,
+            -0.10866200178861618
+          ]
+        ]
+      },
+      "segmentation_id_map[4]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.2669999897480011
+          ]
+        ],
+        "quaternion": [
+          [
+            0.7070540189743042,
+            -0.688513994216919,
+            0.16109000146389008,
+            0.008542000316083431
+          ]
+        ]
+      },
+      "segmentation_id_map[5]": {
+        "position": [
+          [
+            -0.40473899245262146,
+            -0.02594500035047531,
+            0.5303990244865417
+          ]
+        ],
+        "quaternion": [
+          [
+            0.6409389972686768,
+            -0.690326988697052,
+            -0.1531369984149933,
+            -0.29865598678588867
+          ]
+        ]
+      },
+      "segmentation_id_map[6]": {
+        "position": [
+          [
+            -0.1411609947681427,
+            -0.08426500111818314,
+            0.3058139979839325
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.029746999964118004,
+            -0.9395580291748047,
+            0.11812599748373032,
+            -0.31998899579048157
+          ]
+        ]
+      },
+      "segmentation_id_map[7]": {
+        "position": [
+          [
+            -0.1411609947681427,
+            -0.08426500111818314,
+            0.3058139979839325
+          ]
+        ],
+        "quaternion": [
+          [
+            0.7112720012664795,
+            -0.6916710138320923,
+            0.10835199803113937,
+            -0.06279899924993515
+          ]
+        ]
+      },
+      "segmentation_id_map[8]": {
+        "position": [
+          [
+            -0.0734189972281456,
+            -0.09902200102806091,
+            0.2039410024881363
+          ]
+        ],
+        "quaternion": [
+          [
+            0.018192000687122345,
+            -0.9992280006408691,
+            -0.017714999616146088,
+            0.02997799962759018
+          ]
+        ]
+      },
+      "segmentation_id_map[9]": {
+        "position": [
+          [
+            -0.02353999949991703,
+            -0.09719700366258621,
+            0.20097799599170685
+          ]
+        ],
+        "quaternion": [
+          [
+            0.7190880179405212,
+            -0.008333999663591385,
+            0.034060999751091,
+            -0.6940339803695679
+          ]
+        ]
+      },
+      "segmentation_id_map[10]": {
+        "position": [
+          [
+            -0.0734189972281456,
+            -0.09902200102806091,
+            0.2039410024881363
+          ]
+        ],
+        "quaternion": [
+          [
+            0.018192000687122345,
+            -0.9992280006408691,
+            -0.017714999616146088,
+            0.02997799962759018
+          ]
+        ]
+      },
+      "segmentation_id_map[11]": {
+        "position": [
+          [
+            -0.08250200003385544,
+            -0.09372799843549728,
+            0.05431000143289566
+          ]
+        ],
+        "quaternion": [
+          [
+            0.018192000687122345,
+            -0.9992280006408691,
+            -0.017714999616146088,
+            0.02997799962759018
+          ]
+        ]
+      },
+      "segmentation_id_map[12]": {
+        "position": [
+          [
+            -0.07779400050640106,
+            -0.0665230005979538,
+            0.1503169983625412
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.020572999492287636,
+            -0.02809399925172329,
+            0.9255610108375549,
+            -0.3769940137863159
+          ]
+        ]
+      },
+      "segmentation_id_map[16]": {
+        "position": [
+          [
+            -0.0775739997625351,
+            -0.08417099714279175,
+            0.14314700663089752
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.020572999492287636,
+            -0.02809399925172329,
+            0.9255610108375549,
+            -0.3769940137863159
+          ]
+        ]
+      },
+      "segmentation_id_map[17]": {
+        "position": [
+          [
+            -0.0756940022110939,
+            -0.12764599919319153,
+            0.14802700281143188
+          ]
+        ],
+        "quaternion": [
+          [
+            0.4104340076446533,
+            -0.9112250208854675,
+            -0.004470000043511391,
+            0.034533001482486725
+          ]
+        ]
+      },
+      "segmentation_id_map[21]": {
+        "position": [
+          [
+            -0.07670199871063232,
+            -0.1095379963517189,
+            0.14219699800014496
+          ]
+        ],
+        "quaternion": [
+          [
+            0.4104340076446533,
+            -0.9112250208854675,
+            -0.004470000043511391,
+            0.034533001482486725
+          ]
+        ]
+      },
+      "segmentation_id_map[13]": {
+        "position": [
+          [
+            -0.07985100150108337,
+            -0.04115999862551689,
+            0.13130199909210205
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.020572999492287636,
+            -0.02809399925172329,
+            0.9255610108375549,
+            -0.3769940137863159
+          ]
+        ]
+      },
+      "segmentation_id_map[18]": {
+        "position": [
+          [
+            -0.07605700194835663,
+            -0.1515980064868927,
+            0.12716400623321533
+          ]
+        ],
+        "quaternion": [
+          [
+            0.4104340076446533,
+            -0.9112250208854675,
+            -0.004470000043511391,
+            0.034533001482486725
+          ]
+        ]
+      },
+      "segmentation_id_map[14]": {
+        "position": [
+          [
+            -0.08105900138616562,
+            -0.06972800195217133,
+            0.09337999671697617
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.02997799962759018,
+            -0.017714999616146088,
+            0.9992280006408691,
+            0.018192000687122345
+          ]
+        ]
+      },
+      "segmentation_id_map[19]": {
+        "position": [
+          [
+            -0.07931700348854065,
+            -0.1204259991645813,
+            0.09148100018501282
+          ]
+        ],
+        "quaternion": [
+          [
+            0.01819000020623207,
+            -0.9992280006408691,
+            -0.017714999616146088,
+            0.02997799962759018
+          ]
+        ]
+      },
+      "segmentation_id_map[15]": {
+        "position": [
+          [
+            -0.08226600289344788,
+            -0.09057500213384628,
+            0.06021599844098091
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.02997799962759018,
+            -0.017714999616146088,
+            0.9992280006408691,
+            0.018192000687122345
+          ]
+        ]
+      },
+      "segmentation_id_map[20]": {
+        "position": [
+          [
+            -0.08203600347042084,
+            -0.09729000180959702,
+            0.059964001178741455
+          ]
+        ],
+        "quaternion": [
+          [
+            0.01819000020623207,
+            -0.9992280006408691,
+            -0.017714999616146088,
+            0.02997799962759018
+          ]
+        ]
+      }
+    },
+    "entity_aliases": {},
+    "official_evaluation": {
+      "is_cubeA_grasped": false,
+      "is_cubeA_on_cubeB": false,
+      "is_cubeA_static": true,
+      "success": false
+    },
+    "stage_runtime": {
+      "active_stage": null,
+      "completed_stages": [],
+      "failed_stage": null
+    },
+    "terminated": false,
+    "truncated": false
+  },
+  "failure_diagnosis": {
+    "layer": "contact_geometry",
+    "reason": "contact_not_established",
+    "evidence": {
+      "entity": "cubeA",
+      "action_steps": 42,
+      "tcp_displacement_m": 0.16894,
+      "object_displacement_m": 0.0,
+      "final_tcp_object_xy_m": 0.00058,
+      "initial_position": [
+        -0.08305,
+        -0.09354,
+        0.02
+      ],
+      "final_position": [
+        -0.08305,
+        -0.09354,
+        0.02
+      ]
+    },
+    "repair_hint": "The TCP moved substantially but the manipulated object did not. Do not add more steps or repeat the same waypoint. Change the contact side or height, verify object motion after a short action pulse, and use a grasp-and-place strategy when the observed target gripper supports it."
+  },
+  "terminated": false,
+  "truncated": false,
+  "stage_boundary_states": {},
+  "stage_events": []
+}
+
+Latest validation error:
+ValueError('Generated adapter is semantically unchanged from a tested candidate.')
+
+Return a complete module. For a repair, make a substantive change addressing the evidence; unlike
+the selective method, this baseline may rewrite any policy method.

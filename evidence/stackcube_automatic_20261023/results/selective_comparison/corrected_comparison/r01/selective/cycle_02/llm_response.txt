@@ -1,0 +1,29 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    # Source relation: cubeA should sit directly above cubeB at one cube height.
+    target_z = cubeB[2] + 0.04
+    # Compensate for the held-object offset from the TCP so the cube, not the TCP, lands on target.
+    offset = cubeA - self._tcp_pos()
+    for _ in range(12):
+        if self._early_stop():
+            return False
+        cubeB = self._entity_pos("cubeB")
+        cubeA = self._entity_pos("cubeA")
+        tcp = self._tcp_pos()
+        offset = cubeA - tcp
+        target_z = cubeB[2] + 0.04
+        desired_cube = np.array([cubeB[0], cubeB[1], target_z], dtype=np.float32)
+        tcp_target = desired_cube - offset
+        self._move_towards(tcp_target, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+        z_err = float(abs(cubeA[2] - (cubeB[2] + 0.04)))
+        if xy_err < 0.008 and z_err < 0.008:
+            break
+    cubeA = self._entity_pos("cubeA")
+    cubeB = self._entity_pos("cubeB")
+    xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+    z_err = float(abs(cubeA[2] - (cubeB[2] + 0.04)))
+    return bool(xy_err < 0.012 and z_err < 0.012)

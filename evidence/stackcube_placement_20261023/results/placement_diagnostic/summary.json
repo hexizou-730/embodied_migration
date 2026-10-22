@@ -1,0 +1,544 @@
+{
+  "schema": "stackcube_placement_diagnostic.v1",
+  "seed": 0,
+  "provenance": "manual diagnostic replacements; not LLM-generated migration results",
+  "llm_calls": 0,
+  "rows": [
+    {
+      "label": "original",
+      "success": false,
+      "official_success": false,
+      "action_steps": 101,
+      "message": "task program returned failure",
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      },
+      "stage_boundaries": {
+        "approach": {
+          "step": 3,
+          "tcp": [
+            [
+              -0.08130700141191483,
+              -0.09296400099992752,
+              0.11993099749088287
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.0830530896782875,
+                -0.0935426577925682,
+                0.019999898970127106
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926442563533783,
+                0.10727579891681671,
+                0.019999992102384567
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": true,
+            "success": false
+          }
+        },
+        "grasp": {
+          "step": 18,
+          "tcp": [
+            [
+              -0.08242800086736679,
+              -0.09378699958324432,
+              0.024708999320864677
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08253037184476852,
+                -0.09318209439516068,
+                0.02000621147453785
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926438093185425,
+                0.10727570205926895,
+                0.02000001072883606
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "lift": {
+          "step": 21,
+          "tcp": [
+            [
+              -0.08128999918699265,
+              -0.0933310016989708,
+              0.12016300112009048
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08100511133670807,
+                -0.09300605207681656,
+                0.11431611329317093
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926438093185425,
+                0.10727570205926895,
+                0.02000001072883606
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "align": {
+          "step": 29,
+          "tcp": [
+            [
+              -0.038878001272678375,
+              0.10736700147390366,
+              0.06450200080871582
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.05211275443434715,
+                0.1117645800113678,
+                0.07066862285137177
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.039264529943466187,
+                0.10727572441101074,
+                0.019999995827674866
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "release": {
+          "step": 101,
+          "tcp": [
+            [
+              -0.03918899968266487,
+              0.1072390004992485,
+              0.0640449970960617
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.10146458446979523,
+                0.13410374522209167,
+                0.019999975338578224
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03924211114645004,
+                0.1071711853146553,
+                0.020000021904706955
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": true,
+            "success": false
+          }
+        }
+      },
+      "changed_methods": [],
+      "adapter_sha256": "fa29a66bd7faab15d73815595dcc5dcb4a779cd0b74fcaeba7df1f38c789cae6"
+    },
+    {
+      "label": "object_relative_align",
+      "success": true,
+      "official_success": true,
+      "action_steps": 151,
+      "message": "adapter returned success and official evaluate() returned success",
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": true,
+        "success": true
+      },
+      "stage_boundaries": {
+        "approach": {
+          "step": 3,
+          "tcp": [
+            [
+              -0.08130700141191483,
+              -0.09296400099992752,
+              0.11993099749088287
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.0830530896782875,
+                -0.0935426577925682,
+                0.019999898970127106
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926442563533783,
+                0.10727579891681671,
+                0.019999992102384567
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": true,
+            "success": false
+          }
+        },
+        "grasp": {
+          "step": 18,
+          "tcp": [
+            [
+              -0.08242800086736679,
+              -0.09378699958324432,
+              0.024708999320864677
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08253037184476852,
+                -0.09318209439516068,
+                0.02000621147453785
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926438093185425,
+                0.10727570205926895,
+                0.02000001072883606
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "lift": {
+          "step": 21,
+          "tcp": [
+            [
+              -0.08128999918699265,
+              -0.0933310016989708,
+              0.12016300112009048
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08100511133670807,
+                -0.09300605207681656,
+                0.11431611329317093
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926438093185425,
+                0.10727570205926895,
+                0.02000001072883606
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "align": {
+          "step": 149,
+          "tcp": [
+            [
+              -0.03869500011205673,
+              0.10851699858903885,
+              0.06747999787330627
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.03898436948657036,
+                0.10724162310361862,
+                0.06188775971531868
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.0392644889652729,
+                0.1072755753993988,
+                0.02000000886619091
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": true,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "release": {
+          "step": 151,
+          "tcp": [
+            [
+              -0.03868500143289566,
+              0.10852000117301941,
+              0.06748899817466736
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.038886092603206635,
+                0.10723724216222763,
+                0.06000057980418205
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926534950733185,
+                0.1072731763124466,
+                0.020000208169221878
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": true,
+            "is_cubeA_static": true,
+            "success": true
+          }
+        }
+      },
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "adapter_sha256": "6b0f638875a0546dc3c6813e58571474fca9df9af45982ca1fd4a9e890ed6a0e"
+    },
+    {
+      "label": "object_relative_slow_release",
+      "success": true,
+      "official_success": true,
+      "action_steps": 160,
+      "message": "adapter returned success and official evaluate() returned success",
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": true,
+        "success": true
+      },
+      "stage_boundaries": {
+        "approach": {
+          "step": 3,
+          "tcp": [
+            [
+              -0.08130700141191483,
+              -0.09296400099992752,
+              0.11993099749088287
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.0830530896782875,
+                -0.0935426577925682,
+                0.019999898970127106
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926442563533783,
+                0.10727579891681671,
+                0.019999992102384567
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": true,
+            "success": false
+          }
+        },
+        "grasp": {
+          "step": 18,
+          "tcp": [
+            [
+              -0.08242800086736679,
+              -0.09378699958324432,
+              0.024708999320864677
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08253037184476852,
+                -0.09318209439516068,
+                0.02000621147453785
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926438093185425,
+                0.10727570205926895,
+                0.02000001072883606
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "lift": {
+          "step": 21,
+          "tcp": [
+            [
+              -0.08128999918699265,
+              -0.0933310016989708,
+              0.12016300112009048
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.08100511133670807,
+                -0.09300605207681656,
+                0.11431611329317093
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926438093185425,
+                0.10727570205926895,
+                0.02000001072883606
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "align": {
+          "step": 149,
+          "tcp": [
+            [
+              -0.03869500011205673,
+              0.10851699858903885,
+              0.06747999787330627
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.03898436948657036,
+                0.10724162310361862,
+                0.06188775971531868
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.0392644889652729,
+                0.1072755753993988,
+                0.02000000886619091
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": true,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        },
+        "release": {
+          "step": 160,
+          "tcp": [
+            [
+              -0.03837599977850914,
+              0.10855600237846375,
+              0.06751800328493118
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.038924142718315125,
+                0.10877383500337601,
+                0.05999999865889549
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.03926515579223633,
+                0.10727540403604507,
+                0.019999729469418526
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": false,
+            "is_cubeA_on_cubeB": true,
+            "is_cubeA_static": true,
+            "success": true
+          }
+        }
+      },
+      "changed_methods": [
+        "_stage_align",
+        "_stage_release"
+      ],
+      "adapter_sha256": "ced5dcb01b108f6103a085c2f16c6babfcb53444827d3b4d2cc0916faca2ef22"
+    }
+  ]
+}

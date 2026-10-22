@@ -1,0 +1,134 @@
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # ---- helpers -------------------------------------------------------
+    def _safe_move(self, target, gripper, steps):
+        self._move_towards(np.asarray(target, dtype=np.float64),
+                           gripper=float(gripper), steps=int(steps))
+        return not self._early_stop()
+
+    def _safe_repeat(self, delta, gripper, steps):
+        self._repeat_action(np.asarray(delta, dtype=np.float64),
+                            gripper=float(gripper), steps=int(steps))
+        return not self._early_stop()
+
+    def _hold_gripper(self, gripper, steps):
+        return self._safe_repeat(np.zeros(3), gripper, steps)
+
+    def _pos(self, name):
+        return np.asarray(self._entity_pos(name), dtype=np.float64).reshape(-1)[:3]
+
+    def _tcp(self):
+        return np.asarray(self._tcp_pos(), dtype=np.float64).reshape(-1)[:3]
+
+    def _dist_xy(self, a, b):
+        return float(np.linalg.norm(a[:2] - b[:2]))
+
+    # ---- policy --------------------------------------------------------
+    def run_source_actions(self) -> bool:
+        # Measure initial state
+        posA = self._pos("cubeA")
+        posB = self._pos("cubeB")
+        if posA.size < 3 or posB.size < 3:
+            return False
+
+        # 1) Open gripper fully and settle
+        if not self._hold_gripper(0.0, 10):
+            return False
+
+        # 2) Move to a staging pose above cubeA, offset in x to avoid collisions
+        staging = posA.copy()
+        staging[2] = posA[2] + 0.20
+        if not self._safe_move(staging, 0.0, 40):
+            return False
+
+        # 3) Align above cubeA precisely (re-measure A)
+        posA = self._pos("cubeA")
+        above = posA.copy()
+        above[2] = posA[2] + 0.12
+        if not self._safe_move(above, 0.0, 40):
+            return False
+
+        # 4) Descend to grasp height with open gripper
+        grasp = posA.copy()
+        grasp[2] = posA[2] + 0.010
+        if not self._safe_move(grasp, 0.0, 40):
+            return False
+
+        # 5) Close gripper to grasp cubeA
+        if not self._hold_gripper(0.81, 25):
+            return False
+
+        # 6) Verify grasp; if not grasped, retry with slight descent
+        if not self._is_grasping_entity("cubeA"):
+            posA = self._pos("cubeA")
+            grasp2 = posA.copy()
+            grasp2[2] = posA[2] + 0.002
+            if not self._safe_move(grasp2, 0.81, 20):
+                return False
+            if not self._hold_gripper(0.81, 20):
+                return False
+
+        # 7) Lift cubeA straight up
+        posA = self._pos("cubeA")
+        lift = posA.copy()
+        lift[2] = posA[2] + 0.18
+        if not self._safe_move(lift, 0.81, 40):
+            return False
+
+        # 8) Re-measure B and move above it
+        posB = self._pos("cubeB")
+        above_B = posB.copy()
+        above_B[2] = posB[2] + 0.20
+        if not self._safe_move(above_B, 0.81, 60):
+            return False
+
+        # 9) Lower cubeA onto cubeB (target z = B top + half size)
+        posB = self._pos("cubeB")
+        place = posB.copy()
+        place[2] = posB[2] + 0.045
+        if not self._safe_move(place, 0.81, 40):
+            return False
+
+        # 10) Fine-tune XY alignment over B
+        posB = self._pos("cubeB")
+        posA = self._pos("cubeA")
+        if self._dist_xy(posA, posB) > 0.005:
+            adjust = posB.copy()
+            adjust[2] = posA[2]
+            if not self._safe_move(adjust, 0.81, 20):
+                return False
+
+        # 11) Release gripper
+        if not self._hold_gripper(0.0, 25):
+            return False
+
+        # 12) Retreat upward to let cube settle
+        retreat = place.copy()
+        retreat[2] = place[2] + 0.15
+        if not self._safe_move(retreat, 0.0, 40):
+            return False
+
+        # 13) Settle and verify official success
+        for _ in range(8):
+            if self._early_stop():
+                break
+            self._hold_gripper(0.0, 12)
+            ev = self._official_evaluation()
+            if bool(ev.get("success", False)):
+                return True
+
+        ev = self._official_evaluation()
+        return bool(ev.get("success", False))
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)

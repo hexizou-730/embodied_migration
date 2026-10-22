@@ -1,0 +1,159 @@
+```python
+from typing import Any
+import numpy as np
+
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(
+            env,
+            control_mode=control_mode,
+            robot_uid=robot_uid,
+            gripper_open=0.81,
+            gripper_close=0.0,
+            move_steps=30,
+            settle_steps=12,
+            max_delta_m=0.04,
+        )
+
+    # ------------------------------------------------------------------ #
+    # helpers
+    # ------------------------------------------------------------------ #
+    def _goto(self, target, gripper, steps=30, tol=0.006, max_iters=40):
+        """Iteratively drive the TCP towards a world target using bounded deltas."""
+        target = np.asarray(target, dtype=np.float64).reshape(3)
+        for _ in range(max_iters):
+            if self._early_stop():
+                return False
+            cur = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+            delta = target - cur
+            dist = float(np.linalg.norm(delta))
+            if dist <= tol:
+                break
+            step = np.clip(delta, -self.max_delta_m, self.max_delta_m)
+            self._repeat_action(step, gripper=gripper, steps=steps)
+        # final small correction
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            cur = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+            delta = target - cur
+            if float(np.linalg.norm(delta)) <= tol:
+                break
+            step = np.clip(delta, -self.max_delta_m, self.max_delta_m)
+            self._repeat_action(step, gripper=gripper, steps=6)
+        return True
+
+    def _grasp_pose_for(self, cube_pos):
+        """Compute a top-down grasp pose above the cube."""
+        cube_pos = np.asarray(cube_pos, dtype=np.float64).reshape(3)
+        # TCP offset from the source evidence: gripper tip sits ~0.155 below flange
+        tcp_offset_z = 0.155
+        grasp_z = cube_pos[2] + 0.020 + tcp_offset_z - 0.005
+        return np.array([cube_pos[0], cube_pos[1], grasp_z], dtype=np.float64)
+
+    # ------------------------------------------------------------------ #
+    # main policy
+    # ------------------------------------------------------------------ #
+    def run_source_actions(self) -> bool:
+        # ---- read measured state ------------------------------------- #
+        cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).reshape(3)
+        cubeB = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).reshape(3)
+
+        # ---- approach ------------------------------------------------- #
+        pregrasp = self._grasp_pose_for(cubeA)
+        pregrasp[2] += 0.06  # hover above the grasp point
+        if not self._goto(pregrasp, gripper=self.gripper_open, steps=30):
+            return False
+
+        # ---- descend to grasp ---------------------------------------- #
+        grasp_target = self._grasp_pose_for(cubeA)
+        if not self._goto(grasp_target, gripper=self.gripper_open, steps=20):
+            return False
+
+        # ---- close gripper ------------------------------------------- #
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=20)
+        if self._early_stop():
+            return False
+
+        # verify grasp; if not grasped, nudge down and retry once
+        if not self._is_grasping_entity("cubeA"):
+            cur = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+            self._repeat_action(
+                np.array([0.0, 0.0, -self.max_delta_m]),
+                gripper=self.gripper_close,
+                steps=10,
+            )
+            self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=10)
+            if not self._is_grasping_entity("cubeA"):
+                # last resort: small lateral wiggle while closing
+                for _ in range(3):
+                    if self._early_stop():
+                        return False
+                    self._repeat_action(
+                        np.array([0.0, 0.0, -self.max_delta_m]),
+                        gripper=self.gripper_close,
+                        steps=6,
+                    )
+                    self._repeat_action(
+                        np.array([0.0, 0.0, self.max_delta_m]),
+                        gripper=self.gripper_close,
+                        steps=4,
+                    )
+                if not self._is_grasping_entity("cubeA"):
+                    return False
+
+        # ---- lift ---------------------------------------------------- #
+        lift_target = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+        lift_target[2] += 0.12
+        if not self._goto(lift_target, gripper=self.gripper_close, steps=25):
+            return False
+
+        # ---- align above cubeB --------------------------------------- #
+        # Re-read cubeB in case it moved (it should not, but be safe).
+        cubeB = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).reshape(3)
+        cubeA_now = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).reshape(3)
+        # desired cubeA center: directly above cubeB by cube height (~0.04)
+        desired_A = np.array(
+            [cubeB[0], cubeB[1], cubeB[2] + 0.040], dtype=np.float64
+        )
+        # TCP should be above desired_A by the same offset as when grasping
+        offset = cubeA_now - np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+        align_target = desired_A - offset
+        # keep a small clearance above the stack while aligning
+        align_target[2] += 0.02
+        if not self._goto(align_target, gripper=self.gripper_close, steps=25):
+            return False
+
+        # ---- descend to place ---------------------------------------- #
+        place_target = desired_A - offset
+        if not self._goto(place_target, gripper=self.gripper_close, steps=20):
+            return False
+
+        # ---- release ------------------------------------------------- #
+        self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=15)
+        if self._early_stop():
+            return False
+
+        # ---- retreat ------------------------------------------------- #
+        retreat = np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+        retreat[2] += 0.08
+        self._goto(retreat, gripper=self.gripper_open, steps=20)
+
+        # ---- settle and verify --------------------------------------- #
+        for _ in range(20):
+            if self._early_stop():
+                break
+            self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=6)
+            ev = self._official_evaluation()
+            if bool(ev.get("success", False)):
+                return True
+
+        return bool(self._official_evaluation().get("success", False))
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```

@@ -1,0 +1,200 @@
+{
+  "schema": "stackcube_preflight.v1",
+  "git_rev": "a4c0a7e06ea6c9746c52623d2b513bfd9bc3b7dc",
+  "source_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/source_programs/frozen/t07_stack_cube.py",
+  "source_sha256": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895",
+  "candidate_matches_frozen": true,
+  "llm_calls": 0,
+  "target_interfaces": [
+    {
+      "control_mode": "pd_ee_delta_pos",
+      "initialized": true,
+      "action_space": {
+        "repr": "Box(-1.0, 1.0, (4,), float32)",
+        "shape": [
+          4
+        ],
+        "dtype": "float32",
+        "low": {
+          "min": -1.0,
+          "max": -1.0,
+          "values": [
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0
+          ]
+        },
+        "high": {
+          "min": 1.0,
+          "max": 1.0,
+          "values": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "controller_action_mapping": {
+        "arm": [
+          0,
+          3
+        ],
+        "gripper_active": [
+          3,
+          4
+        ],
+        "gripper_passive": [
+          4,
+          4
+        ]
+      },
+      "supported_robots": [
+        "panda_wristcam",
+        "panda",
+        "fetch"
+      ],
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    },
+    {
+      "control_mode": "pd_ee_delta_pose",
+      "initialized": true,
+      "action_space": {
+        "repr": "Box([-1. -1. -1. -1. -1. -1.  0.], [1.   1.   1.   1.   1.   1.   0.81], (7,), float32)",
+        "shape": [
+          7
+        ],
+        "dtype": "float32",
+        "low": {
+          "min": -1.0,
+          "max": 0.0,
+          "values": [
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            0.0
+          ]
+        },
+        "high": {
+          "min": 0.8100000023841858,
+          "max": 1.0,
+          "values": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            0.8100000023841858
+          ]
+        }
+      },
+      "controller_action_mapping": {
+        "arm": [
+          0,
+          6
+        ],
+        "gripper_active": [
+          6,
+          7
+        ],
+        "gripper_passive": [
+          7,
+          7
+        ]
+      },
+      "supported_robots": [
+        "panda_wristcam",
+        "panda",
+        "fetch"
+      ],
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    }
+  ],
+  "source": {
+    "status": "validated",
+    "success": true,
+    "success_rate": 1.0,
+    "environment_mismatches": null,
+    "trials": [
+      {
+        "seed": 0,
+        "success": true,
+        "message": "source actions reached official success",
+        "action_steps": 103,
+        "official_success": true,
+        "terminated": true,
+        "truncated": false,
+        "failure_diagnosis": {
+          "layer": "contact_geometry",
+          "reason": "contact_not_established",
+          "evidence": {
+            "entity": "cubeB",
+            "action_steps": 103,
+            "tcp_displacement_m": 0.15296,
+            "object_displacement_m": 0.00017,
+            "final_tcp_object_xy_m": 0.00845,
+            "initial_position": [
+              -0.03926,
+              0.10728,
+              0.02
+            ],
+            "final_position": [
+              -0.03921,
+              0.10744,
+              0.02
+            ]
+          },
+          "repair_hint": "The TCP moved substantially but the manipulated object did not. Do not add more steps or repeat the same waypoint. Change the contact side or height, verify object motion after a short action pulse, and use a grasp-and-place strategy when the observed target gripper supports it."
+        },
+        "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/stackcube_pilot/preflight_20261021_224739/t07_stack_cube/seed_000.json"
+      },
+      {
+        "seed": 1,
+        "success": true,
+        "message": "source actions reached official success",
+        "action_steps": 89,
+        "official_success": true,
+        "terminated": true,
+        "truncated": false,
+        "failure_diagnosis": {
+          "layer": "contact_geometry",
+          "reason": "contact_not_established",
+          "evidence": {
+            "entity": "cubeB",
+            "action_steps": 89,
+            "tcp_displacement_m": 0.11894,
+            "object_displacement_m": 2e-05,
+            "final_tcp_object_xy_m": 0.00247,
+            "initial_position": [
+              -0.04262,
+              0.07581,
+              0.02
+            ],
+            "final_position": [
+              -0.04263,
+              0.07581,
+              0.02
+            ]
+          },
+          "repair_hint": "The TCP moved substantially but the manipulated object did not. Do not add more steps or repeat the same waypoint. Change the contact side or height, verify object motion after a short action pulse, and use a grasp-and-place strategy when the observed target gripper supports it."
+        },
+        "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/stackcube_pilot/preflight_20261021_224739/t07_stack_cube/seed_001.json"
+      }
+    ]
+  }
+}

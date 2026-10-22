@@ -1,0 +1,74 @@
+{
+  "schema": "stackcube_target_reachability.v1",
+  "env_id": "StackCube-v1",
+  "robot_uid": "xarm6_robotiq",
+  "control_mode": "pd_ee_delta_pose",
+  "seed": 0,
+  "clearance_m": 0.12,
+  "rows": [
+    {
+      "entity": "cubeA",
+      "start_tcp": [
+        -0.018338,
+        0.025664,
+        0.155158
+      ],
+      "object_position": [
+        -0.083053,
+        -0.093543,
+        0.02
+      ],
+      "target": [
+        -0.083053,
+        -0.093543,
+        0.14
+      ],
+      "final_tcp": [
+        -0.082903,
+        -0.091491,
+        0.140011
+      ],
+      "final_error_m": 0.002058,
+      "actions": 12,
+      "reached": true,
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    },
+    {
+      "entity": "cubeB",
+      "start_tcp": [
+        -0.018338,
+        0.025664,
+        0.155158
+      ],
+      "object_position": [
+        -0.039264,
+        0.107276,
+        0.02
+      ],
+      "target": [
+        -0.039264,
+        0.107276,
+        0.14
+      ],
+      "final_tcp": [
+        -0.039067,
+        0.104543,
+        0.14001
+      ],
+      "final_error_m": 0.00274,
+      "actions": 8,
+      "reached": true,
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # ---- helpers -------------------------------------------------------
+    def _safe_move(self, target, gripper, steps):
+        target = np.asarray(target, dtype=np.float64).reshape(3)
+        remaining = int(steps)
+        chunk = 6
+        while remaining > 0:
+            if self._early_stop():
+                return True
+            n = min(chunk, remaining)
+            self._move_towards(target, gripper=gripper, steps=n)
+            remaining -= n
+        return self._early_stop()
+
+    def _safe_repeat(self, delta, gripper, steps):
+        delta = np.asarray(delta, dtype=np.float64).reshape(3)
+        remaining = int(steps)
+        chunk = 6
+        while remaining > 0:
+            if self._early_stop():
+                return True
+            n = min(chunk, remaining)
+            self._repeat_action(delta, gripper=gripper, steps=n)
+            remaining -= n
+        return self._early_stop()
+
+    def _tcp(self):
+        return np.asarray(self._tcp_pos(), dtype=np.float64).reshape(3)
+
+    def _cubeA(self):
+        p = self._entity_pos("cubeA")
+        if p is None:
+            return None
+        return np.asarray(p, dtype=np.float64).reshape(3)
+
+    def _cubeB(self):
+        p = self._entity_pos("cubeB")
+        if p is None:
+            return None
+        return np.asarray(p, dtype=np.float64).reshape(3)
+
+    def _success(self):
+        try:
+            ev = self._official_evaluation()
+            return bool(ev.get("success", False))
+        except Exception:
+            return False
+
+    def _grasped(self):
+        try:
+            return bool(self._is_grasping_entity("cubeA"))
+        except Exception:
+            return False
+
+    def _descend_to(self, xy, z, gripper, steps):
+        """Move to xy at height z, in two stages: xy first, then down."""
+        cur = self._tcp()
+        pre = np.array([xy[0], xy[1], max(cur[2], z + 0.06)], dtype=np.float64)
+        if self._safe_move(pre, gripper=gripper, steps=steps):
+            return True
+        target = np.array([xy[0], xy[1], z], dtype=np.float64)
+        if self._safe_move(target, gripper=gripper, steps=steps):
+            return True
+        return False
+
+    # ---- main policy ---------------------------------------------------
+    def run_source_actions(self) -> bool:
+        # 0. Open gripper and settle.
+        if self._safe_repeat(np.zeros(3), gripper=0.0, steps=10):
+            return True
+
+        cubeA = self._cubeA()
+        cubeB = self._cubeB()
+        if cubeA is None or cubeB is None:
+            return False
+
+        # 1. Approach above cubeA (fresh measured position).
+        cubeA = self._cubeA()
+        above_A = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.12], dtype=np.float64)
+        if self._safe_move(above_A, gripper=0.0, steps=40):
+            return True
+
+        # 2. Descend to grasp height (slightly above cube center to avoid pushing).
+        cubeA = self._cubeA()
+        grasp_z = cubeA[2] + 0.012
+        if self._descend_to((cubeA[0], cubeA[1]), grasp_z, gripper=0.0, steps=40):
+            return True
+
+        # 3. Close gripper and verify grasp via short pulse.
+        if self._safe_repeat(np.zeros(3), gripper=0.81, steps=16):
+            return True
+        if not self._grasped():
+            # small downward nudge and re-close
+            cur = self._tcp()
+            nudge = np.array([cur[0], cur[1], cur[2] - 0.008], dtype=np.float64)
+            if self._safe_move(nudge, gripper=0.81, steps=12):
+                return True
+            if self._safe_repeat(np.zeros(3), gripper=0.81, steps=12):
+                return True
+
+        # 4. Lift cubeA and verify object moved with TCP.
+        cubeA_before = self._cubeA()
+        lift = np.array([cubeA_before[0], cubeA_before[1], cubeA_before[2] + 0.16], dtype=np.float64)
+        if self._safe_move(lift, gripper=0.81, steps=40):
+            return True
+        cubeA_after = self._cubeA()
+        lifted = (cubeA_after[2] - cubeA_before[2]) > 0.03
+        if not lifted:
+            # retry grasp: open, descend a bit lower, close, lift
+            if self._safe_repeat(np.zeros(3), gripper=0.0, steps=10):
+                return True
+            cubeA = self._cubeA()
+            retry_z = cubeA[2] + 0.004
+            if self._descend_to((cubeA[0], cubeA[1]), retry_z, gripper=0.0, steps=30):
+                return True
+            if self._safe_repeat(np.zeros(3), gripper=0.81, steps=16):
+                return True
+            cubeA = self._cubeA()
+            lift2 = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.16], dtype=np.float64)
+            if self._safe_move(lift2, gripper=0.81, steps=40):
+                return True
+
+        # 5. Move above cubeB (fresh measured position).
+        cubeB = self._cubeB()
+        above_B = np.array([cubeB[0], cubeB[1], cubeB[2] + 0.16], dtype=np.float64)
+        if self._safe_move(above_B, gripper=0.81, steps=60):
+            return True
+
+        # 6. Descend to place height: cubeA bottom should rest on cubeB top.
+        # cube half size ~0.02; stack center height = cubeB_z + 0.04.
+        cubeB = self._cubeB()
+        place_z = cubeB[2] + 0.055
+        if self._descend_to((cubeB[0], cubeB[1]), place_z, gripper=0.81, steps=40):
+            return True
+
+        # 7. Open gripper to release.
+        if self._safe_repeat(np.zeros(3), gripper=0.0, steps=16):
+            return True
+
+        # 8. Retreat upward to leave cubeA static and ungrasped.
+        cubeB = self._cubeB()
+        retreat = np.array([cubeB[0], cubeB[1], cubeB[2] + 0.22], dtype=np.float64)
+        if self._safe_move(retreat, gripper=0.0, steps=40):
+            return True
+
+        # 9. Settle and verify.
+        self._safe_repeat(np.zeros(3), gripper=0.0, steps=20)
+
+        return self._success()
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```

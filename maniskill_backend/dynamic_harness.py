@@ -31,6 +31,7 @@ _ENV_ID = re.compile(r".+-v\d+$", re.IGNORECASE)
 _DANGEROUS_CALLS = {"step", "reset"}
 _PROTECTED_METHODS = {
     "_step",
+    "_run_stage",
     "_official_evaluation",
     "_official_success",
     "_snapshot",
@@ -361,14 +362,16 @@ def _concise_execution_error(message: str) -> str:
 class _RecordedEnv:
     """Record actual simulator steps independently of generated logging code."""
 
-    def __init__(self, env: Any, max_steps: int) -> None:
+    def __init__(self, env: Any, max_steps: int, source_path: Path | None = None) -> None:
         self._env = env
         self.max_steps = max_steps
+        self.source_path = source_path.resolve() if source_path is not None else None
         self.steps = 0
         self.done = False
         self.terminated = False
         self.truncated = False
         self.trace: list[Dict[str, Any]] = []
+        self.source_action_trace: list[Dict[str, Any]] = []
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._env, name)
@@ -388,18 +391,52 @@ class _RecordedEnv:
     def step(self, action: Any) -> Any:
         if self.done or self.steps >= self.max_steps:
             raise RuntimeError("Episode ended; no more actions may be executed.")
+        source_location = self._source_location()
+        if (
+            self.source_action_trace
+            and self.source_action_trace[-1].get("source_line") != source_location.get("source_line")
+            and "state_after" not in self.source_action_trace[-1]
+        ):
+            self.source_action_trace[-1]["state_after"] = self.snapshot()
         result = self._env.step(action)
         self.steps += 1
+        source_row = {"step": self.steps, **source_location}
+        self.source_action_trace.append(source_row)
         self.terminated = _scalar_bool(result[2])
         self.truncated = _scalar_bool(result[3]) or self.steps >= self.max_steps
         self.done = self.terminated or self.truncated
         if self.steps == 1 or self.steps % 10 == 0 or self.done:
             self.trace.append({**self.snapshot(), "action": _jsonable(action)})
         if self.done:
+            source_row["state_after"] = self.snapshot()
             evaluation = _safe_evaluate(getattr(self._env, "unwrapped", self._env))
             if _scalar_bool(evaluation.get("success", False)):
                 raise _OfficialSuccessReached
         return result
+
+    def finalize_source_trace(self) -> None:
+        if self.source_action_trace and "state_after" not in self.source_action_trace[-1]:
+            self.source_action_trace[-1]["state_after"] = self.snapshot()
+
+    def _source_location(self) -> Dict[str, Any]:
+        if self.source_path is None:
+            return {"source_line": None, "source_function": None}
+        frame = inspect.currentframe()
+        try:
+            frame = frame.f_back if frame is not None else None
+            while frame is not None:
+                try:
+                    if Path(frame.f_code.co_filename).resolve() == self.source_path:
+                        return {
+                            "source_line": frame.f_lineno,
+                            "source_function": frame.f_code.co_name,
+                        }
+                except (OSError, RuntimeError):
+                    pass
+                frame = frame.f_back
+        finally:
+            del frame
+        return {"source_line": None, "source_function": None}
 
 
 class _OfficialSuccessReached(BaseException):
@@ -478,7 +515,7 @@ def run_dynamic_trial(
     try:
         env = adapter.make()
         _, reset_info = adapter.reset(seed=spec.seed)
-        recorded = _RecordedEnv(env, spec.max_episode_steps)
+        recorded = _RecordedEnv(env, spec.max_episode_steps, source_path=adapter_path)
         recorded.trace.append(recorded.snapshot())
         module = _load_module(adapter_path)
         try:
@@ -508,6 +545,7 @@ def run_dynamic_trial(
             code_ok = True
             code_message = "official task success terminated the episode"
         official = _safe_evaluate(getattr(env, "unwrapped", env))
+        recorded.finalize_source_trace()
         official_success = _scalar_bool(official.get("success", False))
         returned_success = bool(code_ok and (source_entrypoint == "run" or _success_from_ret_val(ret_val)))
         success = bool(returned_success and official_success and recorded.steps > 0)
@@ -552,6 +590,7 @@ def run_dynamic_trial(
             "runtime_snapshot": snapshot,
             "action_steps": recorded.steps,
             "state_trace": [*recorded.trace, recorded.snapshot()],
+            "source_action_trace": recorded.source_action_trace,
             "terminated": recorded.terminated,
             "truncated": recorded.truncated,
         }
@@ -593,9 +632,11 @@ def run_dynamic_trial(
             "failure_layer": "runtime_setup",
         }
         if recorded is not None:
+            recorded.finalize_source_trace()
             result.update(
                 action_steps=recorded.steps,
                 state_trace=recorded.trace,
+                source_action_trace=recorded.source_action_trace,
                 terminated=recorded.terminated,
                 truncated=recorded.truncated,
             )
@@ -1551,6 +1592,12 @@ def _program_robot_methods(tree: ast.AST) -> set[str]:
 
 
 def _dynamic_diagnosis(result: Mapping[str, Any]) -> Dict[str, Any]:
+    if result.get("success") and result.get("official_success") and int(result.get("action_steps") or 0) > 0:
+        return {
+            "layer": "success",
+            "reason": "official_task_success",
+            "repair_hint": "",
+        }
     message = str(result.get("message") or "")
     execution_error = str(result.get("execution_error") or "")
     if result.get("failure_layer") == "runtime_setup":

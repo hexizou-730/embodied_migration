@@ -1,0 +1,131 @@
+{
+  "schema": "selective_migration_repetitions.v1",
+  "rows": [
+    {
+      "method_id": "target_only",
+      "num_runs": 3,
+      "num_success": 1,
+      "success_rate": 0.3333333333333333,
+      "infrastructure_failures": 0,
+      "generation_cycles": 8,
+      "valid_candidates": 8,
+      "target_action_steps": 856,
+      "total_tokens": 70281,
+      "llm_cost_usd": 0.00882615
+    },
+    {
+      "method_id": "whole_rewrite",
+      "num_runs": 3,
+      "num_success": 3,
+      "success_rate": 1.0,
+      "infrastructure_failures": 0,
+      "generation_cycles": 4,
+      "valid_candidates": 4,
+      "target_action_steps": 448,
+      "total_tokens": 47771,
+      "llm_cost_usd": 0.00541055
+    },
+    {
+      "method_id": "selective",
+      "num_runs": 3,
+      "num_success": 2,
+      "success_rate": 0.6666666666666666,
+      "infrastructure_failures": 0,
+      "generation_cycles": 7,
+      "valid_candidates": 7,
+      "target_action_steps": 431,
+      "total_tokens": 47240,
+      "llm_cost_usd": 0.00542276
+    }
+  ],
+  "protocols": [
+    {
+      "task": "StackCube-v1",
+      "source_robot": "panda",
+      "target_robot": "xarm6_robotiq",
+      "target_control_mode": "pd_ee_delta_pose",
+      "seed": 0,
+      "max_generation_cycles": 3,
+      "llm_models_observed": [
+        "deepseek/deepseek-v4.1-flash"
+      ],
+      "generation_settings": {
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash",
+        "temperature": 0.0,
+        "sampling_seed": 0,
+        "max_tokens": 6000,
+        "reasoning_effort": "none",
+        "request_timeout_seconds": 180.0,
+        "request_max_retries": 0
+      },
+      "official_success": "env.unwrapped.evaluate()['success']",
+      "selective_result_reused": null,
+      "experimental_unit": "one independent generation run per method",
+      "method_information": {
+        "target_only": "task definition plus target interface; global rewrite",
+        "whole_rewrite": "complete source code plus source-derived stage representation; global rewrite",
+        "selective": "source-derived stage representation; fixed stage order and failed-stage-only repair"
+      }
+    },
+    {
+      "task": "StackCube-v1",
+      "source_robot": "panda",
+      "target_robot": "xarm6_robotiq",
+      "target_control_mode": "pd_ee_delta_pose",
+      "seed": 0,
+      "max_generation_cycles": 3,
+      "llm_models_observed": [
+        "deepseek/deepseek-v4.1-flash"
+      ],
+      "generation_settings": {
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash",
+        "temperature": 0.0,
+        "sampling_seed": 1,
+        "max_tokens": 6000,
+        "reasoning_effort": "none",
+        "request_timeout_seconds": 180.0,
+        "request_max_retries": 0
+      },
+      "official_success": "env.unwrapped.evaluate()['success']",
+      "selective_result_reused": null,
+      "experimental_unit": "one independent generation run per method",
+      "method_information": {
+        "target_only": "task definition plus target interface; global rewrite",
+        "whole_rewrite": "complete source code plus source-derived stage representation; global rewrite",
+        "selective": "source-derived stage representation; fixed stage order and failed-stage-only repair"
+      }
+    },
+    {
+      "task": "StackCube-v1",
+      "source_robot": "panda",
+      "target_robot": "xarm6_robotiq",
+      "target_control_mode": "pd_ee_delta_pose",
+      "seed": 0,
+      "max_generation_cycles": 3,
+      "llm_models_observed": [
+        "deepseek/deepseek-v4.1-flash"
+      ],
+      "generation_settings": {
+        "provider": "openrouter",
+        "model": "deepseek/deepseek-v4.1-flash",
+        "temperature": 0.0,
+        "sampling_seed": 2,
+        "max_tokens": 6000,
+        "reasoning_effort": "none",
+        "request_timeout_seconds": 180.0,
+        "request_max_retries": 0
+      },
+      "official_success": "env.unwrapped.evaluate()['success']",
+      "selective_result_reused": null,
+      "experimental_unit": "one independent generation run per method",
+      "method_information": {
+        "target_only": "task definition plus target interface; global rewrite",
+        "whole_rewrite": "complete source code plus source-derived stage representation; global rewrite",
+        "selective": "source-derived stage representation; fixed stage order and failed-stage-only repair"
+      }
+    }
+  ],
+  "interpretation_limit": "Fixed-scene independent generation pilot; not a held-out-scene generalization estimate."
+}

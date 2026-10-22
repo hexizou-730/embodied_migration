@@ -1,0 +1,1330 @@
+Generate a target adapter for this controlled baseline.
+
+Method: target_only
+Experiment: {
+  "env_id": "StackCube-v1",
+  "task_label": "t07_stack_cube",
+  "source_robot": "panda",
+  "target_robot": "xarm6_robotiq",
+  "source_control_mode": "pd_joint_pos",
+  "target_control_mode": "pd_ee_delta_pose",
+  "seed": 0,
+  "max_episode_steps": 1000,
+  "max_source_cycles": 2,
+  "max_target_cycles": 3,
+  "obs_mode": "state",
+  "sim_backend": "auto",
+  "render_backend": "gpu"
+}
+Target interface: {
+  "env_id": "StackCube-v1",
+  "robot_uid": "xarm6_robotiq",
+  "control_mode": "pd_ee_delta_pose",
+  "supported_robots": [
+    "panda_wristcam",
+    "panda",
+    "fetch"
+  ],
+  "action_space": {
+    "repr": "Box([-1. -1. -1. -1. -1. -1.  0.], [1.   1.   1.   1.   1.   1.   0.81], (7,), float32)",
+    "shape": [
+      7
+    ],
+    "dtype": "float32",
+    "low": {
+      "min": -1.0,
+      "max": 0.0,
+      "values": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        0.0
+      ]
+    },
+    "high": {
+      "min": 0.8100000023841858,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.8100000023841858
+      ]
+    }
+  },
+  "controller_action_mapping": {
+    "arm": [
+      0,
+      6
+    ],
+    "gripper_active": [
+      6,
+      7
+    ],
+    "gripper_passive": [
+      7,
+      7
+    ]
+  },
+  "tcp": [
+    [
+      -0.018338000401854515,
+      0.02566399984061718,
+      0.15515799820423126
+    ]
+  ],
+  "pose_entities": {
+    "cubeA": {
+      "position": [
+        [
+          -0.08305300027132034,
+          -0.09354300051927567,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.138947993516922,
+          0.0,
+          0.0,
+          0.9902999997138977
+        ]
+      ]
+    },
+    "cubeB": {
+      "position": [
+        [
+          -0.039264000952243805,
+          0.10727600008249283,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.3038809895515442,
+          0.0,
+          0.0,
+          0.952709972858429
+        ]
+      ]
+    },
+    "segmentation_id_map[10]": {
+      "position": [
+        [
+          -0.008479000069200993,
+          0.020188000053167343,
+          0.304733008146286
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[11]": {
+      "position": [
+        [
+          -0.018338000401854515,
+          0.02566399984061718,
+          0.15515799820423126
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[12]": {
+      "position": [
+        [
+          -0.013001999817788601,
+          0.05275699868798256,
+          0.2511639893054962
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03245000168681145,
+          -0.015877999365329742,
+          0.9993039965629578,
+          0.009279999881982803
+        ]
+      ]
+    },
+    "segmentation_id_map[13]": {
+      "position": [
+        [
+          -0.013716000132262707,
+          0.08416400104761124,
+          0.2558709979057312
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03245000168681145,
+          -0.015877999365329742,
+          0.9993039965629578,
+          0.009279999881982803
+        ]
+      ]
+    },
+    "segmentation_id_map[14]": {
+      "position": [
+        [
+          -0.01697400026023388,
+          0.09108500182628632,
+          0.20899799466133118
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03242700174450874,
+          -0.01592399924993515,
+          0.9993159770965576,
+          0.007840000092983246
+        ]
+      ]
+    },
+    "segmentation_id_map[15]": {
+      "position": [
+        [
+          -0.018394000828266144,
+          0.06955300271511078,
+          0.17628200352191925
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03242700174450874,
+          -0.01592399924993515,
+          0.9993159770965576,
+          0.007840000092983246
+        ]
+      ]
+    },
+    "segmentation_id_map[16]": {
+      "position": [
+        [
+          -0.012896000407636166,
+          0.03511499986052513,
+          0.24397599697113037
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03262300044298172,
+          -0.01551899965852499,
+          0.9991409778594971,
+          0.02028599940240383
+        ]
+      ]
+    },
+    "segmentation_id_map[17]": {
+      "position": [
+        [
+          -0.011172999627888203,
+          -0.00837200041860342,
+          0.2488050013780594
+        ]
+      ],
+      "quaternion": [
+        [
+          0.01774200052022934,
+          -0.9991899728775024,
+          -0.015602000057697296,
+          0.032582998275756836
+        ]
+      ]
+    },
+    "segmentation_id_map[18]": {
+      "position": [
+        [
+          -0.009957999922335148,
+          -0.03997800126671791,
+          0.25174498558044434
+        ]
+      ],
+      "quaternion": [
+        [
+          0.01774200052022934,
+          -0.9991899728775024,
+          -0.015602000057697296,
+          0.032582998275756836
+        ]
+      ]
+    },
+    "segmentation_id_map[19]": {
+      "position": [
+        [
+          -0.012868000194430351,
+          -0.04444900155067444,
+          0.20455199480056763
+        ]
+      ],
+      "quaternion": [
+        [
+          0.03227100148797035,
+          -0.9988260269165039,
+          -0.015127000398933887,
+          0.03280699998140335
+        ]
+      ]
+    },
+    "segmentation_id_map[1]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[20]": {
+      "position": [
+        [
+          -0.015643000602722168,
+          -0.020426999777555466,
+          0.17371100187301636
+        ]
+      ],
+      "quaternion": [
+        [
+          0.03227100148797035,
+          -0.9988260269165039,
+          -0.015127000398933887,
+          0.03280699998140335
+        ]
+      ]
+    },
+    "segmentation_id_map[21]": {
+      "position": [
+        [
+          -0.012136000208556652,
+          0.009744999930262566,
+          0.24299800395965576
+        ]
+      ],
+      "quaternion": [
+        [
+          0.02287600003182888,
+          -0.999085009098053,
+          -0.015434999950230122,
+          0.032662998884916306
+        ]
+      ]
+    },
+    "segmentation_id_map[22]": {
+      "position": [
+        [
+          -0.11999999731779099,
+          0.0,
+          -0.919642984867096
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7071070075035095,
+          0.0,
+          0.0,
+          0.7071070075035095
+        ]
+      ]
+    },
+    "segmentation_id_map[23]": {
+      "position": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[24]": {
+      "position": [
+        [
+          -0.08305300027132034,
+          -0.09354300051927567,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.138947993516922,
+          0.0,
+          0.0,
+          0.9902999997138977
+        ]
+      ]
+    },
+    "segmentation_id_map[25]": {
+      "position": [
+        [
+          -0.039264000952243805,
+          0.10727600008249283,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.3038809895515442,
+          0.0,
+          0.0,
+          0.952709972858429
+        ]
+      ]
+    },
+    "segmentation_id_map[2]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[3]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.2669999897480011
+        ]
+      ],
+      "quaternion": [
+        [
+          0.9998440146446228,
+          0.0,
+          -0.0,
+          0.017640000209212303
+        ]
+      ]
+    },
+    "segmentation_id_map[4]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.2669999897480011
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7009869813919067,
+          -0.703827977180481,
+          0.06803199648857117,
+          0.09281600266695023
+        ]
+      ]
+    },
+    "segmentation_id_map[5]": {
+      "position": [
+        [
+          -0.4056510031223297,
+          0.004108000081032515,
+          0.532043993473053
+        ]
+      ],
+      "quaternion": [
+        [
+          0.6292849779129028,
+          -0.6175209879875183,
+          -0.34448501467704773,
+          -0.3224869966506958
+        ]
+      ]
+    },
+    "segmentation_id_map[6]": {
+      "position": [
+        [
+          -0.07793500274419785,
+          0.01567400060594082,
+          0.4064210057258606
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018882999196648598,
+          -0.8817520141601562,
+          0.0042050001211464405,
+          -0.47131600975990295
+        ]
+      ]
+    },
+    "segmentation_id_map[7]": {
+      "position": [
+        [
+          -0.07793500274419785,
+          0.01567400060594082,
+          0.4064210057258606
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7196450233459473,
+          -0.6935439705848694,
+          0.019076000899076462,
+          0.027282999828457832
+        ]
+      ]
+    },
+    "segmentation_id_map[8]": {
+      "position": [
+        [
+          -0.008479000069200993,
+          0.020188000053167343,
+          0.304733008146286
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[9]": {
+      "position": [
+        [
+          0.041391000151634216,
+          0.02180499956011772,
+          0.3015049993991852
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7175289988517761,
+          -0.009775999933481216,
+          0.03632599860429764,
+          -0.6955119967460632
+        ]
+      ]
+    }
+  },
+  "entity_aliases": {},
+  "official_evaluation": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": true,
+    "success": false
+  },
+  "evaluate_source": "    def evaluate(self):\n        pos_A = self.cubeA.pose.p\n        pos_B = self.cubeB.pose.p\n        offset = pos_A - pos_B\n        xy_flag = (\n            torch.linalg.norm(offset[..., :2], axis=1)\n            <= torch.linalg.norm(self.cube_half_size[:2]) + 0.005\n        )\n        z_flag = torch.abs(offset[..., 2] - self.cube_half_size[..., 2] * 2) <= 0.005\n        is_cubeA_on_cubeB = torch.logical_and(xy_flag, z_flag)\n        # NOTE (stao): GPU sim can be fast but unstable. Angular velocity is rather high despite it not really rotating\n        is_cubeA_static = self.cubeA.is_static(lin_thresh=1e-2, ang_thresh=0.5)\n        is_cubeA_grasped = self.agent.is_grasping(self.cubeA)\n        success = is_cubeA_on_cubeB * is_cubeA_static * (~is_cubeA_grasped)\n        return {\n            \"is_cubeA_grasped\": is_cubeA_grasped,\n            \"is_cubeA_on_cubeB\": is_cubeA_on_cubeB,\n            \"is_cubeA_static\": is_cubeA_static,\n            \"success\": success.bool(),\n        }\n"
+}
+
+No source robot program or source execution evidence is available. Solve from the task and target interface.
+
+Required module contract:
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.81, gripper_close=0.0,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    def run_source_actions(self) -> bool:
+        # Implement the complete target policy here using measured state and bounded actions.
+        ...
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```
+
+Use only Python standard-library modules and numpy. Do not import torch, sapien, mani_skill,
+gymnasium, motion planners, or controllers. Do not override _step, _run_stage, _snapshot,
+_official_evaluation, _official_success, _entity_catalog, _robot_root_quat, or
+	_world_delta_to_action_delta. Runtime values are flat numpy vectors. The inherited API is:
+	- self._entity_pos("cubeA") / self._entity_pos("cubeB") -> flat xyz arrays
+	- self._tcp_pos() -> flat TCP xyz array
+	- self._official_evaluation() -> official task booleans
+	- self._is_grasping_entity("cubeA") -> target grasp detector
+	- self._move_towards(world_target, gripper=value, steps=count)
+	- self._repeat_action(delta_xyz, gripper=value, steps=count)
+	Do not call _entity_catalog() or subscript Actor objects. Both motion helpers require gripper and
+	steps as keyword-only arguments and neither accepts tol. Check self._early_stop() in explicit loops.
+	Never mutate object poses, simulator state, controller internals, or official success.
+Returning True is insufficient; the harness independently requires official evaluate()['success'].
+
+Current complete candidate, empty on the first round:
+```python
+from typing import Any
+import numpy as np
+
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(
+            env,
+            control_mode=control_mode,
+            robot_uid=robot_uid,
+            gripper_open=0.81,
+            gripper_close=0.0,
+            move_steps=30,
+            settle_steps=12,
+            max_delta_m=0.04,
+        )
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+    def _safe_move(self, target, gripper, steps):
+        target = np.asarray(target, dtype=np.float64).reshape(3)
+        self._move_towards(target, gripper=gripper, steps=steps)
+        return not self._early_stop()
+
+    def _safe_repeat(self, delta, gripper, steps):
+        delta = np.asarray(delta, dtype=np.float64).reshape(3)
+        self._repeat_action(delta, gripper=gripper, steps=steps)
+        return not self._early_stop()
+
+    def _above(self, pos, height):
+        pos = np.asarray(pos, dtype=np.float64).reshape(3)
+        return np.array([pos[0], pos[1], pos[2] + height], dtype=np.float64)
+
+    def _entity_moved(self, name, initial, tol=0.005):
+        cur = np.asarray(self._entity_pos(name), dtype=np.float64).reshape(3)
+        return float(np.linalg.norm(cur - initial)) > tol
+
+    # ------------------------------------------------------------------
+    # policy
+    # ------------------------------------------------------------------
+    def run_source_actions(self) -> bool:
+        half = 0.02
+
+        cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).reshape(3)
+        cubeB = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).reshape(3)
+
+        # ---- 1) Hover above cube A ----
+        if not self._safe_move(self._above(cubeA, 0.12), self.gripper_open, 40):
+            return False
+
+        # ---- 2) Descend to just above grasp height ----
+        pre_grasp = np.array([cubeA[0], cubeA[1], cubeA[2] + half + 0.015],
+                             dtype=np.float64)
+        if not self._safe_move(pre_grasp, self.gripper_open, 40):
+            return False
+
+        # ---- 3) Close gripper at grasp height ----
+        grasp_target = np.array([cubeA[0], cubeA[1], cubeA[2] + half],
+                                dtype=np.float64)
+        if not self._safe_move(grasp_target, self.gripper_close, 40):
+            return False
+
+        # ---- 4) Verify grasp by lifting a bit and checking cube A moved ----
+        lift_target = self._above(cubeA, 0.10)
+        if not self._safe_move(lift_target, self.gripper_close, 40):
+            return False
+
+        if not self._entity_moved("cubeA", cubeA, tol=0.01):
+            # Grasp failed; retry once with a slightly deeper approach.
+            if not self._safe_move(self._above(cubeA, 0.12), self.gripper_open, 40):
+                return False
+            deeper = np.array([cubeA[0], cubeA[1], cubeA[2] + half - 0.005],
+                              dtype=np.float64)
+            if not self._safe_move(deeper, self.gripper_open, 40):
+                return False
+            if not self._safe_move(deeper, self.gripper_close, 40):
+                return False
+            if not self._safe_move(self._above(cubeA, 0.10), self.gripper_close, 40):
+                return False
+            if not self._entity_moved("cubeA", cubeA, tol=0.01):
+                return False
+
+        # Re-measure cube A after lift (it may have shifted).
+        cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).reshape(3)
+        cubeB = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).reshape(3)
+
+        # ---- 5) Move above cube B while carrying A ----
+        if not self._safe_move(self._above(cubeB, 0.16), self.gripper_close, 60):
+            return False
+
+        # ---- 6) Descend to place cube A on top of cube B ----
+        place_z = cubeB[2] + half * 2 + half  # top of B + half of A
+        place_target = np.array([cubeB[0], cubeB[1], place_z], dtype=np.float64)
+        if not self._safe_move(place_target, self.gripper_close, 40):
+            return False
+
+        # ---- 7) Release cube A ----
+        if not self._safe_move(place_target, self.gripper_open, 40):
+            return False
+
+        # ---- 8) Retreat upward to let cube A settle ----
+        if not self._safe_move(self._above(cubeB, 0.16), self.gripper_open, 40):
+            return False
+
+        # ---- 9) Settle wait ----
+        for _ in range(4):
+            if self._early_stop():
+                break
+            self._repeat_action(np.zeros(3), gripper=self.gripper_open, steps=12)
+
+        # ---- 10) Final verification via official evaluation ----
+        try:
+            ev = self._official_evaluation()
+            if isinstance(ev, dict):
+                return bool(ev.get("success", False))
+        except Exception:
+            pass
+        return False
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```
+
+Latest real execution evidence:
+{
+  "success": false,
+  "message": "task program returned failure",
+  "execution_error": "",
+  "official_success": false,
+  "official_evaluation": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": true,
+    "success": false
+  },
+  "action_steps": 75,
+  "runtime_snapshot": {
+    "task_state": {
+      "robot_init_qpos_noise": 0.02,
+      "num_envs": 1,
+      "reconfiguration_freq": 0,
+      "cube_half_size": [
+        0.019999999552965164,
+        0.019999999552965164,
+        0.019999999552965164
+      ]
+    },
+    "entity_velocities": {
+      "cubeA": {
+        "linear_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "angular_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "cubeB": {
+        "linear_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "angular_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "robot_state": {
+      "qpos": [
+        [
+          0.19297462701797485,
+          0.16256117820739746,
+          -1.19688880443573,
+          0.07075951993465424,
+          1.0852489471435547,
+          0.12889036536216736,
+          0.8099992275238037,
+          0.8099990487098694,
+          0.8099992871284485,
+          0.8099989295005798,
+          -0.8100014328956604,
+          -0.8100027441978455
+        ]
+      ],
+      "qvel": [
+        [
+          -1.3417200683818464e-08,
+          -9.60286627993412e-10,
+          2.6405187369960004e-08,
+          -5.524394737221883e-07,
+          -3.626463396244617e-08,
+          2.3118315084502683e-07,
+          1.1716329936461989e-05,
+          1.2181999409222044e-05,
+          1.610181061550975e-05,
+          1.0181425750488415e-05,
+          -2.082828177663032e-05,
+          2.3777491151122376e-05
+        ]
+      ],
+      "root_position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "root_quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "tcp": [
+      -0.037296000868082047,
+      0.10789500176906586,
+      0.1804949939250946
+    ],
+    "entities": {
+      "cubeA": {
+        "position": [
+          [
+            -0.08969700336456299,
+            -0.11298500001430511,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.3575499951839447,
+            -4.999999873689376e-06,
+            -3.000000106112566e-06,
+            0.9338939785957336
+          ]
+        ]
+      },
+      "cubeB": {
+        "position": [
+          [
+            -0.03926499933004379,
+            0.10727500170469284,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.3038800060749054,
+            -3.999999989900971e-06,
+            -1.9999999949504854e-06,
+            0.952709972858429
+          ]
+        ]
+      },
+      "segmentation_id_map[22]": {
+        "position": [
+          [
+            -0.11999999731779099,
+            0.0,
+            -0.919642984867096
+          ]
+        ],
+        "quaternion": [
+          [
+            0.7071070075035095,
+            0.0,
+            0.0,
+            0.7071070075035095
+          ]
+        ]
+      },
+      "segmentation_id_map[23]": {
+        "position": [
+          [
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "quaternion": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "segmentation_id_map[24]": {
+        "position": [
+          [
+            -0.08969700336456299,
+            -0.11298500001430511,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.3575499951839447,
+            -4.999999873689376e-06,
+            -3.000000106112566e-06,
+            0.9338939785957336
+          ]
+        ]
+      },
+      "segmentation_id_map[25]": {
+        "position": [
+          [
+            -0.03926499933004379,
+            0.10727500170469284,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.3038800060749054,
+            -3.999999989900971e-06,
+            -1.9999999949504854e-06,
+            0.952709972858429
+          ]
+        ]
+      },
+      "segmentation_id_map[1]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.0
+          ]
+        ],
+        "quaternion": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "segmentation_id_map[2]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.0
+          ]
+        ],
+        "quaternion": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ]
+      },
+      "segmentation_id_map[3]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.2669999897480011
+          ]
+        ],
+        "quaternion": [
+          [
+            0.9953489899635315,
+            0.0,
+            0.0,
+            0.09633799642324448
+          ]
+        ]
+      },
+      "segmentation_id_map[4]": {
+        "position": [
+          [
+            -0.5220000147819519,
+            0.0,
+            0.2669999897480011
+          ]
+        ],
+        "quaternion": [
+          [
+            0.6959620118141174,
+            -0.7070260047912598,
+            -0.010751999914646149,
+            0.1250399947166443
+          ]
+        ]
+      },
+      "segmentation_id_map[5]": {
+        "position": [
+          [
+            -0.4249950051307678,
+            0.018955999985337257,
+            0.5390899777412415
+          ]
+        ],
+        "quaternion": [
+          [
+            0.645455002784729,
+            -0.5780969858169556,
+            -0.40719300508499146,
+            -0.2887659966945648
+          ]
+        ]
+      },
+      "segmentation_id_map[6]": {
+        "position": [
+          [
+            -0.09719900041818619,
+            0.08300899714231491,
+            0.430649995803833
+          ]
+        ],
+        "quaternion": [
+          [
+            0.06500499695539474,
+            -0.8676019906997681,
+            -0.05308299884200096,
+            -0.49012500047683716
+          ]
+        ]
+      },
+      "segmentation_id_map[7]": {
+        "position": [
+          [
+            -0.09719900041818619,
+            0.08300899714231491,
+            0.430649995803833
+          ]
+        ],
+        "quaternion": [
+          [
+            0.7243090271949768,
+            -0.6843469738960266,
+            -0.03587299957871437,
+            0.07588899880647659
+          ]
+        ]
+      },
+      "segmentation_id_map[8]": {
+        "position": [
+          [
+            -0.028170999139547348,
+            0.10012300312519073,
+            0.33001598715782166
+          ]
+        ],
+        "quaternion": [
+          [
+            0.026374999433755875,
+            -0.9990919828414917,
+            -0.01471600029617548,
+            0.030056999996304512
+          ]
+        ]
+      },
+      "segmentation_id_map[9]": {
+        "position": [
+          [
+            0.021717000752687454,
+            0.10167200118303299,
+            0.3270510137081146
+          ]
+        ],
+        "quaternion": [
+          [
+            0.7168700098991394,
+            -0.002604000037536025,
+            0.03990299999713898,
+            -0.696058988571167
+          ]
+        ]
+      },
+      "segmentation_id_map[10]": {
+        "position": [
+          [
+            -0.028170999139547348,
+            0.10012300312519073,
+            0.33001598715782166
+          ]
+        ],
+        "quaternion": [
+          [
+            0.026374999433755875,
+            -0.9990919828414917,
+            -0.01471600029617548,
+            0.030055999755859375
+          ]
+        ]
+      },
+      "segmentation_id_map[11]": {
+        "position": [
+          [
+            -0.037296000868082047,
+            0.10789500176906586,
+            0.1804949939250946
+          ]
+        ],
+        "quaternion": [
+          [
+            0.026374999433755875,
+            -0.9990919828414917,
+            -0.01471600029617548,
+            0.030055999755859375
+          ]
+        ]
+      },
+      "segmentation_id_map[12]": {
+        "position": [
+          [
+            -0.03236199915409088,
+            0.13351300358772278,
+            0.27692699432373047
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.0218260008841753,
+            -0.02536799944937229,
+            0.928659975528717,
+            -0.36941999197006226
+          ]
+        ]
+      },
+      "segmentation_id_map[16]": {
+        "position": [
+          [
+            -0.032260000705718994,
+            0.11598200350999832,
+            0.26947200298309326
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.02182699926197529,
+            -0.02536799944937229,
+            0.928659975528717,
+            -0.36941999197006226
+          ]
+        ]
+      },
+      "segmentation_id_map[17]": {
+        "position": [
+          [
+            -0.03065899945795536,
+            0.07242199778556824,
+            0.2736470103263855
+          ]
+        ],
+        "quaternion": [
+          [
+            0.41790199279785156,
+            -0.9078760147094727,
+            -0.0016830000095069408,
+            0.03342299908399582
+          ]
+        ]
+      },
+      "segmentation_id_map[21]": {
+        "position": [
+          [
+            -0.031553998589515686,
+            0.0906279981136322,
+            0.268110990524292
+          ]
+        ],
+        "quaternion": [
+          [
+            0.41790100932121277,
+            -0.9078760147094727,
+            -0.0016830000095069408,
+            0.03342299908399582
+          ]
+        ]
+      },
+      "segmentation_id_map[13]": {
+        "position": [
+          [
+            -0.034265000373125076,
+            0.15919199585914612,
+            0.25832599401474
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.0218260008841753,
+            -0.02536799944937229,
+            0.928659975528717,
+            -0.36941999197006226
+          ]
+        ]
+      },
+      "segmentation_id_map[18]": {
+        "position": [
+          [
+            -0.031189000234007835,
+            0.04881399869918823,
+            0.2524000108242035
+          ]
+        ],
+        "quaternion": [
+          [
+            0.41790199279785156,
+            -0.9078760147094727,
+            -0.0016830000095069408,
+            0.03342299908399582
+          ]
+        ]
+      },
+      "segmentation_id_map[14]": {
+        "position": [
+          [
+            -0.035677000880241394,
+            0.1312510073184967,
+            0.2199469953775406
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.030055999755859375,
+            -0.01471600029617548,
+            0.9990919828414917,
+            0.02637599967420101
+          ]
+        ]
+      },
+      "segmentation_id_map[19]": {
+        "position": [
+          [
+            -0.034265000373125076,
+            0.0805789977312088,
+            0.2172269970178604
+          ]
+        ],
+        "quaternion": [
+          [
+            0.02637300081551075,
+            -0.9990919828414917,
+            -0.01471600029617548,
+            0.030055999755859375
+          ]
+        ]
+      },
+      "segmentation_id_map[15]": {
+        "position": [
+          [
+            -0.03703700006008148,
+            0.11095000058412552,
+            0.1864510029554367
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.030055999755859375,
+            -0.01471600029617548,
+            0.9990919828414917,
+            0.02637599967420101
+          ]
+        ]
+      },
+      "segmentation_id_map[20]": {
+        "position": [
+          [
+            -0.03685000166296959,
+            0.10423900187015533,
+            0.18609100580215454
+          ]
+        ],
+        "quaternion": [
+          [
+            0.02637300081551075,
+            -0.9990919828414917,
+            -0.01471600029617548,
+            0.030055999755859375
+          ]
+        ]
+      }
+    },
+    "entity_aliases": {},
+    "official_evaluation": {
+      "is_cubeA_grasped": false,
+      "is_cubeA_on_cubeB": false,
+      "is_cubeA_static": true,
+      "success": false
+    },
+    "stage_runtime": {
+      "active_stage": null,
+      "completed_stages": [],
+      "failed_stage": null
+    },
+    "terminated": false,
+    "truncated": false
+  },
+  "failure_diagnosis": {
+    "layer": "contact_geometry",
+    "reason": "contact_not_established",
+    "evidence": {
+      "entity": "cubeB",
+      "action_steps": 75,
+      "tcp_displacement_m": 0.08811,
+      "object_displacement_m": 0.0,
+      "final_tcp_object_xy_m": 0.00206,
+      "initial_position": [
+        -0.03926,
+        0.10728,
+        0.02
+      ],
+      "final_position": [
+        -0.03926,
+        0.10728,
+        0.02
+      ]
+    },
+    "repair_hint": "The TCP moved substantially but the manipulated object did not. Do not add more steps or repeat the same waypoint. Change the contact side or height, verify object motion after a short action pulse, and use a grasp-and-place strategy when the observed target gripper supports it."
+  },
+  "terminated": false,
+  "truncated": false,
+  "stage_events": []
+}
+
+Latest validation error:
+
+
+Return a complete module. For a repair, make a substantive change addressing the evidence; unlike
+the selective method, this baseline may rewrite any policy method.

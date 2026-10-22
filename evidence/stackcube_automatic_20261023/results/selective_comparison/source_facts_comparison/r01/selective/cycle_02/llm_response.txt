@@ -1,0 +1,28 @@
+def _stage_align(self) -> bool:
+    cubeB = np.asarray(self._entity_pos("cubeB"), dtype=np.float32).reshape(-1)
+    cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float32).reshape(-1)
+    cube_height = 0.04
+
+    # Desired held-object center: directly above cubeB at one cube height.
+    desired_A = cubeB.copy()
+    desired_A[2] = cubeB[2] + cube_height
+
+    for _ in range(12):
+        if self._early_stop():
+            return False
+        cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float32).reshape(-1)
+        tcp = np.asarray(self._tcp_pos(), dtype=np.float32).reshape(-1)
+        # Move TCP by the object's current offset from its desired pose.
+        delta = desired_A - cubeA
+        xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+        z_err = float(abs(cubeA[2] - desired_A[2]))
+        if xy_err <= 0.008 and z_err <= 0.008:
+            break
+        target = tcp + delta
+        self._move_towards(target, gripper=0.81, steps=6)
+
+    cubeA = np.asarray(self._entity_pos("cubeA"), dtype=np.float32).reshape(-1)
+    xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+    z_err = float(abs(cubeA[2] - (cubeB[2] + cube_height)))
+    aligned = bool(xy_err <= 0.012 and z_err <= 0.012)
+    return bool(aligned and self._is_grasping_entity("cubeA"))

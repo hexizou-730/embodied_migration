@@ -1,0 +1,31 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    # Source stack geometry: cubeA center must sit one full cube height above cubeB center.
+    # cube_half_size is 0.02, so the target z offset is 0.04 above cubeB's center.
+    stack_z = float(cubeB[2]) + 0.04
+    # Hover well above the stack, then descend in bounded increments.
+    hover = np.array([cubeB[0], cubeB[1], stack_z + 0.08], dtype=np.float32)
+    for _ in range(6):
+        if self._early_stop():
+            return False
+        self._move_towards(hover, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        if np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.015:
+            break
+    # Descend toward the exact stack height, correcting xy drift each iteration.
+    for _ in range(8):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        target = np.array([cubeB[0], cubeB[1], stack_z], dtype=np.float32)
+        self._move_towards(target, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+        z_err = abs(float(cubeA[2]) - stack_z)
+        if xy_err <= 0.008 and z_err <= 0.008:
+            break
+    cubeA = self._entity_pos("cubeA")
+    xy_ok = bool(np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.01)
+    z_ok = bool(abs(float(cubeA[2]) - stack_z) <= 0.01)
+    return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))

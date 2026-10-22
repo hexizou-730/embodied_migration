@@ -1,0 +1,1 @@
+Write a complete executable Python target adapter for ManiSkill. Return only Python code. Use measured state and real bounded actions; never mutate simulator state or success.

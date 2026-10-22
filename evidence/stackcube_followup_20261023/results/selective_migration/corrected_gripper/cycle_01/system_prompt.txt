@@ -1,0 +1,1 @@
+Write a complete executable Python target adapter for ManiSkill. Return only Python code. Preserve the supplied task-stage program exactly and never mutate simulator state or success.

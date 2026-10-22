@@ -1,0 +1,78 @@
+{
+  "schema": "selective_migration_comparison.v1",
+  "protocol": {
+    "task": "StackCube-v1",
+    "source_robot": "panda",
+    "target_robot": "xarm6_robotiq",
+    "target_control_mode": "pd_ee_delta_pose",
+    "seed": 0,
+    "max_generation_cycles": 3,
+    "llm_models_observed": [
+      "deepseek/deepseek-v4.1-flash"
+    ],
+    "official_success": "env.unwrapped.evaluate()['success']",
+    "selective_result_reused": "evidence/stackcube_pilot_20261022/selective_migration_phase3/summary.json",
+    "experimental_unit": "one independent generation run per method",
+    "method_information": {
+      "target_only": "task definition plus target interface; global rewrite",
+      "whole_rewrite": "complete source code plus source-derived stage representation; global rewrite",
+      "selective": "source-derived stage representation; fixed stage order and failed-stage-only repair"
+    }
+  },
+  "rows": [
+    {
+      "method_id": "target_only",
+      "success": false,
+      "status": "target_budget_exhausted",
+      "generation_cycles": 3,
+      "valid_candidates": 3,
+      "executed_trials": 3,
+      "trials_with_actions": 3,
+      "target_action_steps": 201,
+      "total_tokens": 27008,
+      "llm_cost_usd": 0.00304977,
+      "last_failure": "contact_not_established",
+      "last_runtime_failure": "contact_not_established",
+      "last_physical_failure": "contact_not_established",
+      "last_generation_error": null,
+      "completed_stages": []
+    },
+    {
+      "method_id": "whole_rewrite",
+      "success": false,
+      "status": "target_budget_exhausted",
+      "generation_cycles": 3,
+      "valid_candidates": 2,
+      "executed_trials": 2,
+      "trials_with_actions": 1,
+      "target_action_steps": 220,
+      "total_tokens": 43649,
+      "llm_cost_usd": 0.00475909,
+      "last_failure": "pre_action_execution_error",
+      "last_runtime_failure": "pre_action_execution_error",
+      "last_physical_failure": "contact_not_established",
+      "last_generation_error": "ValueError('Generated adapter is semantically unchanged from a tested candidate.')",
+      "completed_stages": []
+    },
+    {
+      "method_id": "selective",
+      "success": false,
+      "status": "target_budget_exhausted",
+      "generation_cycles": 3,
+      "valid_candidates": 2,
+      "executed_trials": 2,
+      "trials_with_actions": 2,
+      "target_action_steps": 12,
+      "total_tokens": 41299,
+      "llm_cost_usd": 0.00342829,
+      "last_failure": "grasp",
+      "last_runtime_failure": "grasp",
+      "last_physical_failure": "grasp",
+      "last_generation_error": "ValueError('Only _stage_grasp may change in this repair; changed methods: [].')",
+      "completed_stages": [
+        "approach"
+      ]
+    }
+  ],
+  "interpretation_limit": "One run per method is a pipeline pilot, not evidence that one method is superior."
+}

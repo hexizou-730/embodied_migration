@@ -1,0 +1,154 @@
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # ---- helpers -------------------------------------------------------
+    def _safe_move(self, target, gripper, steps):
+        if self._early_stop():
+            return False
+        self._move_towards(np.asarray(target, dtype=np.float64),
+                           gripper=float(gripper), steps=int(steps))
+        return not self._early_stop()
+
+    def _safe_repeat(self, delta, gripper, steps):
+        if self._early_stop():
+            return False
+        self._repeat_action(np.asarray(delta, dtype=np.float64),
+                            gripper=float(gripper), steps=int(steps))
+        return not self._early_stop()
+
+    def _hold_gripper(self, gripper, steps):
+        return self._safe_repeat(np.zeros(3), gripper, steps)
+
+    def _tcp(self):
+        return np.asarray(self._tcp_pos(), dtype=np.float64).ravel()
+
+    def _entity(self, name):
+        return np.asarray(self._entity_pos(name), dtype=np.float64).ravel()
+
+    def _move_xy_then_z(self, target, gripper, steps_xy, steps_z):
+        tcp = self._tcp()
+        target = np.asarray(target, dtype=np.float64).ravel()
+        xy_target = np.array([target[0], target[1], tcp[2]])
+        if not self._safe_move(xy_target, gripper, steps_xy):
+            return False
+        return self._safe_move(target, gripper, steps_z)
+
+    def _pulse_and_check(self, delta, gripper, steps, entity, min_disp=0.004):
+        """Apply a short action pulse and verify the entity actually moved."""
+        before = self._entity(entity)
+        if not self._safe_repeat(delta, gripper, steps):
+            return False, 0.0
+        after = self._entity(entity)
+        disp = float(np.linalg.norm(after - before))
+        return disp >= min_disp, disp
+
+    # ---- policy --------------------------------------------------------
+    def run_source_actions(self) -> bool:
+        # Measured state only.
+        cubeA = self._entity("cubeA")
+        cubeB = self._entity("cubeB")
+
+        half = 0.02
+        # Grasp slightly below the top so fingers straddle the cube sides.
+        grasp_z = cubeA[2] + half * 0.6
+        approach_z = grasp_z + 0.12
+        lift_z = cubeB[2] + 2.0 * half + 0.12
+        place_z = cubeB[2] + 2.0 * half + 0.004
+        retreat_z = place_z + 0.15
+
+        # 1) Open gripper fully and settle.
+        if not self._hold_gripper(0.0, 12):
+            return False
+
+        # 2) Move above cubeA (XY first, then descend).
+        above_A = np.array([cubeA[0], cubeA[1], approach_z])
+        if not self._move_xy_then_z(above_A, 0.0, 40, 40):
+            return False
+
+        # 3) Descend to grasp pose.
+        grasp_A = np.array([cubeA[0], cubeA[1], grasp_z])
+        if not self._safe_move(grasp_A, 0.0, 40):
+            return False
+
+        # 4) Close gripper and verify grasp via detector.
+        if not self._hold_gripper(0.81, 25):
+            return False
+
+        grasped = bool(self._is_grasping_entity("cubeA"))
+        if not grasped:
+            # Nudge down and retry close.
+            if not self._safe_repeat(np.array([0.0, 0.0, -0.012]), 0.81, 12):
+                return False
+            if not self._hold_gripper(0.81, 20):
+                return False
+            grasped = bool(self._is_grasping_entity("cubeA"))
+        if not grasped:
+            # Final attempt: small downward move then close.
+            if not self._safe_repeat(np.array([0.0, 0.0, -0.008]), 0.81, 10):
+                return False
+            if not self._hold_gripper(0.81, 20):
+                return False
+            grasped = bool(self._is_grasping_entity("cubeA"))
+        if not grasped:
+            return False
+
+        # 5) Lift straight up and verify cubeA actually rises with the gripper.
+        lift_A = np.array([cubeA[0], cubeA[1], lift_z])
+        if not self._safe_move(lift_A, 0.81, 40):
+            return False
+        moved, _ = self._pulse_and_check(np.zeros(3), 0.81, 6, "cubeA", min_disp=0.002)
+        if not moved:
+            # Cube slipped; try re-grasp once from current position.
+            cur = self._entity("cubeA")
+            regrasp = np.array([cur[0], cur[1], cur[2] + half * 0.6])
+            if not self._safe_move(regrasp, 0.0, 25):
+                return False
+            if not self._hold_gripper(0.81, 20):
+                return False
+            if not self._is_grasping_entity("cubeA"):
+                return False
+            if not self._safe_move(np.array([cur[0], cur[1], lift_z]), 0.81, 40):
+                return False
+
+        # 6) Move above cubeB (XY first at lift height).
+        above_B = np.array([cubeB[0], cubeB[1], lift_z])
+        if not self._move_xy_then_z(above_B, 0.81, 60, 20):
+            return False
+
+        # 7) Descend to place height.
+        place_A = np.array([cubeB[0], cubeB[1], place_z])
+        if not self._safe_move(place_A, 0.81, 40):
+            return False
+
+        # 8) Open gripper to release.
+        if not self._hold_gripper(0.0, 25):
+            return False
+
+        # 9) Retreat upward to let cube settle.
+        retreat = np.array([cubeB[0], cubeB[1], retreat_z])
+        if not self._safe_move(retreat, 0.0, 40):
+            return False
+
+        # 10) Settle and verify official success.
+        if not self._hold_gripper(0.0, 25):
+            return False
+
+        ev = self._official_evaluation()
+        try:
+            return bool(ev.get("success", False))
+        except Exception:
+            return False
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```

@@ -1,0 +1,840 @@
+{
+  "schema": "selective_migration_result.v1",
+  "status": "target_budget_exhausted",
+  "success": false,
+  "study": "/tmp/hexi_stack_place_20261023/benchmark_tasks/t07_stack_cube/selective_migration_study.json",
+  "spec": {
+    "env_id": "StackCube-v1",
+    "task_label": "t07_stack_cube",
+    "source_robot": "panda",
+    "target_robot": "xarm6_robotiq",
+    "source_control_mode": "pd_joint_pos",
+    "target_control_mode": "pd_ee_delta_pose",
+    "seed": 0,
+    "max_episode_steps": 1000,
+    "max_source_cycles": 2,
+    "max_target_cycles": 3,
+    "obs_mode": "state",
+    "sim_backend": "auto",
+    "render_backend": "gpu"
+  },
+  "runtime_contract": {
+    "gripper_open": 0.0,
+    "gripper_close": 0.81
+  },
+  "stage_order": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "locked_stages": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "next_repair_stage": "align",
+  "incumbent_method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+    "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+    "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+    "_stage_align": "3f2400bcaa9aae7baa2b3bdd50096981155641568af06d9d5ca33e9fdc713d00",
+    "_stage_release": "fde960a1e6dacbb82e4878d2e60757e142b4b20014c6686c7a0877e872301f7b",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "model": "deepseek/deepseek-v4.1-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 1538,
+        "prompt_tokens": 16464,
+        "total_tokens": 18002,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null,
+          "image_tokens": 0
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost": 0.00192148,
+        "is_byok": false,
+        "cost_details": {
+          "upstream_inference_cost": 0.00192148,
+          "upstream_inference_prompt_cost": 0.00115248,
+          "upstream_inference_completions_cost": 0.000769
+        },
+        "openrouter_metadata": {
+          "requested": "deepseek/deepseek-v4.1-flash",
+          "strategy": "direct",
+          "region": "CDG",
+          "summary": "available=38, selected=OpenInference",
+          "attempt": 1,
+          "is_byok": false,
+          "endpoints": {
+            "total": 40,
+            "available": [
+              {
+                "provider": "OpenInference",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": true
+              },
+              {
+                "provider": "Relace",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Baidu",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Decart",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Sail Research",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Sail Research",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "InferenceNet",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "InferenceNet",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Reka",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "AtlasCloud",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DeepInfra",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "StreamLake",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "CoreWeave",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Alibaba",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "GMICloud",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Wafer",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Novita",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "ModelRun",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Fireworks",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Phala",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DigitalOcean",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Morph",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Makora",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Crusoe",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Google",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Nebius",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "PrimeIntellect",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Cohere",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Together",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "SiliconFlow",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Modal",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Parasail",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Fireworks",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Venice",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DeepInfra",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              }
+            ]
+          },
+          "generation_time": 29981
+        },
+        "provider": "OpenInference"
+      },
+      "allowed_stage": "align",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": false,
+      "error": "ValueError('Only _stage_align may change in this repair; changed methods: [].')"
+    },
+    {
+      "cycle": 2,
+      "model": "deepseek/deepseek-v4.1-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 1538,
+        "prompt_tokens": 16484,
+        "total_tokens": 18022,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null,
+          "image_tokens": 0
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost": 0.00192288,
+        "is_byok": false,
+        "cost_details": {
+          "upstream_inference_cost": 0.00192288,
+          "upstream_inference_prompt_cost": 0.00115388,
+          "upstream_inference_completions_cost": 0.000769
+        },
+        "openrouter_metadata": {
+          "requested": "deepseek/deepseek-v4.1-flash",
+          "strategy": "direct",
+          "region": "CDG",
+          "summary": "available=38, selected=OpenInference",
+          "attempt": 1,
+          "is_byok": false,
+          "endpoints": {
+            "total": 40,
+            "available": [
+              {
+                "provider": "OpenInference",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": true
+              },
+              {
+                "provider": "Relace",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Baidu",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Decart",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Sail Research",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Sail Research",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "InferenceNet",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "InferenceNet",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Reka",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "AtlasCloud",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DeepInfra",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "StreamLake",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "CoreWeave",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Alibaba",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "GMICloud",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Wafer",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Novita",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "ModelRun",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Fireworks",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Phala",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DigitalOcean",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Morph",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Makora",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Crusoe",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Google",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Nebius",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "PrimeIntellect",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Cohere",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Together",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "SiliconFlow",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Modal",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Parasail",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Fireworks",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Venice",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DeepInfra",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              }
+            ]
+          },
+          "generation_time": 29533
+        },
+        "provider": "OpenInference"
+      },
+      "allowed_stage": "align",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": false,
+      "error": "ValueError('Only _stage_align may change in this repair; changed methods: [].')"
+    },
+    {
+      "cycle": 3,
+      "model": "deepseek/deepseek-v4.1-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 1538,
+        "prompt_tokens": 16484,
+        "total_tokens": 18022,
+        "completion_tokens_details": {
+          "accepted_prediction_tokens": null,
+          "audio_tokens": 0,
+          "reasoning_tokens": 0,
+          "rejected_prediction_tokens": null,
+          "image_tokens": 0
+        },
+        "prompt_tokens_details": {
+          "audio_tokens": 0,
+          "cached_tokens": 16384,
+          "cache_write_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost": 0.000907072,
+        "is_byok": false,
+        "cost_details": {
+          "upstream_inference_cost": 0.000907072,
+          "upstream_inference_prompt_cost": 0.000138072,
+          "upstream_inference_completions_cost": 0.000769
+        },
+        "openrouter_metadata": {
+          "requested": "deepseek/deepseek-v4.1-flash",
+          "strategy": "direct",
+          "region": "CDG",
+          "summary": "available=38, selected=OpenInference",
+          "attempt": 1,
+          "is_byok": false,
+          "endpoints": {
+            "total": 40,
+            "available": [
+              {
+                "provider": "OpenInference",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": true
+              },
+              {
+                "provider": "Relace",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Baidu",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Decart",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Sail Research",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Sail Research",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "InferenceNet",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "InferenceNet",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Reka",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "AtlasCloud",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DeepInfra",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "StreamLake",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "CoreWeave",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Alibaba",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "GMICloud",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Wafer",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Novita",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "ModelRun",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Fireworks",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Phala",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DigitalOcean",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Morph",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Makora",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Crusoe",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Google",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Nebius",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "PrimeIntellect",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Cohere",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Together",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "SiliconFlow",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Modal",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Parasail",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Fireworks",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "Venice",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "BaseTen",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              },
+              {
+                "provider": "DeepInfra",
+                "model": "deepseek/deepseek-v4.1-flash-20260910",
+                "selected": false
+              }
+            ]
+          },
+          "generation_time": 20162
+        },
+        "provider": "OpenInference"
+      },
+      "allowed_stage": "align",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": false,
+      "error": "ValueError('Only _stage_align may change in this repair; changed methods: [].')"
+    }
+  ],
+  "resume_replay": {
+    "adapter": "evidence/stackcube_followup_20261023/results/selective_migration/corrected_gripper/cycle_02/target_adapter.py",
+    "method_hashes": {
+      "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+      "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+      "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+      "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+      "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+      "_stage_align": "3f2400bcaa9aae7baa2b3bdd50096981155641568af06d9d5ca33e9fdc713d00",
+      "_stage_release": "fde960a1e6dacbb82e4878d2e60757e142b4b20014c6686c7a0877e872301f7b",
+      "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+    },
+    "success": false,
+    "action_steps": 101,
+    "repair_localization": {
+      "runtime_failed_stage": "release",
+      "repair_stage": "align",
+      "reason": "source_stage_postcondition_not_reached",
+      "evidence": {
+        "source_observed_new_true_predicates": [
+          "is_cubeA_on_cubeB"
+        ],
+        "violated_predicates": [
+          "is_cubeA_on_cubeB"
+        ],
+        "target_boundary": {
+          "step": 29,
+          "tcp": [
+            [
+              -0.038878001272678375,
+              0.10736700147390366,
+              0.06450200080871582
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.05211275443434715,
+                0.1117645800113678,
+                0.07066862285137177
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.039264529943466187,
+                0.10727572441101074,
+                0.019999995827674866
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        }
+      }
+    }
+  },
+  "target_adapter": "results/selective_migration/support_guard_repair/artifacts/target_adapter.py"
+}

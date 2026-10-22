@@ -1,0 +1,170 @@
+{
+  "schema": "selective_migration_study.v1",
+  "study_id": "stack_cube_panda_to_xarm6",
+  "status": "manual_placement_verified_automatic_repair_stalled",
+  "research_question": "Can a successful source program be migrated more reliably or cheaply by preserving task-stage semantics and adapting only embodiment-dependent stages?",
+  "manual_evaluation_only": {
+    "expected_stage_order": [
+      "approach",
+      "grasp",
+      "lift",
+      "align",
+      "release"
+    ],
+    "expected_entities": {
+      "approach": ["cubeA"],
+      "grasp": ["cubeA"],
+      "lift": ["cubeA"],
+      "align": ["cubeA", "cubeB"],
+      "release": ["cubeA", "cubeB"]
+    },
+    "note": "Used only after extraction for validation; never supplied to the extractor or target-code generator."
+  },
+  "task": {
+    "task_id": "t07_stack_cube",
+    "env_id": "StackCube-v1",
+    "official_success": "env.unwrapped.evaluate()['success']"
+  },
+  "source": {
+    "robot_uid": "panda",
+    "control_mode": "pd_joint_pos",
+    "entrypoint": "run",
+    "program_evidence": "evidence/stackcube_pilot_20261022/source_stack_cube.py",
+    "preflight_summary": "evidence/stackcube_pilot_20261022/preflight_20261021_224739/summary.json",
+    "preflight_seeds": [0, 1],
+    "stage_representation": "evidence/stackcube_pilot_20261022/source_stage_program.json",
+    "stage_trace": "evidence/stackcube_pilot_20261022/stage_state_trace_20261021_225808/seed_000.json"
+  },
+  "target": {
+    "robot_uid": "xarm6_robotiq",
+    "control_mode": "pd_ee_delta_pose",
+    "action_layout": [
+      "delta_x",
+      "delta_y",
+      "delta_z",
+      "delta_rot_x",
+      "delta_rot_y",
+      "delta_rot_z",
+      "gripper_position"
+    ],
+    "observed_gripper_closed": 0.81,
+    "observed_gripper_open": 0.0,
+    "interface_summary": "evidence/stackcube_pilot_20261022/preflight_20261021_224739/summary.json",
+    "action_probe": "evidence/stackcube_pilot_20261022/action_probe_20261021_225142/summary.json",
+    "reachability_probe": "evidence/stackcube_pilot_20261022/reachability_20261021_225229/summary.json",
+    "officially_listed_for_environment": false
+  },
+  "fixed_boundaries": {
+    "environment_implementation": "unchanged",
+    "official_success_signal": "unchanged",
+    "simulator": "unchanged",
+    "target_low_level_controller": "unchanged",
+    "generated_surface": "target task adapter only"
+  },
+  "phase1_acceptance": {
+    "source_replay_official_success": true,
+    "target_environment_initializes": true,
+    "target_executes_translation_actions": true,
+    "target_executes_rotation_actions": true,
+    "target_gripper_endpoints_measured": true,
+    "cube_a_pregrasp_waypoint_reached": true,
+    "cube_b_predrop_waypoint_reached": true
+  },
+  "phase3": {
+    "implementation": "maniskill_backend/selective_migration.py",
+    "entrypoint": "selective.py",
+    "pilot_evidence": "evidence/stackcube_pilot_20261022/selective_migration_phase3/summary.json",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "seed": 0,
+    "generation_budget": 3,
+    "status": "target_budget_exhausted",
+    "official_target_success": false,
+    "real_target_actions_executed": true,
+    "first_failed_stage": "grasp",
+    "permanently_locked_passed_stages": ["approach"],
+    "local_repair_verified": true,
+    "local_repair_evidence": "Cycle 2 changed only _stage_grasp; approach, lift, align, release and the fixed entrypoint retained identical AST hashes.",
+    "outcome": "The stage-preserving execution and repair mechanism worked, but the generated grasp stage did not establish an official xArm6 grasp within the bounded pilot."
+  },
+  "phase4": {
+    "valid_for_method_comparison": false,
+    "invalidation_reason": "The gripper open/close directions supplied to all methods were reversed; this was corrected by measured finger-pad separation on 2026-10-23. Historical artifacts are retained unchanged.",
+    "implementation": "maniskill_backend/selective_comparison.py",
+    "entrypoint": "phase4.py",
+    "pilot_evidence": "evidence/stackcube_pilot_20261022/selective_comparison_phase4/summary.json",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "seed": 0,
+    "generation_budget_per_method": 3,
+    "methods": [
+      "target_only",
+      "whole_rewrite",
+      "selective"
+    ],
+    "official_target_successes": 0,
+    "target_action_steps": {
+      "target_only": 201,
+      "whole_rewrite": 220,
+      "selective": 12
+    },
+    "outcome": "The controlled three-method pipeline is executable and records identical metrics. No method achieved official StackCube success in this one-run pilot. Only the selective method preserved and reported a completed approach stage before localizing failure to grasp.",
+    "interpretation_limit": "One independent generation run per method validates the protocol only and does not establish comparative superiority."
+  },
+  "gripper_contract_correction": {
+    "date": "2026-10-23",
+    "evidence": "evidence/stackcube_followup_20261023/results/grasp_verified/gripper_endpoints.json",
+    "command_zero_finger_pad_distance_m": 0.09236162900924683,
+    "command_081_finger_pad_distance_m": 0.006723285652697086,
+    "open_command": 0.0,
+    "close_command": 0.81,
+    "stationary_gripper_execution": "Use _repeat_action; _move_towards(current_tcp) returns without sending a command.",
+    "manual_probe": "Explicit close plus corrected endpoints produced official grasp before and after an approximately 8 cm lift at seed 0. This is a diagnostic intervention, not an LLM migration success."
+  },
+  "post_correction_selective_pilot": {
+    "evidence": "evidence/stackcube_followup_20261023/results/selective_migration/corrected_gripper/summary.json",
+    "model": "deepseek/deepseek-v4.1-flash",
+    "seed": 0,
+    "generation_budget": 3,
+    "official_target_success": false,
+    "cycles": [
+      {"cycle": 1, "valid": true, "action_steps": 27, "completed_stages": ["approach", "grasp", "lift"], "failed_stage": "align"},
+      {"cycle": 2, "valid": true, "action_steps": 101, "completed_stages": ["approach", "grasp", "lift", "align"], "failed_stage": "release"},
+      {"cycle": 3, "valid": false, "reason": "Only comments changed; AST repair validation rejected the candidate."}
+    ],
+    "interpretation_limit": "Stage completion uses generated stage predicates. It does not establish correct causal localization or robustness; overall official StackCube success remains false."
+  },
+  "placement_followup": {
+    "evidence": "evidence/stackcube_placement_20261023/README.md",
+    "seed": 0,
+    "source_based_localization": {
+      "runtime_failed_stage": "release",
+      "repair_stage": "align",
+      "source_predicate": "is_cubeA_on_cubeB",
+      "source_stage_end_value": true,
+      "target_stage_end_value": false
+    },
+    "automatic_repair": {
+      "summary": "evidence/stackcube_placement_20261023/results/selective_migration/support_guard_repair/summary.json",
+      "llm_requests": 3,
+      "new_executable_candidates": 0,
+      "official_success": false,
+      "reason": "All generated repairs were semantically unchanged."
+    },
+    "manual_diagnostic": {
+      "summary": "evidence/stackcube_placement_20261023/results/placement_diagnostic/summary.json",
+      "llm_requests": 0,
+      "align_only_official_success": true,
+      "align_only_actions": 151,
+      "align_and_release_official_success": true,
+      "align_and_release_actions": 160,
+      "provenance": "Manual diagnostic stage replacements, not LLM migration results."
+    },
+    "interpretation_limit": "Single-seed diagnostics confirm physical feasibility and an actionable localization; automatic migration and generalization are not established."
+  },
+  "not_yet_established": [
+    "stage extraction generalization beyond the StackCube source style",
+    "target grasp robustness beyond the seed-0 diagnostic",
+    "target placement robustness beyond seed 0",
+    "fully automatic LLM-generated target task success",
+    "selective migration advantage over baselines under repeated trials"
+  ]
+}

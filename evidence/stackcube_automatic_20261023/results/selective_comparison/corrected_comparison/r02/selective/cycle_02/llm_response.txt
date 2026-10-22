@@ -1,0 +1,27 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    # Source stack geometry: cubeA center should sit one cube height above cubeB center.
+    target_z = cubeB[2] + 0.04
+    # Account for TCP-to-held-object offset measured at runtime.
+    offset = cubeA - self._tcp_pos()
+    for _ in range(12):
+        if self._early_stop():
+            return False
+        cubeB = self._entity_pos("cubeB")
+        cubeA = self._entity_pos("cubeA")
+        offset = cubeA - self._tcp_pos()
+        desired_cubeA = np.array([cubeB[0], cubeB[1], cubeB[2] + 0.04], dtype=np.float32)
+        tcp_target = desired_cubeA - offset
+        self._move_towards(tcp_target, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        xy_err = np.linalg.norm(cubeA[:2] - cubeB[:2])
+        z_err = abs(cubeA[2] - (cubeB[2] + 0.04))
+        if xy_err < 0.008 and z_err < 0.008:
+            break
+    cubeA = self._entity_pos("cubeA")
+    cubeB = self._entity_pos("cubeB")
+    xy_ok = bool(np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.01)
+    z_ok = bool(abs(cubeA[2] - (cubeB[2] + 0.04)) <= 0.01)
+    return xy_ok and z_ok

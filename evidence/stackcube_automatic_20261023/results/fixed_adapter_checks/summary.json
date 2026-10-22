@@ -1,0 +1,24 @@
+{
+  "schema": "fixed_adapter_smoke.v1",
+  "candidate": "results/selective_migration/method_patch_r01/artifacts/target_adapter.py",
+  "adapter_sha256": "b8da4f7c7944a8c57ee76b4ede9c5030d6d646d52a90eae8e14728d572f8d3a7",
+  "selection": "first chronological successful automatic repair, chosen before these checks",
+  "llm_calls": 0,
+  "used_for_repair_feedback": false,
+  "rows": [
+    {
+      "seed": 0,
+      "success": true,
+      "official_success": true,
+      "action_steps": 31,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 1,
+      "success": true,
+      "official_success": true,
+      "action_steps": 25,
+      "message": "adapter returned success and official evaluate() returned success"
+    }
+  ]
+}

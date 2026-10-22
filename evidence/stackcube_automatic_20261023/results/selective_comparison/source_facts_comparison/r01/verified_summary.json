@@ -1,0 +1,90 @@
+{
+  "schema": "selective_migration_comparison.v1",
+  "protocol": {
+    "task": "StackCube-v1",
+    "source_robot": "panda",
+    "target_robot": "xarm6_robotiq",
+    "target_control_mode": "pd_ee_delta_pose",
+    "seed": 0,
+    "max_generation_cycles": 3,
+    "llm_models_observed": [
+      "deepseek/deepseek-v4.1-flash"
+    ],
+    "generation_settings": {
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "temperature": 0.0,
+      "sampling_seed": 0,
+      "max_tokens": 6000,
+      "reasoning_effort": "none",
+      "request_timeout_seconds": 180.0,
+      "request_max_retries": 0
+    },
+    "official_success": "env.unwrapped.evaluate()['success']",
+    "selective_result_reused": null,
+    "experimental_unit": "one independent generation run per method",
+    "method_information": {
+      "target_only": "task definition plus target interface; global rewrite",
+      "whole_rewrite": "complete source code plus source-derived stage representation; global rewrite",
+      "selective": "source-derived stage representation; fixed stage order and failed-stage-only repair"
+    }
+  },
+  "rows": [
+    {
+      "method_id": "target_only",
+      "success": true,
+      "status": "success",
+      "generation_cycles": 3,
+      "valid_candidates": 3,
+      "executed_trials": 3,
+      "trials_with_actions": 3,
+      "target_action_steps": 240,
+      "total_tokens": 28791,
+      "llm_cost_usd": 0.0042819,
+      "last_failure": "contact_not_established",
+      "last_runtime_failure": "contact_not_established",
+      "last_physical_failure": "contact_not_established",
+      "last_generation_error": null,
+      "completed_stages": []
+    },
+    {
+      "method_id": "whole_rewrite",
+      "success": false,
+      "status": "target_budget_exhausted",
+      "generation_cycles": 3,
+      "valid_candidates": 3,
+      "executed_trials": 3,
+      "trials_with_actions": 3,
+      "target_action_steps": 1171,
+      "total_tokens": 44530,
+      "llm_cost_usd": 0.00568893,
+      "last_failure": "episode_budget_exhausted",
+      "last_runtime_failure": "episode_budget_exhausted",
+      "last_physical_failure": "episode_budget_exhausted",
+      "last_generation_error": null,
+      "completed_stages": []
+    },
+    {
+      "method_id": "selective",
+      "success": false,
+      "status": "target_budget_exhausted",
+      "generation_cycles": 3,
+      "valid_candidates": 3,
+      "executed_trials": 3,
+      "trials_with_actions": 3,
+      "target_action_steps": 86,
+      "total_tokens": 17946,
+      "llm_cost_usd": 0.00229295,
+      "last_failure": "align",
+      "last_runtime_failure": "align",
+      "last_physical_failure": "align",
+      "last_generation_error": null,
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift"
+      ]
+    }
+  ],
+  "interpretation_limit": "One run per method is a pipeline pilot, not evidence that one method is superior."
+}

@@ -1,0 +1,281 @@
+{
+  "schema": "stackcube_automatic_evidence_verification.v2",
+  "primary_comparison": "results/selective_comparison/source_facts_comparison",
+  "expected_primary_runs": 9,
+  "primary_prompt_count": 24,
+  "checks": [
+    {
+      "name": "r01/target_only/input_filter",
+      "pass": true
+    },
+    {
+      "name": "target_only/cycle_03/official_success",
+      "pass": true
+    },
+    {
+      "name": "r01/target_only/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/target_only/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/target_only/cycle_03/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/whole_rewrite/input_filter",
+      "pass": true
+    },
+    {
+      "name": "r01/whole_rewrite/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/whole_rewrite/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/whole_rewrite/cycle_03/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/selective/input_filter",
+      "pass": true
+    },
+    {
+      "name": "selective/cycle_02/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "selective/cycle_03/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "r01/selective/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/selective/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r01/selective/cycle_03/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/target_only/input_filter",
+      "pass": true
+    },
+    {
+      "name": "r02/target_only/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/target_only/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/target_only/cycle_03/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/whole_rewrite/input_filter",
+      "pass": true
+    },
+    {
+      "name": "whole_rewrite/cycle_03/official_success",
+      "pass": true
+    },
+    {
+      "name": "r02/whole_rewrite/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/whole_rewrite/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/whole_rewrite/cycle_03/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/selective/input_filter",
+      "pass": true
+    },
+    {
+      "name": "selective/cycle_02/official_success",
+      "pass": true
+    },
+    {
+      "name": "selective/cycle_02/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "r02/selective/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r02/selective/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r03/target_only/input_filter",
+      "pass": true
+    },
+    {
+      "name": "target_only/cycle_03/official_success",
+      "pass": true
+    },
+    {
+      "name": "r03/target_only/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r03/target_only/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r03/target_only/cycle_03/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r03/whole_rewrite/input_filter",
+      "pass": true
+    },
+    {
+      "name": "whole_rewrite/cycle_01/official_success",
+      "pass": true
+    },
+    {
+      "name": "r03/whole_rewrite/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r03/selective/input_filter",
+      "pass": true
+    },
+    {
+      "name": "selective/cycle_02/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "selective/cycle_03/official_success",
+      "pass": true
+    },
+    {
+      "name": "selective/cycle_03/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "r03/selective/cycle_01/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r03/selective/cycle_02/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "r03/selective/cycle_03/no_human_labels",
+      "pass": true
+    },
+    {
+      "name": "method_patch_r01/cycle_01/official_success",
+      "pass": true
+    },
+    {
+      "name": "method_patch_r01/cycle_01/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "method_patch_r02/cycle_01/official_success",
+      "pass": true
+    },
+    {
+      "name": "method_patch_r02/cycle_01/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "method_patch_r03/cycle_01/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "method_patch_r03/cycle_02/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "method_patch_r03/cycle_03/official_success",
+      "pass": true
+    },
+    {
+      "name": "method_patch_r03/cycle_03/local_scope",
+      "changed_methods": [
+        "_stage_align"
+      ],
+      "pass": true
+    },
+    {
+      "name": "fixed/candidate_sha256",
+      "pass": true
+    },
+    {
+      "name": "fixed/no_repair_feedback",
+      "pass": true
+    },
+    {
+      "name": "fixed/seed_000",
+      "pass": true
+    },
+    {
+      "name": "fixed/seed_001",
+      "pass": true
+    }
+  ],
+  "all_checks_pass": true,
+  "executed_runtime_snapshot_sha256": {
+    "phase4.py": "a57d8e5cedfe33a9edfb51f93d5d4ccd0184ad24c0789964280283a5ce8ebab1",
+    "selective.py": "949e239acfcef38caf08c46759ca6f1f067a12b8ef5d9d6110d51c51560c7118",
+    "llm_client.py": "497ce1799890ba3db41fcf34a9cca410758b36813c9568be581c34df1d4c2c67",
+    "maniskill_backend/dynamic_adapter.py": "dfd86aa8e46b2301d37266992aae019152092f97d7fc9c113e5c819c59bbc99d",
+    "maniskill_backend/selective_comparison.py": "67369bfafe00d76e099bc313a17e28f0dd2fbc341bd6c824e6bcb705193e7c09",
+    "maniskill_backend/llm.py": "033f8d30d29e02c72aaf035823b734632273f6cf54a41295a677be444534b471",
+    "maniskill_backend/dynamic_harness.py": "66e7b2a3845113976516ba95f213cfb8743a64733943be026dc6032e68addeb5",
+    "maniskill_backend/env_adapter.py": "8e13ae2ffec6f77e8527d912eb6c98434ef65884ac1f4e12ff00ece79e4460fc",
+    "maniskill_backend/code_validation.py": "c23efe8843d4be4780f92ce5db04076c0ca3e4d9c048f7ca8acd5985af6716f9",
+    "maniskill_backend/selective_migration.py": "d1a4cdf1ef574f6b6789cfff2e2befa8ab9d60578ba2f89a86b17729947a208e",
+    "benchmark_tasks/t07_stack_cube/selective_migration_study.json": "891fbff7a85219bab224c416d3c9d4e8275286dce9f30ef290d4fbdb8cebcce5",
+    "evidence/stackcube_pilot_20261022/source_stage_program.json": "8622e21393b4f460bb22d495478d4be4c7ae6f6bbe5dd34ba25f179437d9533c",
+    "evidence/stackcube_pilot_20261022/source_stack_cube.py": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895"
+  },
+  "ast_hash_note": "Both compared files are parsed by this same interpreter; remote AST hashes can differ across Python versions.",
+  "raw_execution_summaries_retained": true,
+  "exploratory_comparison": "corrected_comparison retained but excluded from primary results after input audit"
+}

@@ -1,0 +1,95 @@
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    def _safe_move(self, target, gripper, steps):
+        try:
+            self._move_towards(np.asarray(target, dtype=np.float64),
+                               gripper=float(gripper), steps=int(steps))
+        except Exception:
+            pass
+
+    def _safe_repeat(self, delta, gripper, steps):
+        try:
+            self._repeat_action(np.asarray(delta, dtype=np.float64),
+                                gripper=float(gripper), steps=int(steps))
+        except Exception:
+            pass
+
+    def _stop(self):
+        try:
+            return bool(self._early_stop())
+        except Exception:
+            return False
+
+    def run_source_actions(self) -> bool:
+        try:
+            posA = np.asarray(self._entity_pos("cubeA"), dtype=np.float64).reshape(-1)[:3]
+            posB = np.asarray(self._entity_pos("cubeB"), dtype=np.float64).reshape(-1)[:3]
+        except Exception:
+            return False
+
+        # Approach above cubeA, open gripper
+        above_A = posA + np.array([0.0, 0.0, 0.12])
+        self._safe_move(above_A, 0.0, 40)
+        if self._stop():
+            return True
+
+        # Descend to grasp height
+        grasp_A = posA + np.array([0.0, 0.0, 0.015])
+        self._safe_move(grasp_A, 0.0, 40)
+        if self._stop():
+            return True
+
+        # Close gripper to grasp
+        self._safe_repeat(np.zeros(3), 0.81, 20)
+        if self._stop():
+            return True
+
+        # Lift cubeA
+        lift_A = posA + np.array([0.0, 0.0, 0.15])
+        self._safe_move(lift_A, 0.81, 40)
+        if self._stop():
+            return True
+
+        # Move above cubeB
+        above_B = posB + np.array([0.0, 0.0, 0.15])
+        self._safe_move(above_B, 0.81, 60)
+        if self._stop():
+            return True
+
+        # Lower onto cubeB (stack height ~ cube size)
+        stack_B = posB + np.array([0.0, 0.0, 0.045])
+        self._safe_move(stack_B, 0.81, 40)
+        if self._stop():
+            return True
+
+        # Release
+        self._safe_repeat(np.zeros(3), 0.0, 20)
+        if self._stop():
+            return True
+
+        # Retreat upward to let cube settle
+        retreat = stack_B + np.array([0.0, 0.0, 0.12])
+        self._safe_move(retreat, 0.0, 40)
+        if self._stop():
+            return True
+
+        # Settle in place
+        self._safe_repeat(np.zeros(3), 0.0, 20)
+
+        try:
+            return bool(self._official_evaluation().get("success", False))
+        except Exception:
+            return False
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)

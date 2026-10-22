@@ -1,0 +1,29 @@
+{
+  "python": "3.10.20 (main, Mar 11 2026, 17:46:40) [GCC 14.3.0]",
+  "packages": {
+    "mani_skill": "3.0.1",
+    "sapien": "3.0.3",
+    "torch": "2.12.0",
+    "gymnasium": "1.3.0",
+    "numpy": "1.26.4"
+  },
+  "runtime_code_sha256": {
+    "phase4.py": "a57d8e5cedfe33a9edfb51f93d5d4ccd0184ad24c0789964280283a5ce8ebab1",
+    "selective.py": "949e239acfcef38caf08c46759ca6f1f067a12b8ef5d9d6110d51c51560c7118",
+    "llm_client.py": "497ce1799890ba3db41fcf34a9cca410758b36813c9568be581c34df1d4c2c67",
+    "maniskill_backend/dynamic_adapter.py": "dfd86aa8e46b2301d37266992aae019152092f97d7fc9c113e5c819c59bbc99d",
+    "maniskill_backend/selective_comparison.py": "67369bfafe00d76e099bc313a17e28f0dd2fbc341bd6c824e6bcb705193e7c09",
+    "maniskill_backend/llm.py": "033f8d30d29e02c72aaf035823b734632273f6cf54a41295a677be444534b471",
+    "maniskill_backend/dynamic_harness.py": "66e7b2a3845113976516ba95f213cfb8743a64733943be026dc6032e68addeb5",
+    "maniskill_backend/env_adapter.py": "8e13ae2ffec6f77e8527d912eb6c98434ef65884ac1f4e12ff00ece79e4460fc",
+    "maniskill_backend/code_validation.py": "c23efe8843d4be4780f92ce5db04076c0ca3e4d9c048f7ca8acd5985af6716f9",
+    "maniskill_backend/selective_migration.py": "d1a4cdf1ef574f6b6789cfff2e2befa8ab9d60578ba2f89a86b17729947a208e",
+    "benchmark_tasks/t07_stack_cube/selective_migration_study.json": "891fbff7a85219bab224c416d3c9d4e8275286dce9f30ef290d4fbdb8cebcce5",
+    "evidence/stackcube_pilot_20261022/source_stage_program.json": "8622e21393b4f460bb22d495478d4be4c7ae6f6bbe5dd34ba25f179437d9533c",
+    "evidence/stackcube_pilot_20261022/source_stack_cube.py": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895"
+  },
+  "robot_source_sha256": "f3d4c7238544e6d3bd4b21c0d7d49de8dbec7eb780b57c06e3188e584883b6bc",
+  "environment_provenance": "Same unchanged isolated remote clone and conda environment as corrected_comparison; code snapshot captured separately for the filtered-input group.",
+  "base_git_revision": "a4c0a7e06ea6c9746c52623d2b513bfd9bc3b7dc",
+  "runtime_snapshot": "executed_runtime_source_facts"
+}

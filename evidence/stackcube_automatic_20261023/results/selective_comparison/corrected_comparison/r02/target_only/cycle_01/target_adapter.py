@@ -1,0 +1,89 @@
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # ---- helpers -------------------------------------------------------
+    def _safe_move(self, target, gripper, steps):
+        """Move towards target, checking early stop."""
+        self._move_towards(np.asarray(target, dtype=np.float64),
+                           gripper=float(gripper), steps=int(steps))
+        return self._early_stop()
+
+    def _safe_repeat(self, delta, gripper, steps):
+        self._repeat_action(np.asarray(delta, dtype=np.float64),
+                            gripper=float(gripper), steps=int(steps))
+        return self._early_stop()
+
+    def _above(self, pos, dz):
+        p = np.array(pos, dtype=np.float64).reshape(3)
+        p[2] += float(dz)
+        return p
+
+    # ---- policy --------------------------------------------------------
+    def run_source_actions(self) -> bool:
+        # 1. Open gripper fully and settle.
+        if self._safe_repeat(np.zeros(3), gripper=0.0, steps=8):
+            return True
+
+        # 2. Approach cubeA from above.
+        cubeA = np.array(self._entity_pos("cubeA"), dtype=np.float64).reshape(3)
+        cubeB = np.array(self._entity_pos("cubeB"), dtype=np.float64).reshape(3)
+
+        # Pre-grasp pose: above cubeA.
+        pre = self._above(cubeA, 0.12)
+        if self._safe_move(pre, gripper=0.0, steps=40):
+            return True
+
+        # 3. Descend to grasp height.
+        grasp = self._above(cubeA, 0.015)
+        if self._safe_move(grasp, gripper=0.0, steps=40):
+            return True
+
+        # 4. Close gripper to grasp.
+        if self._safe_repeat(np.zeros(3), gripper=0.81, steps=20):
+            return True
+
+        # 5. Lift cubeA.
+        lift = self._above(cubeA, 0.15)
+        if self._safe_move(lift, gripper=0.81, steps=40):
+            return True
+
+        # 6. Move above cubeB.
+        over_B = self._above(cubeB, 0.15)
+        if self._safe_move(over_B, gripper=0.81, steps=60):
+            return True
+
+        # 7. Lower onto cubeB (stack height ~ 2 * half_size ~ 0.04).
+        stack = self._above(cubeB, 0.045)
+        if self._safe_move(stack, gripper=0.81, steps=40):
+            return True
+
+        # 8. Release.
+        if self._safe_repeat(np.zeros(3), gripper=0.0, steps=20):
+            return True
+
+        # 9. Retreat upward to let cube settle.
+        retreat = self._above(cubeB, 0.20)
+        if self._safe_move(retreat, gripper=0.0, steps=40):
+            return True
+
+        # 10. Settle and verify.
+        for _ in range(6):
+            if self._safe_repeat(np.zeros(3), gripper=0.0, steps=10):
+                return True
+            ev = self._official_evaluation()
+            if bool(ev.get("success", False)):
+                return True
+
+        return bool(self._official_evaluation().get("success", False))
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedRobot:
+    return GeneratedRobot(env, control_mode=control_mode, robot_uid=robot_uid)

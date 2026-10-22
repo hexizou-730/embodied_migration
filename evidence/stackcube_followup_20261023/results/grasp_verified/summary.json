@@ -1,0 +1,60 @@
+{
+  "schema": "stackcube_grasp_diagnostic.v1",
+  "seed": 0,
+  "provenance": "manual diagnostic intervention on saved LLM code; not an LLM migration result",
+  "llm_calls": 0,
+  "rows": [
+    {
+      "label": "original",
+      "action_steps": 6,
+      "close_actions": 0,
+      "grasp_returned": false,
+      "cube_disp_xy": 0.0002691670423193772,
+      "lift_dz": 0.0,
+      "grasp_lift_verified": false,
+      "error": null
+    },
+    {
+      "label": "explicit_close",
+      "action_steps": 78,
+      "close_actions": 72,
+      "grasp_returned": false,
+      "cube_disp_xy": 0.012694964735693951,
+      "lift_dz": 0.0,
+      "grasp_lift_verified": false,
+      "error": null
+    },
+    {
+      "label": "correct_endpoints",
+      "action_steps": 30,
+      "close_actions": 12,
+      "grasp_returned": true,
+      "cube_disp_xy": 0.0007178342871568689,
+      "lift_dz": 0.08014925383031368,
+      "grasp_lift_verified": true,
+      "error": null
+    },
+    {
+      "label": "z_+0.012",
+      "action_steps": 30,
+      "close_actions": 12,
+      "grasp_returned": true,
+      "cube_disp_xy": 0.00107759158411081,
+      "lift_dz": 0.07970450446009636,
+      "grasp_lift_verified": true,
+      "error": null
+    },
+    {
+      "label": "z_+0.024",
+      "action_steps": 29,
+      "close_actions": 12,
+      "grasp_returned": true,
+      "cube_disp_xy": 0.0010067906026758663,
+      "lift_dz": 0.07806562818586826,
+      "grasp_lift_verified": true,
+      "error": null
+    }
+  ],
+  "success_definition": "official grasp detector before and after lift; cube rises more than 4 cm",
+  "not_established": "official StackCube task success"
+}
