@@ -38,16 +38,31 @@ found)记为 llm_unavailable,LLM 费用 0,仅证明失败路径可复现;`granul
 
 ## 结果
 
-<!-- RESULTS_PENDING:由 analyze_ablation.py 离线重算后填入 -->
-
 | 臂 | 官方成功 | 成功率(Wilson 95%) | 成功轮数中位 | 累计新候选 actions | 累计 tokens |
 |---|---:|---|---:|---:|---:|
-| method_patch | PENDING | PENDING | PENDING | PENDING | PENDING |
-| module_rewrite | PENDING | PENDING | PENDING | PENDING | PENDING |
+| method_patch | 9/10 | 0.90 [0.60, 0.98] | 1 | 377 | 55,184 |
+| module_rewrite | 10/10 | 1.00 [0.72, 1.00] | 1 | 349 | 79,874 |
 
-配对结果(逐采样 seed):
+配对结果(采样 seed 0–9,10 对全部完成,无基础设施失败):
 
-<!-- PAIRED_TABLE_PENDING -->
+- 成功差异:method 独有失败 0 对,module 独有失败 1 对(seed 7);双侧精确符号检验 p = 1.0。
+- 成对动作差(module − method):均值 -2.8,bootstrap 95% [-17.3, 8.3],不排除零。
+- 成对 token 差(module − method):均值 +2,469,bootstrap 95% [-42.1, 4,740.5],不排除零。
+  逐对点估计显示 module 每次成功运行多消耗约 2.6k tokens(整模块输出的结构性开销),
+  但 seed 7 上 method 的多轮失败(共 13,856 tokens)抵消了该差异。
+- 证据复核:61 项离线重算检查全部通过。
+
+seed 7 失败解剖(method_patch):第 1、2 轮为 align 的真实物理失败(41/49 actions,
+定位与反馈正常);第 3 轮 LLM 在替换方法内定义嵌套函数,被
+"Local repair changed the module method set" 拒绝,未执行——这是单方法格式特有的
+一种脆性。同 seed 的 module_rewrite 以 1 轮成功(31 actions,7,352 tokens,
+仅改 `_stage_align`)。
+
+判读:两臂等成功率、等中位轮数、动作无可分离差异;token 差为正点估计但在 n=10
+不显著。结合历史从零生成对照(selective 366 vs 975/1,329 actions),本消融把归因
+收窄:大幅 action 节省来自阶段保留与诊断协议,而非单方法输出粒度;输出粒度只影响
+每次调用的输出开销。实测证据驱动的修复闭环本身高度可靠:20 次臂运行 19 次官方
+成功,中位 1 轮。主张应据此调整为"实测证据修复闭环可靠,输出粒度是二阶因素"。
 
 判读边界:n=10 是 pilot 样本量;单一物理场景、单一失败候选的续修证据;
 所有数字只作效应量描述,不做显著性宣称;续修结果不得混入从零生成对照。

@@ -1,0 +1,58 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    half = 0.02
+    target_z = float(cubeB[2]) + 2.0 * half
+
+    # Measure the held-cube offset relative to TCP so we can command the TCP
+    # to place cubeA directly above cubeB.
+    tcp = self._tcp_pos()
+    offset = cubeA - tcp
+
+    # Hover above the target first, correcting XY using measured offset.
+    hover_z = target_z + 0.10
+    for _ in range(8):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        tcp = self._tcp_pos()
+        offset = cubeA - tcp
+        desired_tcp = np.array([cubeB[0], cubeB[1], hover_z], dtype=np.float32) - offset
+        err = desired_tcp - tcp
+        norm = float(np.linalg.norm(err))
+        if norm > 0.04:
+            err = err * (0.04 / norm)
+        self._repeat_action(err, gripper=self.gripper_close, steps=1)
+        cubeA = self._entity_pos("cubeA")
+        if (np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.01
+                and abs(float(cubeA[2]) - hover_z) <= 0.015):
+            break
+
+    # Descend to stack height, correcting XY and Z using measured held-cube offset.
+    for _ in range(14):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        tcp = self._tcp_pos()
+        offset = cubeA - tcp
+        desired_tcp = np.array([cubeB[0], cubeB[1], target_z], dtype=np.float32) - offset
+        err = desired_tcp - tcp
+        norm = float(np.linalg.norm(err))
+        if norm > 0.04:
+            err = err * (0.04 / norm)
+        self._repeat_action(err, gripper=self.gripper_close, steps=1)
+        cubeA = self._entity_pos("cubeA")
+        if (np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.006
+                and abs(float(cubeA[2]) - target_z) <= 0.006):
+            break
+
+    # Settle in place while holding.
+    for _ in range(6):
+        if self._early_stop():
+            return False
+        self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=1)
+
+    cubeA = self._entity_pos("cubeA")
+    xy_ok = bool(np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.008)
+    z_ok = bool(abs(float(cubeA[2]) - target_z) <= 0.008)
+    return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))

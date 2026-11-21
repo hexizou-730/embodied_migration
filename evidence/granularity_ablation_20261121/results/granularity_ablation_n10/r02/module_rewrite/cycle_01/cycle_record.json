@@ -1,0 +1,55 @@
+{
+  "cycle": 1,
+  "model": "deepseek-flash",
+  "used_llm": true,
+  "usage": {
+    "completion_tokens": 1677,
+    "prompt_tokens": 5628,
+    "total_tokens": 7305,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 5376
+    },
+    "prompt_cache_hit_tokens": 5376,
+    "prompt_cache_miss_tokens": 252
+  },
+  "diagnosed_stage": "align",
+  "generation_unit": "complete_module",
+  "locked_stages_before": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "changed_methods": [
+    "_stage_align"
+  ],
+  "valid": true,
+  "adapter": "results/repair_granularity/granularity_ablation_n10/r02/module_rewrite/cycle_01/target_adapter.py",
+  "semantic_sha256": "37f970f16dc6c0288ce0e8a80dda7e0aa3139b477db0a04f4cc4226084dccb6e",
+  "method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+    "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+    "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+    "_stage_align": "7356bcba61234ac06e24ffbd24d2592964a135bcd0827765610472555ecd9f4e",
+    "_stage_release": "fde960a1e6dacbb82e4878d2e60757e142b4b20014c6686c7a0877e872301f7b",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "trial_result": "results/repair_granularity/granularity_ablation_n10/r02/module_rewrite/cycle_01/trial_result.json",
+  "success": false,
+  "action_steps": 29,
+  "failed_stage": "align",
+  "repair_localization": {
+    "runtime_failed_stage": "align",
+    "repair_stage": "align",
+    "reason": "runtime_failed_stage"
+  },
+  "completed_stages": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "message": "task program returned failure"
+}

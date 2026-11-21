@@ -1,0 +1,223 @@
+{
+  "schema": "granularity_analysis.v1",
+  "root": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/repair_granularity/granularity_ablation_n10",
+  "bootstrap": {
+    "iterations": 10000,
+    "seed": 0,
+    "method": "percentile"
+  },
+  "failed_candidate_sha256": "fa29a66bd7faab15d73815595dcc5dcb4a779cd0b74fcaeba7df1f38c789cae6",
+  "evidence_checks": {
+    "total": 61,
+    "failed": 0,
+    "failed_details": []
+  },
+  "arms": [
+    {
+      "arm_id": "method_patch",
+      "num_runs": 10,
+      "num_success": 9,
+      "generation_cycles": 12,
+      "llm_calls": 12,
+      "valid_candidates": 11,
+      "target_action_steps": 377,
+      "total_tokens": 55184,
+      "llm_cost_usd": 0.0,
+      "replay_action_steps_excluded": 1010,
+      "success_rate": 0.9,
+      "success_wilson_95": [
+        0.5958,
+        0.9821
+      ],
+      "cycles_to_success": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "median_cycles_to_success": 1
+    },
+    {
+      "arm_id": "module_rewrite",
+      "num_runs": 10,
+      "num_success": 10,
+      "generation_cycles": 11,
+      "llm_calls": 11,
+      "valid_candidates": 11,
+      "target_action_steps": 349,
+      "total_tokens": 79874,
+      "llm_cost_usd": 0.0,
+      "replay_action_steps_excluded": 1010,
+      "success_rate": 1.0,
+      "success_wilson_95": [
+        0.7225,
+        1.0
+      ],
+      "cycles_to_success": [
+        1,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "median_cycles_to_success": 1
+    }
+  ],
+  "paired": {
+    "num_pairs": 10,
+    "per_repetition": [
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          30
+        ],
+        "total_tokens": [
+          4580,
+          7223
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          60
+        ],
+        "total_tokens": [
+          4636,
+          14216
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4580,
+          7338
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          33,
+          31
+        ],
+        "total_tokens": [
+          4566,
+          7359
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4657,
+          7359
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4583,
+          7457
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          31,
+          36
+        ],
+        "total_tokens": [
+          4595,
+          7115
+        ]
+      },
+      {
+        "method_patch_success": false,
+        "module_rewrite_success": true,
+        "action_steps": [
+          90,
+          31
+        ],
+        "total_tokens": [
+          13856,
+          7352
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          36
+        ],
+        "total_tokens": [
+          4583,
+          7094
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          31,
+          32
+        ],
+        "total_tokens": [
+          4548,
+          7361
+        ]
+      }
+    ],
+    "discordant_method_only": 0,
+    "discordant_module_only": 1,
+    "sign_test_p_two_sided": 1.0,
+    "mean_action_difference_module_minus_method": -2.8,
+    "action_difference_bootstrap_95": [
+      -17.3,
+      8.3
+    ],
+    "mean_token_difference_module_minus_method": 2469.0,
+    "token_difference_bootstrap_95": [
+      -42.1,
+      4740.5
+    ],
+    "cost_guidance": [
+      "paired action difference is not separated from zero at this sample size",
+      "paired token difference is not separated from zero at this sample size"
+    ]
+  },
+  "interpretation_limits": [
+    "n=10 paired repair runs from one shared failed candidate in one fixed scene",
+    "resume-based repair evidence; never merge with from-scratch generation comparisons",
+    "descriptive statistics only; no held-out-scene or cross-task generalization claim"
+  ]
+}

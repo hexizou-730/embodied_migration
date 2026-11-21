@@ -1,0 +1,173 @@
+{
+  "schema": "repair_granularity_ablation.v1",
+  "failed_candidate_sha256": "fa29a66bd7faab15d73815595dcc5dcb4a779cd0b74fcaeba7df1f38c789cae6",
+  "arms": [
+    {
+      "arm_id": "method_patch",
+      "num_runs": 10,
+      "num_success": 9,
+      "success_rate": 0.9,
+      "infrastructure_failures": 0,
+      "cycles_to_success": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "generation_unit": "single_stage_method",
+      "generation_cycles": 12,
+      "valid_candidates": 11,
+      "executed_trials": 11,
+      "target_action_steps": 377,
+      "total_tokens": 55184,
+      "replay_action_steps_excluded": 1010,
+      "llm_cost_usd": 0.0
+    },
+    {
+      "arm_id": "module_rewrite",
+      "num_runs": 10,
+      "num_success": 10,
+      "success_rate": 1.0,
+      "infrastructure_failures": 0,
+      "cycles_to_success": [
+        1,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "generation_unit": "complete_module",
+      "generation_cycles": 11,
+      "valid_candidates": 11,
+      "executed_trials": 11,
+      "target_action_steps": 349,
+      "total_tokens": 79874,
+      "replay_action_steps_excluded": 1010,
+      "llm_cost_usd": 0.0
+    }
+  ],
+  "paired_by_sampling_seed": [
+    {
+      "sampling_seed": 0,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 32,
+      "method_patch_total_tokens": 4580,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 30,
+      "module_rewrite_total_tokens": 7223
+    },
+    {
+      "sampling_seed": 1,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 32,
+      "method_patch_total_tokens": 4636,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 2,
+      "module_rewrite_target_action_steps": 60,
+      "module_rewrite_total_tokens": 14216
+    },
+    {
+      "sampling_seed": 2,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 32,
+      "method_patch_total_tokens": 4580,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 31,
+      "module_rewrite_total_tokens": 7338
+    },
+    {
+      "sampling_seed": 3,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 33,
+      "method_patch_total_tokens": 4566,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 31,
+      "module_rewrite_total_tokens": 7359
+    },
+    {
+      "sampling_seed": 4,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 32,
+      "method_patch_total_tokens": 4657,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 31,
+      "module_rewrite_total_tokens": 7359
+    },
+    {
+      "sampling_seed": 5,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 32,
+      "method_patch_total_tokens": 4583,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 31,
+      "module_rewrite_total_tokens": 7457
+    },
+    {
+      "sampling_seed": 6,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 31,
+      "method_patch_total_tokens": 4595,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 36,
+      "module_rewrite_total_tokens": 7115
+    },
+    {
+      "sampling_seed": 7,
+      "method_patch_success": false,
+      "method_patch_generation_cycles": 3,
+      "method_patch_target_action_steps": 90,
+      "method_patch_total_tokens": 13856,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 31,
+      "module_rewrite_total_tokens": 7352
+    },
+    {
+      "sampling_seed": 8,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 32,
+      "method_patch_total_tokens": 4583,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 36,
+      "module_rewrite_total_tokens": 7094
+    },
+    {
+      "sampling_seed": 9,
+      "method_patch_success": true,
+      "method_patch_generation_cycles": 1,
+      "method_patch_target_action_steps": 31,
+      "method_patch_total_tokens": 4548,
+      "module_rewrite_success": true,
+      "module_rewrite_generation_cycles": 1,
+      "module_rewrite_target_action_steps": 32,
+      "module_rewrite_total_tokens": 7361
+    }
+  ],
+  "experimental_unit": "one repair run from one shared failed candidate per arm and repetition",
+  "interpretation_limit": "Resume-based paired repair ablation in one fixed scene; not from-scratch generation success and not a held-out-scene generalization estimate."
+}

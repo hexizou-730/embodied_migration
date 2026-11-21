@@ -1,0 +1,38 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    # Target cubeA center: directly above cubeB at one full cube height (2 * half_size).
+    half = 0.02
+    target_z = float(cubeB[2]) + 2.0 * half
+    target = np.array([cubeB[0], cubeB[1], target_z], dtype=np.float32)
+
+    # First raise the held cube to a safe hover above the target to avoid dragging.
+    hover = np.array([cubeB[0], cubeB[1], target_z + 0.06], dtype=np.float32)
+    for _ in range(6):
+        if self._early_stop():
+            return False
+        self._move_towards(hover, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        if np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.015:
+            break
+
+    # Descend onto the stack position, correcting XY each iteration from measured cubeA.
+    for _ in range(10):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        err = target - cubeA
+        # Command TCP by the measured object error so the held cube lands on target.
+        tcp = self._tcp_pos()
+        cmd = tcp + err
+        self._move_towards(cmd, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        xy_ok = np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.008
+        z_ok = abs(float(cubeA[2]) - target_z) <= 0.008
+        if xy_ok and z_ok:
+            break
+
+    cubeA = self._entity_pos("cubeA")
+    xy_ok = bool(np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.01)
+    z_ok = bool(abs(float(cubeA[2]) - target_z) <= 0.012)
+    return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))
