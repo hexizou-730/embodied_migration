@@ -1,0 +1,64 @@
+{
+  "schema": "repair_granularity_ablation.v1",
+  "study_id": "stackcube_repair_granularity_panda_to_xarm6",
+  "status": "implemented_pending_execution",
+  "research_question": "Holding the shared failed candidate, measured state feedback, and budget fixed, does restricting the repair output to the diagnosed stage method change success or cost relative to a complete-module rewrite?",
+  "provenance_note": "This ablation protocol is deliberately a separate file so the pinned selective_migration_study.json bytes stay unchanged for historical evidence verification.",
+  "task": {
+    "task_id": "t07_stack_cube",
+    "env_id": "StackCube-v1",
+    "official_success": "env.unwrapped.evaluate()['success']"
+  },
+  "source": {
+    "robot_uid": "panda",
+    "control_mode": "pd_joint_pos",
+    "entrypoint": "run",
+    "program_evidence": "evidence/stackcube_pilot_20261022/source_stack_cube.py",
+    "stage_representation": "evidence/stackcube_pilot_20261022/source_stage_program.json"
+  },
+  "target": {
+    "robot_uid": "xarm6_robotiq",
+    "control_mode": "pd_ee_delta_pose",
+    "observed_gripper_closed": 0.81,
+    "observed_gripper_open": 0.0,
+    "officially_listed_for_environment": false
+  },
+  "repair_granularity_ablation": {
+    "failed_candidate": "evidence/stackcube_placement_20261023/results/selective_migration/support_guard_repair/resume_replay/target_adapter.py",
+    "failed_candidate_sha256": "fa29a66bd7faab15d73815595dcc5dcb4a779cd0b74fcaeba7df1f38c789cae6",
+    "failed_candidate_provenance": "The replayed incumbent whose measured align stage claimed completion while official is_cubeA_on_cubeB stayed false; it is the same starting point used by the three method_patch runs in evidence/stackcube_automatic_20261023.",
+    "entrypoint": "ablation.py",
+    "implementation": "maniskill_backend/repair_granularity.py",
+    "environment_seed": 0,
+    "max_cycles_per_run": 3,
+    "repetitions": 3,
+    "paired_sampling_seeds": "generation_settings().sampling_seed advanced once per repetition, identical across arms",
+    "arms": {
+      "method_patch": "LLM returns only the diagnosed _stage_* method; the harness splices it in and AST-locks every other method. This is the existing selective.py --resume-adapter code path with byte-identical prompts, so the arm reproduces the historical method_patch protocol exactly.",
+      "module_rewrite": "LLM returns one complete module under the same five-stage interface contract with the same measured evidence; any _stage_* method or __init__ may change; a module semantically identical to a tested candidate is rejected before execution."
+    },
+    "identical_across_arms": [
+      "failed candidate bytes and the replay before repair",
+      "repair localization output and measured state feedback content",
+      "environment seed, model, temperature, output token limit, request timeout, and max cycles",
+      "official success authority and conservative acceptance rules",
+      "stage-interface structural validation"
+    ],
+    "differs_only_by_design": [
+      "repair output scope: one spliced method versus one complete module",
+      "visible incumbent scope: the method arm sees __init__ and the diagnosed method; the module arm sees the complete module because it must reproduce it"
+    ],
+    "metrics": [
+      "official success per run",
+      "cycles to success",
+      "LLM calls and tokens",
+      "new-candidate cumulative actions excluding the replayed incumbent actions",
+      "recorded cost"
+    ],
+    "not_valid_claims": [
+      "from-scratch generation success rate",
+      "held-out scene or seed generalization",
+      "multi-task or multi-robot conclusions"
+    ]
+  }
+}

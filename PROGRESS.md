@@ -12,6 +12,10 @@ selective 累计 366 actions / 50,325 tokens，整体重写为 1,329 / 96,957，
 无源信息生成为 975 / 84,283。本组显示消耗更少，未显示成功率优势。
 最新证据见 `evidence/stackcube_automatic_20261023/`。
 
+2026-11-21 新增：修复粒度消融入口 `ablation.py` 已实现并通过本地回归测试
+（新增 10 项），尚未执行真实 LLM/仿真运行。该消融从同一份钉住的失败候选出发，
+成对比较单方法修复与整体重写，只隔离修复粒度的作用；详见下一阶段第 5 条。
+
 ## 已完成
 
 1. 建立通用迁移 Harness：读取源程序和目标接口，调用 LLM 生成 Adapter，在
@@ -103,6 +107,16 @@ selective 累计 366 actions / 50,325 tokens，整体重写为 1,329 / 96,957，
 5. **按证据扩展或停止（本轮决策完成）。** 自动局部修复可行，但没有成功率优势证据，
    暂不扩展 20 任务或追加调参。下一项有意义的实验应固定同一个失败候选与状态反馈，
    只比较整体重写和单方法修复，隔离修复粒度的作用；随后做固定代码的新场景验证。
+   2026-11-21：该消融已实现为 `ablation.py` 与 `maniskill_backend/repair_granularity.py`，
+   协议配置为 `benchmark_tasks/t07_stack_cube/repair_granularity_ablation.json`，钉住失败候选
+   `evidence/stackcube_placement_20261023/results/selective_migration/support_guard_repair/resume_replay/target_adapter.py`
+   （SHA-256 fa29a66bd7faab15d73815595dcc5dcb4a779cd0b74fcaeba7df1f38c789cae6，即三次
+   method_patch 的同一起点）。两臂共享重放、修复定位、实测状态反馈、环境 seed、预算与
+   成对采样 seed，唯一处理差异是修复输出粒度：method_patch 复用既有
+   `selective.py --resume-adapter` 代码路径（提示逐字节不变）；module_rewrite 输出完整模块，
+   同样受五阶段接口结构约束，语义不变的完整模块在执行前被拒绝。重放的 101 actions 只
+   记录不混入新候选累计。旧 `selective_migration_study.json` 字节未动，历史证据校验不受
+   影响。待远程执行后按证据目录惯例归档；续修结果不得混入从零生成对照。
 
 当前已完成可复用 Harness、源程序阶段表示、实测反例定位、单方法生成与拼装，
 并验证三个自动局部修复成功运行。旧的整模块续修连续无变化问题通过缩小输出范围

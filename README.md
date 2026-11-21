@@ -18,12 +18,15 @@
 ```bash
 python selective.py --run-name stackcube_auto --max-cycles 3
 python phase4.py --run-name stackcube_comparison --max-cycles 3 --repetitions 3
+python ablation.py --run-name granularity_ablation --max-cycles 3 --repetitions 3
 ```
 
 第一条从源阶段表示生成目标 Adapter，失败后只生成诊断指定的方法；第二条自动运行
-三种方法各三次的从零生成对照并汇总，最多 27 次 LLM 请求。环境 seed 固定，重复时
-改变 LLM 的采样 seed。两条命令均需要 ManiSkill 环境和有效 API 配置，会产生实际费用。
-`--resume-adapter` 只用于已有候选的重放续修；续修结果不能混入从零生成对照。
+三种方法各三次的从零生成对照并汇总，最多 27 次 LLM 请求。第三条是修复粒度消融：从协议
+配置钉住的同一份失败候选出发，成对运行单方法修复与整体重写两臂，最多 18 次 LLM 请求。
+环境 seed 固定，重复时改变 LLM 的采样 seed。三条命令均需要 ManiSkill 环境和有效
+API 配置，会产生实际费用。`--resume-adapter` 只用于已有候选的重放续修；续修结果
+（含消融两臂）不能混入从零生成对照。
 
 本次 StackCube 实验使用以下环境配置（API key 由本机 `.env` 或环境变量提供）：
 
@@ -73,6 +76,7 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | `benchmark.py` | 在同一任务和预算下比较四种生成/修复方法 |
 | `selective.py` | StackCube 五阶段生成与单方法修复；可重放已有候选后续修 |
 | `phase4.py` | StackCube 三方法从零生成对照、独立重复和自动汇总 |
+| `ablation.py` | 同一失败候选下，单方法修复与整体重写的成对消融，只隔离修复粒度 |
 
 单文件迁移，不需要在任务目录中注册：
 
