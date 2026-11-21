@@ -38,6 +38,12 @@ stages.py 校验 valid=True，见 `evidence/t04_pick_cube_pilot_20261121/`。
 检查，study 声明的 stage_semantics 正常注入。此为单次冒烟，不构成 t04 从零
 成功率结论；t04 与 StackCube 的难度差异保留为论文分层叙事素材。
 
+2026-11-21 收尾：t04 从零稳定性 5/5（采样 seed 1–5，全部 1 轮，22–28
+actions，合计 40,214 tokens），加冒烟共 6/6；n=10 首个成功修复 Adapter 留出
+重放（seeds 100–109，零 LLM、零修复）为 9/10，仅 seed 100 失败，结果未回流；
+t05_place_sphere 候选源程序验证 0/10，未冻结，如实出局。论文大纲见
+`paper/outline.md`，难度分层表两行已定量。
+
 ## 已完成
 
 1. 建立通用迁移 Harness：读取源程序和目标接口，调用 LLM 生成 Adapter，在

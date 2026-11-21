@@ -1,0 +1,95 @@
+{
+  "schema": "heldout_repair_adapter_replay.v1",
+  "adapter": "results/repair_granularity/granularity_ablation_n10/r01/method_patch/artifacts/target_adapter.py",
+  "adapter_sha256": "5ae011045b86d3d504d5c239b35ad4d7687582da5ea491767f3252d902d249ee",
+  "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+  ],
+  "llm_calls": 0,
+  "code_repairs": 0,
+  "num_success": 9,
+  "num_trials": 10,
+  "success_rate": 0.9,
+  "results": [
+    {
+      "seed": 100,
+      "success": false,
+      "official_success": false,
+      "action_steps": 30,
+      "message": "task program returned failure"
+    },
+    {
+      "seed": 101,
+      "success": true,
+      "official_success": true,
+      "action_steps": 37,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 102,
+      "success": true,
+      "official_success": true,
+      "action_steps": 31,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 103,
+      "success": true,
+      "official_success": true,
+      "action_steps": 34,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 104,
+      "success": true,
+      "official_success": true,
+      "action_steps": 107,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 105,
+      "success": true,
+      "official_success": true,
+      "action_steps": 28,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 106,
+      "success": true,
+      "official_success": true,
+      "action_steps": 28,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 107,
+      "success": true,
+      "official_success": true,
+      "action_steps": 27,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 108,
+      "success": true,
+      "official_success": true,
+      "action_steps": 28,
+      "message": "adapter returned success and official evaluate() returned success"
+    },
+    {
+      "seed": 109,
+      "success": true,
+      "official_success": true,
+      "action_steps": 29,
+      "message": "adapter returned success and official evaluate() returned success"
+    }
+  ],
+  "note": "Held-out replay only; never fed back to repair or adapter selection."
+}
