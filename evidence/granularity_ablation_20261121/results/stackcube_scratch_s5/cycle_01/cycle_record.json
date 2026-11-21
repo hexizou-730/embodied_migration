@@ -1,0 +1,88 @@
+{
+  "cycle": 1,
+  "model": "deepseek-flash",
+  "used_llm": true,
+  "usage": {
+    "completion_tokens": 1422,
+    "prompt_tokens": 8458,
+    "total_tokens": 9880,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 8320
+    },
+    "prompt_cache_hit_tokens": 8320,
+    "prompt_cache_miss_tokens": 138
+  },
+  "allowed_stage": null,
+  "generation_unit": "complete_module",
+  "locked_stages_before": [],
+  "valid": true,
+  "adapter": "results/selective_migration/stackcube_scratch_s5/cycle_01/target_adapter.py",
+  "method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "a32ec145d252c9f7d6a987c8fd936fcdb75915dbacc420943e73e666d380ce0c",
+    "_stage_grasp": "e06aff4deefcaad3b643b3fc8ef4e946a5f4d47285e75af864fcf7bf209e15bd",
+    "_stage_lift": "8d0b2d769062d05bb45aed68b075b314cbbfa38b9d2fba4416acf96df4d7a00d",
+    "_stage_align": "7f3e753cda99d7ece89d1df49450e7167880fb8d7db511379726c12fa201fd9d",
+    "_stage_release": "6250d372ad226663489be369c9a478bd3744e401f36a7736d2d6dcafd8a04584",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "trial_result": "results/selective_migration/stackcube_scratch_s5/cycle_01/trial_result.json",
+  "success": false,
+  "action_steps": 71,
+  "failed_stage": "release",
+  "repair_localization": {
+    "runtime_failed_stage": "release",
+    "repair_stage": "align",
+    "reason": "source_stage_postcondition_not_reached",
+    "evidence": {
+      "source_observed_new_true_predicates": [
+        "is_cubeA_on_cubeB"
+      ],
+      "violated_predicates": [
+        "is_cubeA_on_cubeB"
+      ],
+      "target_boundary": {
+        "step": 27,
+        "tcp": [
+          [
+            -0.039016999304294586,
+            0.1073869988322258,
+            0.08006399869918823
+          ]
+        ],
+        "entities": {
+          "cubeA": [
+            [
+              -0.05932837724685669,
+              0.11363503336906433,
+              0.08694849163293839
+            ]
+          ],
+          "cubeB": [
+            [
+              -0.0392644889652729,
+              0.10727559030056,
+              0.019999995827674866
+            ]
+          ]
+        },
+        "official_evaluation": {
+          "is_cubeA_grasped": true,
+          "is_cubeA_on_cubeB": false,
+          "is_cubeA_static": false,
+          "success": false
+        }
+      }
+    }
+  },
+  "completed_stages": [
+    "approach",
+    "grasp",
+    "lift",
+    "align"
+  ],
+  "message": "task program returned failure"
+}

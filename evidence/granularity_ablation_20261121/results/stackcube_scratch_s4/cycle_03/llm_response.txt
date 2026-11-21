@@ -1,0 +1,43 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    tcp = self._tcp_pos()
+    offset = cubeA - tcp
+    # Official predicate: cubeA center must sit cube_half_size*2 above cubeB
+    # center in z, and within xy half-size + 0.005. Aim slightly above to
+    # allow settling, then verify by measuring the held object.
+    target_z = cubeB[2] + 0.04
+    desired_cubeA = np.array([cubeB[0], cubeB[1], target_z], dtype=np.float32)
+    for _ in range(14):
+        if self._early_stop():
+            return False
+        if not self._is_grasping_entity("cubeA"):
+            return False
+        cubeA_now = self._entity_pos("cubeA")
+        tcp_now = self._tcp_pos()
+        offset_now = cubeA_now - tcp_now
+        target_now = desired_cubeA - offset_now
+        err = target_now - tcp_now
+        if float(np.linalg.norm(err)) <= 0.006:
+            break
+        self._move_towards(target_now, gripper=self.gripper_close, steps=self.move_steps)
+    # Fine correction pass using measured object error directly.
+    for _ in range(6):
+        if self._early_stop():
+            return False
+        if not self._is_grasping_entity("cubeA"):
+            return False
+        cubeA_now = self._entity_pos("cubeA")
+        tcp_now = self._tcp_pos()
+        obj_err = desired_cubeA - cubeA_now
+        if float(np.linalg.norm(obj_err)) <= 0.004:
+            break
+        self._move_towards(tcp_now + obj_err, gripper=self.gripper_close, steps=self.move_steps)
+    cubeA_now = self._entity_pos("cubeA")
+    xy_err = float(np.linalg.norm(cubeA_now[:2] - cubeB[:2]))
+    z_err = float(abs((cubeA_now[2] - cubeB[2]) - 0.04))
+    return bool(
+        self._is_grasping_entity("cubeA")
+        and xy_err <= 0.010
+        and z_err <= 0.010
+    )

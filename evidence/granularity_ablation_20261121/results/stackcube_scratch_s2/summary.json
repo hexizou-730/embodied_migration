@@ -1,0 +1,209 @@
+{
+  "schema": "selective_migration_result.v1",
+  "status": "success",
+  "success": true,
+  "study": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/benchmark_tasks/t07_stack_cube/selective_migration_study.json",
+  "spec": {
+    "env_id": "StackCube-v1",
+    "task_label": "t07_stack_cube",
+    "source_robot": "panda",
+    "target_robot": "xarm6_robotiq",
+    "source_control_mode": "pd_joint_pos",
+    "target_control_mode": "pd_ee_delta_pose",
+    "seed": 0,
+    "max_episode_steps": 1000,
+    "max_source_cycles": 2,
+    "max_target_cycles": 3,
+    "obs_mode": "state",
+    "sim_backend": "auto",
+    "render_backend": "gpu"
+  },
+  "runtime_contract": {
+    "gripper_open": 0.0,
+    "gripper_close": 0.81
+  },
+  "generation_settings": {
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "temperature": 0.0,
+    "sampling_seed": 2,
+    "max_tokens": 6000,
+    "reasoning_effort": null,
+    "request_timeout_seconds": 180.0,
+    "request_max_retries": 0
+  },
+  "repair_output_format": "single_stage_method",
+  "source_metadata_filter": "extracted_source_facts_only",
+  "stage_semantics_source": null,
+  "source_program_sha256": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895",
+  "stage_order": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "locked_stages": [
+    "align",
+    "approach",
+    "grasp",
+    "lift",
+    "release"
+  ],
+  "next_repair_stage": null,
+  "incumbent_method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "3f6ca00640fb6c9162b777255d56026cadc05cfc769f74bd3f260950c04ab6c8",
+    "_stage_grasp": "984e28e2368a93201969e2dae4706c9a912ac26ef8495165603f50250be6e6b2",
+    "_stage_lift": "6f33cf5905cb41e72073fb4d4819671d01c0433b3c45f7f23a1c78b33dd50552",
+    "_stage_align": "02668e28a5027ed8b3872c152d619b25b5bf1120452c7612aad806e239bf30f3",
+    "_stage_release": "90b4b2177b7fc30136a74c41e8d7231aaa9fc4ef064426d9052bfde2489073b4",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "model": "deepseek-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 1425,
+        "prompt_tokens": 8458,
+        "total_tokens": 9883,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 8320
+        },
+        "prompt_cache_hit_tokens": 8320,
+        "prompt_cache_miss_tokens": 138
+      },
+      "allowed_stage": null,
+      "generation_unit": "complete_module",
+      "locked_stages_before": [],
+      "valid": true,
+      "adapter": "results/selective_migration/stackcube_scratch_s2/cycle_01/target_adapter.py",
+      "method_hashes": {
+        "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+        "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+        "_stage_approach": "3f6ca00640fb6c9162b777255d56026cadc05cfc769f74bd3f260950c04ab6c8",
+        "_stage_grasp": "984e28e2368a93201969e2dae4706c9a912ac26ef8495165603f50250be6e6b2",
+        "_stage_lift": "6f33cf5905cb41e72073fb4d4819671d01c0433b3c45f7f23a1c78b33dd50552",
+        "_stage_align": "5c4ca9e2ce77e16bca3364b30dd434043f37c10c75c83fa9390679175bc74ee5",
+        "_stage_release": "90b4b2177b7fc30136a74c41e8d7231aaa9fc4ef064426d9052bfde2489073b4",
+        "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+      },
+      "trial_result": "results/selective_migration/stackcube_scratch_s2/cycle_01/trial_result.json",
+      "success": false,
+      "action_steps": 55,
+      "failed_stage": "release",
+      "repair_localization": {
+        "runtime_failed_stage": "release",
+        "repair_stage": "align",
+        "reason": "source_stage_postcondition_not_reached",
+        "evidence": {
+          "source_observed_new_true_predicates": [
+            "is_cubeA_on_cubeB"
+          ],
+          "violated_predicates": [
+            "is_cubeA_on_cubeB"
+          ],
+          "target_boundary": {
+            "step": 19,
+            "tcp": [
+              [
+                -0.039007000625133514,
+                0.10738000273704529,
+                0.08006100356578827
+              ]
+            ],
+            "entities": {
+              "cubeA": [
+                [
+                  -0.05809508264064789,
+                  0.11349403113126755,
+                  0.08661812543869019
+                ]
+              ],
+              "cubeB": [
+                [
+                  -0.0392644889652729,
+                  0.10727559030056,
+                  0.019999995827674866
+                ]
+              ]
+            },
+            "official_evaluation": {
+              "is_cubeA_grasped": true,
+              "is_cubeA_on_cubeB": false,
+              "is_cubeA_static": false,
+              "success": false
+            }
+          }
+        }
+      },
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift",
+        "align"
+      ],
+      "message": "task program returned failure"
+    },
+    {
+      "cycle": 2,
+      "model": "deepseek-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 410,
+        "prompt_tokens": 3887,
+        "total_tokens": 4297,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 1664
+        },
+        "prompt_cache_hit_tokens": 1664,
+        "prompt_cache_miss_tokens": 2223
+      },
+      "allowed_stage": "align",
+      "generation_unit": "stage_method",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": true,
+      "adapter": "results/selective_migration/stackcube_scratch_s2/cycle_02/target_adapter.py",
+      "method_hashes": {
+        "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+        "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+        "_stage_approach": "3f6ca00640fb6c9162b777255d56026cadc05cfc769f74bd3f260950c04ab6c8",
+        "_stage_grasp": "984e28e2368a93201969e2dae4706c9a912ac26ef8495165603f50250be6e6b2",
+        "_stage_lift": "6f33cf5905cb41e72073fb4d4819671d01c0433b3c45f7f23a1c78b33dd50552",
+        "_stage_align": "02668e28a5027ed8b3872c152d619b25b5bf1120452c7612aad806e239bf30f3",
+        "_stage_release": "90b4b2177b7fc30136a74c41e8d7231aaa9fc4ef064426d9052bfde2489073b4",
+        "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+      },
+      "trial_result": "results/selective_migration/stackcube_scratch_s2/cycle_02/trial_result.json",
+      "success": true,
+      "action_steps": 23,
+      "failed_stage": null,
+      "repair_localization": {
+        "runtime_failed_stage": null,
+        "repair_stage": null,
+        "reason": "official_success"
+      },
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift",
+        "align",
+        "release"
+      ],
+      "message": "adapter returned success and official evaluate() returned success"
+    }
+  ],
+  "resume_replay": null,
+  "target_adapter": "results/selective_migration/stackcube_scratch_s2/artifacts/target_adapter.py"
+}

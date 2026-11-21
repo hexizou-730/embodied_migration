@@ -1,0 +1,33 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    # Desired held-cube center: directly above cubeB at stack height.
+    half = 0.02
+    target_cube = np.array(
+        [cubeB[0], cubeB[1], cubeB[2] + 2.0 * half], dtype=np.float32
+    )
+    # Account for TCP-to-held-object offset measured at runtime.
+    offset = cubeA - self._tcp_pos()
+    for _ in range(10):
+        if self._early_stop():
+            return False
+        if not self._is_grasping_entity("cubeA"):
+            return False
+        cubeA = self._entity_pos("cubeA")
+        tcp = self._tcp_pos()
+        offset = cubeA - tcp
+        tcp_target = target_cube - offset
+        self._move_towards(tcp_target, gripper=self.gripper_close, steps=6)
+        cubeA = self._entity_pos("cubeA")
+        xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+        z_err = float(abs((cubeA[2] - cubeB[2]) - 2.0 * half))
+        if xy_err <= 0.008 and z_err <= 0.008:
+            break
+    cubeA = self._entity_pos("cubeA")
+    xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+    z_err = float(abs((cubeA[2] - cubeB[2]) - 2.0 * half))
+    return bool(
+        self._is_grasping_entity("cubeA")
+        and xy_err <= 0.012
+        and z_err <= 0.012
+    )

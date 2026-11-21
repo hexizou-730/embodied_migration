@@ -1,0 +1,382 @@
+Repair one failed target method for StackCube-v1, panda -> xarm6_robotiq.
+Return exactly one Python function: def _stage_align(self) -> bool.
+The harness will insert it into the saved adapter. Do not output the class, imports, or other methods.
+All other methods and the stage order are preserved by the harness. Retained stages: ['approach', 'grasp', 'lift'].
+The replacement must change executable logic; copying the current body or editing comments is rejected.
+
+Source-derived relation and successful source-stage observation:
+{
+  "stage_id": "align",
+  "source_lines": [
+    88,
+    88
+  ],
+  "operations": [
+    "move_tcp_to_pose"
+  ],
+  "source_calls": [
+    "planner.move_to_pose_with_screw(align_pose)"
+  ],
+  "target_symbol": "align_pose",
+  "target_expression": "align_pose",
+  "entities": [
+    "cubeA",
+    "cubeB"
+  ],
+  "dependency_expressions": [
+    "(goal_pose.p - env.cubeA.pose.p).cpu().numpy()[0]",
+    "(grasp_info['closing'], grasp_info['center'])",
+    "0.025",
+    "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+    "env.agent.build_grasp_pose(approaching, closing, center)",
+    "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+    "env.cubeB.pose * sapien.Pose([0, 0, (env.cube_half_size[2] * 2).item()])",
+    "env.unwrapped",
+    "get_actor_obb(env.cubeA)",
+    "grasp_pose * delta_pose",
+    "grasp_pose2",
+    "np.array([0, 0, -1])",
+    "sapien.Pose([0, 0, 0.1]) * grasp_pose",
+    "sapien.Pose(lift_pose.p + offset, lift_pose.q)",
+    "sapien.Pose(q=euler2quat(0, 0, angle))"
+  ],
+  "completion_check": "cubeA is aligned above cubeB before release",
+  "transferable_relation": "place cubeA above cubeB using the source object-relative stack geometry",
+  "preserve": [
+    "stage order",
+    "object-relative task relation",
+    "completion semantics"
+  ],
+  "adaptation_obligations": [
+    "replace Panda planner motion",
+    "account for the target TCP-to-held-object transform",
+    "preserve cubeA-to-cubeB placement geometry"
+  ],
+  "runtime": {
+    "action_count": 26,
+    "first_action_step": 76,
+    "last_action_step": 101,
+    "source_line_counts": {
+      "88": 26
+    },
+    "final_state": {
+      "step": 101,
+      "tcp": [
+        [
+          -0.04747600108385086,
+          0.10791900008916855,
+          0.060394998639822006
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.0452897734940052,
+            0.10699792206287384,
+            0.05990515649318695
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03924059867858887,
+            0.10736323893070221,
+            0.019996285438537598
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    }
+  }
+}
+
+Target control mode: pd_ee_delta_pose
+Action bounds: {"repr": "Box([-1. -1. -1. -1. -1. -1.  0.], [1.   1.   1.   1.   1.   1.   0.81], (7,), float32)", "shape": [7], "dtype": "float32", "low": {"min": -1.0, "max": 0.0, "values": [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0]}, "high": {"min": 0.8100000023841858, "max": 1.0, "values": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8100000023841858]}}
+Official evaluation implementation:
+    def evaluate(self):
+        pos_A = self.cubeA.pose.p
+        pos_B = self.cubeB.pose.p
+        offset = pos_A - pos_B
+        xy_flag = (
+            torch.linalg.norm(offset[..., :2], axis=1)
+            <= torch.linalg.norm(self.cube_half_size[:2]) + 0.005
+        )
+        z_flag = torch.abs(offset[..., 2] - self.cube_half_size[..., 2] * 2) <= 0.005
+        is_cubeA_on_cubeB = torch.logical_and(xy_flag, z_flag)
+        # NOTE (stao): GPU sim can be fast but unstable. Angular velocity is rather high despite it not really rotating
+        is_cubeA_static = self.cubeA.is_static(lin_thresh=1e-2, ang_thresh=0.5)
+        is_cubeA_grasped = self.agent.is_grasping(self.cubeA)
+        success = is_cubeA_on_cubeB * is_cubeA_static * (~is_cubeA_grasped)
+        return {
+            "is_cubeA_grasped": is_cubeA_grasped,
+            "is_cubeA_on_cubeB": is_cubeA_on_cubeB,
+            "is_cubeA_static": is_cubeA_static,
+            "success": success.bool(),
+        }
+
+
+Available inherited API (np is already imported):
+- self._entity_pos(name) and self._tcp_pos(): flat xyz numpy arrays, in world coordinates.
+- self._official_evaluation(): official boolean fields; self._official_success(): task success bool.
+- self._is_grasping_entity(name): actual target grasp detector.
+- self._make_action(normalized_world_xyz, gripper=value): maps to the controller frame, leaves rotation zero.
+- self._step(action): sends a real simulator action and updates termination.
+- self._move_towards(world_target, gripper=value, steps=count): translates TCP, stops within 1 cm.
+- self._repeat_action(normalized_world_xyz, gripper=value, steps=count): repeats real commands.
+- self._early_stop(): episode ended. Check it in explicit bounded loops.
+Motion helper arguments gripper and steps are keyword-only. No tol argument exists.
+For opening/closing in place use _repeat_action(np.zeros(3), gripper=..., steps=...).
+Never modify the simulator, object poses, controller, official evaluator, runtime methods, or other stages.
+
+Current initialization (read-only context):
+def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+Current method to replace:
+def _stage_align(self) -> bool:
+        cubeB = self._entity_pos("cubeB")
+        cubeA = self._entity_pos("cubeA")
+        # Target the held cube's center above cubeB, compensating for the
+        # TCP-to-held-object offset measured at runtime.
+        tcp = self._tcp_pos()
+        offset = cubeA - tcp
+        desired_cubeA = np.array(
+            [cubeB[0], cubeB[1], cubeB[2] + 0.04 + 0.02], dtype=np.float32
+        )
+        align_target = desired_cubeA - offset
+        for _ in range(10):
+            if self._early_stop():
+                return False
+            if not self._is_grasping_entity("cubeA"):
+                return False
+            cubeA_now = self._entity_pos("cubeA")
+            tcp_now = self._tcp_pos()
+            offset_now = cubeA_now - tcp_now
+            target_now = desired_cubeA - offset_now
+            err = target_now - tcp_now
+            if float(np.linalg.norm(err)) <= 0.008:
+                break
+            self._move_towards(target_now, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA_now = self._entity_pos("cubeA")
+        xy_err = float(np.linalg.norm(cubeA_now[:2] - cubeB[:2]))
+        z_err = float(abs((cubeA_now[2] - cubeB[2]) - 0.04))
+        return bool(
+            self._is_grasping_entity("cubeA")
+            and xy_err <= 0.012
+            and z_err <= 0.012
+        )
+
+Real execution evidence:
+{
+  "success": false,
+  "message": "task program returned failure",
+  "execution_error": "",
+  "action_steps": 28,
+  "official_evaluation": {
+    "is_cubeA_grasped": true,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": false,
+    "success": false
+  },
+  "repair_localization": {
+    "runtime_failed_stage": "align",
+    "repair_stage": "align",
+    "reason": "runtime_failed_stage"
+  },
+  "stage_boundary_states": {
+    "approach": {
+      "step": 3,
+      "tcp": [
+        [
+          -0.08130700141191483,
+          -0.09296400099992752,
+          0.11993099749088287
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.0830530896782875,
+            -0.0935426577925682,
+            0.019999898970127106
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926442563533783,
+            0.10727579891681671,
+            0.019999992102384567
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    },
+    "grasp": {
+      "step": 18,
+      "tcp": [
+        [
+          -0.08242800086736679,
+          -0.09378699958324432,
+          0.024708999320864677
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.08253037184476852,
+            -0.09318209439516068,
+            0.02000621147453785
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926438093185425,
+            0.10727570205926895,
+            0.02000001072883606
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "lift": {
+      "step": 21,
+      "tcp": [
+        [
+          -0.08128999918699265,
+          -0.0933310016989708,
+          0.12016300112009048
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.08100511133670807,
+            -0.09300605207681656,
+            0.11431611329317093
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926438093185425,
+            0.10727570205926895,
+            0.02000001072883606
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "align": {
+      "step": 28,
+      "tcp": [
+        [
+          -0.018857000395655632,
+          0.1015549972653389,
+          0.07568400353193283
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.0426681712269783,
+            0.11195041239261627,
+            0.08439585566520691
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926452621817589,
+            0.10727570205926895,
+            0.01999998837709427
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    }
+  },
+  "final_state": {
+    "tcp": [
+      -0.018857000395655632,
+      0.1015549972653389,
+      0.07568400353193283
+    ],
+    "task_state": {
+      "robot_init_qpos_noise": 0.02,
+      "num_envs": 1,
+      "reconfiguration_freq": 0,
+      "cube_half_size": [
+        0.019999999552965164,
+        0.019999999552965164,
+        0.019999999552965164
+      ]
+    },
+    "entities": {
+      "cubeA": {
+        "position": [
+          [
+            -0.04266799986362457,
+            0.11195000261068344,
+            0.08439599722623825
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.04125399887561798,
+            0.2146890014410019,
+            -0.03828199952840805,
+            0.975059986114502
+          ]
+        ]
+      },
+      "cubeB": {
+        "position": [
+          [
+            -0.03926499933004379,
+            0.10727600008249283,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.3038800060749054,
+            -4.999999873689376e-06,
+            -9.999999974752427e-07,
+            0.952709972858429
+          ]
+        ]
+      }
+    }
+  }
+}
+
+Each candidate restarts from reset and replays retained stages. The final failed snapshot is not the
+entry state of this method: use the measured preceding-stage boundary and re-read state at runtime.
+Use the source object-relative relation to meet the official predicates; TCP arrival alone does not
+establish the object's pose. Return True only after measuring this stage's completion.
+Latest validation error: 
+Return only the replacement function.

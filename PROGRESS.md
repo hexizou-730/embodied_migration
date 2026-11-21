@@ -44,6 +44,13 @@ actions，合计 40,214 tokens），加冒烟共 6/6；n=10 首个成功修复 A
 t05_place_sphere 候选源程序验证 0/10，未冻结，如实出局。论文大纲见
 `paper/outline.md`，难度分层表两行已定量。
 
+2026-11-21 终笔：同供应商口径的 StackCube 从零对照 n=5（采样 seed 1–5，无
+resume）：**1/5** 官方成功，其余 3 轮预算耗尽；五次第 1 轮全部被源后置条件
+定位捕获 align 假通过（5/5），唯一成功也是第 2 轮修 align 所得。难度表完整：
+PickCube 从零 6/6 vs StackCube 从零 1/5 vs StackCube 修复 75/80（93.8%），
+全部同供应商、同管线、可离线重算。论文初稿（英文）见 `paper/draft.md`，
+今日研究总费用约 $0.17。
+
 ## 已完成
 
 1. 建立通用迁移 Harness：读取源程序和目标接口，调用 LLM 生成 Adapter，在
