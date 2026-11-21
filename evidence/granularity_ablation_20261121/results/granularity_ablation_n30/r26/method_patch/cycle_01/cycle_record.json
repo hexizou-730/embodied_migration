@@ -1,0 +1,53 @@
+{
+  "cycle": 1,
+  "model": "deepseek-flash",
+  "used_llm": true,
+  "usage": {
+    "completion_tokens": 565,
+    "prompt_tokens": 4072,
+    "total_tokens": 4637,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 3840
+    },
+    "prompt_cache_hit_tokens": 3840,
+    "prompt_cache_miss_tokens": 232
+  },
+  "allowed_stage": "align",
+  "generation_unit": "stage_method",
+  "locked_stages_before": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "valid": true,
+  "adapter": "results/repair_granularity/granularity_ablation_n30/r26/method_patch/cycle_01/target_adapter.py",
+  "method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+    "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+    "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+    "_stage_align": "0bc68f0b2d15c0e68b52b92b4ba175914076bdc53acd4ac75da1d7551a9e460d",
+    "_stage_release": "fde960a1e6dacbb82e4878d2e60757e142b4b20014c6686c7a0877e872301f7b",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "trial_result": "results/repair_granularity/granularity_ablation_n30/r26/method_patch/cycle_01/trial_result.json",
+  "success": true,
+  "action_steps": 32,
+  "failed_stage": null,
+  "repair_localization": {
+    "runtime_failed_stage": null,
+    "repair_stage": null,
+    "reason": "official_success"
+  },
+  "completed_stages": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "message": "adapter returned success and official evaluate() returned success"
+}

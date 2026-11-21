@@ -1,0 +1,44 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    # Target cubeA center: directly above cubeB at one full cube height (2 * half_size).
+    half = 0.02
+    target_z = float(cubeB[2]) + 2.0 * half
+    target = np.array([cubeB[0], cubeB[1], target_z], dtype=np.float32)
+
+    # Compute TCP-to-held-cube offset so we can drive the cube, not just the TCP.
+    offset = cubeA - self._tcp_pos()
+
+    for _ in range(10):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        target = np.array([cubeB[0], cubeB[1], float(cubeB[2]) + 2.0 * half], dtype=np.float32)
+        offset = cubeA - self._tcp_pos()
+        tcp_target = target - offset
+        self._move_towards(tcp_target, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        xy_err = float(np.linalg.norm(cubeA[:2] - cubeB[:2]))
+        z_err = abs(float(cubeA[2]) - (float(cubeB[2]) + 2.0 * half))
+        if xy_err <= 0.008 and z_err <= 0.008:
+            break
+
+    # Fine correction with small repeated deltas toward the object-relative target.
+    for _ in range(8):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        target = np.array([cubeB[0], cubeB[1], float(cubeB[2]) + 2.0 * half], dtype=np.float32)
+        err = target - cubeA
+        if float(np.linalg.norm(err[:2])) <= 0.006 and abs(float(err[2])) <= 0.006:
+            break
+        step = np.clip(err, -self.max_delta_m, self.max_delta_m).astype(np.float32)
+        self._repeat_action(step, gripper=self.gripper_close, steps=1)
+
+    cubeA = self._entity_pos("cubeA")
+    cubeB = self._entity_pos("cubeB")
+    xy_ok = bool(np.linalg.norm(cubeA[:2] - cubeB[:2]) <= 0.01)
+    z_ok = bool(abs(float(cubeA[2]) - (float(cubeB[2]) + 2.0 * half)) <= 0.012)
+    return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))

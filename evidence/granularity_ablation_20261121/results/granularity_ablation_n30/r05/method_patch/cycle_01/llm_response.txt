@@ -1,0 +1,42 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    # Target cubeA center: directly above cubeB, one full cube height up.
+    target_z = float(cubeB[2]) + 0.04
+    target_xy = np.array([cubeB[0], cubeB[1]], dtype=np.float32)
+
+    # First move TCP so the held cubeA hovers above cubeB, using the measured
+    # TCP-to-cubeA offset to command the TCP, not the cube directly.
+    for _ in range(8):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        tcp = self._tcp_pos()
+        offset = cubeA - tcp
+        hover_cube = np.array([target_xy[0], target_xy[1], target_z + 0.06], dtype=np.float32)
+        hover_tcp = hover_cube - offset
+        self._move_towards(hover_tcp, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        if np.linalg.norm(cubeA[:2] - target_xy) <= 0.012:
+            break
+
+    # Descend so cubeA center reaches stack height above cubeB.
+    for _ in range(10):
+        if self._early_stop():
+            return False
+        cubeA = self._entity_pos("cubeA")
+        tcp = self._tcp_pos()
+        offset = cubeA - tcp
+        target_cube = np.array([target_xy[0], target_xy[1], target_z], dtype=np.float32)
+        target_tcp = target_cube - offset
+        self._move_towards(target_tcp, gripper=self.gripper_close, steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        xy_err = float(np.linalg.norm(cubeA[:2] - target_xy))
+        z_err = abs(float(cubeA[2]) - target_z)
+        if xy_err <= 0.008 and z_err <= 0.008:
+            break
+
+    cubeA = self._entity_pos("cubeA")
+    xy_ok = bool(np.linalg.norm(cubeA[:2] - target_xy) <= 0.012)
+    z_ok = bool(abs(float(cubeA[2]) - target_z) <= 0.012)
+    return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))

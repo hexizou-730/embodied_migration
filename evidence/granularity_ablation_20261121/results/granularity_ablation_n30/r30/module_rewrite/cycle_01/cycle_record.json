@@ -1,0 +1,58 @@
+{
+  "cycle": 1,
+  "model": "deepseek-flash",
+  "used_llm": true,
+  "usage": {
+    "completion_tokens": 1767,
+    "prompt_tokens": 5628,
+    "total_tokens": 7395,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 5376
+    },
+    "prompt_cache_hit_tokens": 5376,
+    "prompt_cache_miss_tokens": 252
+  },
+  "diagnosed_stage": "align",
+  "generation_unit": "complete_module",
+  "locked_stages_before": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "changed_methods": [
+    "_stage_align",
+    "_stage_release"
+  ],
+  "valid": true,
+  "adapter": "results/repair_granularity/granularity_ablation_n30/r30/module_rewrite/cycle_01/target_adapter.py",
+  "semantic_sha256": "81e463396ac093434e83cd812a2b2810da7d61db94a9d6e94a77fcb3cde73c8d",
+  "method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+    "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+    "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+    "_stage_align": "717c40520765db3e1ab9cece0bf9ee618eb1b672f14d160bb9ecfc17f73dfe2c",
+    "_stage_release": "bc4cfa74f05ba7692ecb0c241a66fd746392055f9c4c896a3506fc930bebbd67",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "trial_result": "results/repair_granularity/granularity_ablation_n30/r30/module_rewrite/cycle_01/trial_result.json",
+  "success": true,
+  "action_steps": 31,
+  "failed_stage": null,
+  "repair_localization": {
+    "runtime_failed_stage": null,
+    "repair_stage": null,
+    "reason": "official_success"
+  },
+  "completed_stages": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "message": "adapter returned success and official evaluate() returned success"
+}

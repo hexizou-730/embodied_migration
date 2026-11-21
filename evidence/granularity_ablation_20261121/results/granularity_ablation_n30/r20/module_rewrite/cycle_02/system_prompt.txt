@@ -1,0 +1,1 @@
+Repair one ManiSkill policy by rewriting the complete target adapter. Return only one complete executable Python module implementing the fixed stage contract. Any _stage_* method may change; the stage order and inherited runtime are fixed. Read measured state and execute bounded actions.

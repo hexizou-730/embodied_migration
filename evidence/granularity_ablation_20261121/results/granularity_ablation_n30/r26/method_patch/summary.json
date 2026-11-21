@@ -1,0 +1,180 @@
+{
+  "schema": "selective_migration_result.v1",
+  "status": "success",
+  "success": true,
+  "study": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/benchmark_tasks/t07_stack_cube/repair_granularity_ablation.json",
+  "spec": {
+    "env_id": "StackCube-v1",
+    "task_label": "t07_stack_cube",
+    "source_robot": "panda",
+    "target_robot": "xarm6_robotiq",
+    "source_control_mode": "pd_joint_pos",
+    "target_control_mode": "pd_ee_delta_pose",
+    "seed": 0,
+    "max_episode_steps": 1000,
+    "max_source_cycles": 2,
+    "max_target_cycles": 3,
+    "obs_mode": "state",
+    "sim_backend": "auto",
+    "render_backend": "gpu"
+  },
+  "runtime_contract": {
+    "gripper_open": 0.0,
+    "gripper_close": 0.81
+  },
+  "generation_settings": {
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "temperature": 0.0,
+    "sampling_seed": 35,
+    "max_tokens": 6000,
+    "reasoning_effort": null,
+    "request_timeout_seconds": 180.0,
+    "request_max_retries": 0
+  },
+  "repair_output_format": "single_stage_method",
+  "source_metadata_filter": "extracted_source_facts_only",
+  "stage_semantics_source": null,
+  "source_program_sha256": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895",
+  "stage_order": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "locked_stages": [
+    "align",
+    "approach",
+    "grasp",
+    "lift",
+    "release"
+  ],
+  "next_repair_stage": null,
+  "incumbent_method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+    "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+    "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+    "_stage_align": "0bc68f0b2d15c0e68b52b92b4ba175914076bdc53acd4ac75da1d7551a9e460d",
+    "_stage_release": "fde960a1e6dacbb82e4878d2e60757e142b4b20014c6686c7a0877e872301f7b",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "model": "deepseek-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 565,
+        "prompt_tokens": 4072,
+        "total_tokens": 4637,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 3840
+        },
+        "prompt_cache_hit_tokens": 3840,
+        "prompt_cache_miss_tokens": 232
+      },
+      "allowed_stage": "align",
+      "generation_unit": "stage_method",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": true,
+      "adapter": "results/repair_granularity/granularity_ablation_n30/r26/method_patch/cycle_01/target_adapter.py",
+      "method_hashes": {
+        "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+        "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+        "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+        "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+        "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+        "_stage_align": "0bc68f0b2d15c0e68b52b92b4ba175914076bdc53acd4ac75da1d7551a9e460d",
+        "_stage_release": "fde960a1e6dacbb82e4878d2e60757e142b4b20014c6686c7a0877e872301f7b",
+        "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+      },
+      "trial_result": "results/repair_granularity/granularity_ablation_n30/r26/method_patch/cycle_01/trial_result.json",
+      "success": true,
+      "action_steps": 32,
+      "failed_stage": null,
+      "repair_localization": {
+        "runtime_failed_stage": null,
+        "repair_stage": null,
+        "reason": "official_success"
+      },
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift",
+        "align",
+        "release"
+      ],
+      "message": "adapter returned success and official evaluate() returned success"
+    }
+  ],
+  "resume_replay": {
+    "adapter": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/evidence/stackcube_placement_20261023/results/selective_migration/support_guard_repair/resume_replay/target_adapter.py",
+    "method_hashes": {
+      "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+      "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+      "_stage_approach": "f0f590605ebe635d657bdb86f3ec5ed15547078f34dc0d8d80d7a5dfbd6f176f",
+      "_stage_grasp": "0bf5d566ff2cb8003a0e98f75a5943609d5a50bba65d573e6d816f3087553322",
+      "_stage_lift": "88dd25328ad6bfe7e7fe638c3d075ed752199f789c9cf6b4e2fec2a22526bd93",
+      "_stage_align": "3f2400bcaa9aae7baa2b3bdd50096981155641568af06d9d5ca33e9fdc713d00",
+      "_stage_release": "fde960a1e6dacbb82e4878d2e60757e142b4b20014c6686c7a0877e872301f7b",
+      "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+    },
+    "success": false,
+    "action_steps": 101,
+    "repair_localization": {
+      "runtime_failed_stage": "release",
+      "repair_stage": "align",
+      "reason": "source_stage_postcondition_not_reached",
+      "evidence": {
+        "source_observed_new_true_predicates": [
+          "is_cubeA_on_cubeB"
+        ],
+        "violated_predicates": [
+          "is_cubeA_on_cubeB"
+        ],
+        "target_boundary": {
+          "step": 29,
+          "tcp": [
+            [
+              -0.038878001272678375,
+              0.10736700147390366,
+              0.06450200080871582
+            ]
+          ],
+          "entities": {
+            "cubeA": [
+              [
+                -0.05211275443434715,
+                0.1117645800113678,
+                0.07066862285137177
+              ]
+            ],
+            "cubeB": [
+              [
+                -0.039264529943466187,
+                0.10727572441101074,
+                0.019999995827674866
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "is_cubeA_grasped": true,
+            "is_cubeA_on_cubeB": false,
+            "is_cubeA_static": false,
+            "success": false
+          }
+        }
+      }
+    }
+  },
+  "target_adapter": "results/repair_granularity/granularity_ablation_n30/r26/method_patch/artifacts/target_adapter.py"
+}

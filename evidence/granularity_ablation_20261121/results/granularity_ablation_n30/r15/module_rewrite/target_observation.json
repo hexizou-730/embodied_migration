@@ -1,0 +1,634 @@
+{
+  "task_state": {
+    "robot_init_qpos_noise": 0.02,
+    "num_envs": 1,
+    "reconfiguration_freq": 0,
+    "cube_half_size": [
+      0.019999999552965164,
+      0.019999999552965164,
+      0.019999999552965164
+    ]
+  },
+  "entity_velocities": {
+    "cubeA": {
+      "linear_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "angular_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "cubeB": {
+      "linear_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "angular_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "robot_state": {
+    "qpos": [
+      [
+        0.035281047224998474,
+        0.2280031442642212,
+        -1.2104252576828003,
+        0.04481786489486694,
+        1.0473511219024658,
+        -0.019545556977391243,
+        0.01900176890194416,
+        -0.003027144121006131,
+        -0.0020643770694732666,
+        0.008211970329284668,
+        0.0028808715287595987,
+        0.029085470363497734
+      ]
+    ],
+    "qvel": [
+      [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    ],
+    "root_position": [
+      [
+        -0.5220000147819519,
+        0.0,
+        0.0
+      ]
+    ],
+    "root_quaternion": [
+      [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    ]
+  },
+  "env_id": "StackCube-v1",
+  "robot_uid": "xarm6_robotiq",
+  "control_mode": "pd_ee_delta_pose",
+  "environment_class": "mani_skill.envs.tasks.tabletop.stack_cube.StackCubeEnv",
+  "environment_doc": "**Task Description:**\nThe goal is to pick up a red cube and stack it on top of a green cube and let go of the cube without it falling\n\n**Randomizations:**\n- both cubes have their z-axis rotation randomized\n- both cubes have their xy positions on top of the table scene randomized. The positions are sampled such that the cubes do not collide with each other\n\n**Success Conditions:**\n- the red cube is on top of the green cube (to within half of the cube size)\n- the red cube is static\n- the red cube is not being grasped by the robot (robot must let go of the cube)",
+  "supported_robots": [
+    "panda_wristcam",
+    "panda",
+    "fetch"
+  ],
+  "action_space": {
+    "repr": "Box([-1. -1. -1. -1. -1. -1.  0.], [1.   1.   1.   1.   1.   1.   0.81], (7,), float32)",
+    "shape": [
+      7
+    ],
+    "dtype": "float32",
+    "low": {
+      "min": -1.0,
+      "max": 0.0,
+      "values": [
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        -1.0,
+        0.0
+      ]
+    },
+    "high": {
+      "min": 0.8100000023841858,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.8100000023841858
+      ]
+    }
+  },
+  "observation_shape": [
+    1,
+    54
+  ],
+  "controller_summary": "CombinedController(dof=7, active_joints=12\n    arm: PDEEPoseController(dof=6, active_joints=6, end_link=eef, joints=(joint1, joint2, joint3, joint4, joint5, joint6))\n    gripper_active: PDJointPosMimicController(dof=1, active_joints=2, mimic_to_control_joint_map={\n        left_outer_knuckle_joint: right_outer_knuckle_joint,\n    })\n    gripper_passive: PassiveController(dof=0, active_joints=4, joints=(left_inner_knuckle_joint, right_inner_knuckle_joint, left_inner_finger_joint, right_inner_finger_joint))\n)",
+  "controller_action_mapping": {
+    "arm": [
+      0,
+      6
+    ],
+    "gripper_active": [
+      6,
+      7
+    ],
+    "gripper_passive": [
+      7,
+      7
+    ]
+  },
+  "tcp": [
+    [
+      -0.018338000401854515,
+      0.02566399984061718,
+      0.15515799820423126
+    ]
+  ],
+  "pose_entities": {
+    "cubeA": {
+      "position": [
+        [
+          -0.08305300027132034,
+          -0.09354300051927567,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.138947993516922,
+          0.0,
+          0.0,
+          0.9902999997138977
+        ]
+      ]
+    },
+    "cubeB": {
+      "position": [
+        [
+          -0.039264000952243805,
+          0.10727600008249283,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.3038809895515442,
+          0.0,
+          0.0,
+          0.952709972858429
+        ]
+      ]
+    },
+    "segmentation_id_map[10]": {
+      "position": [
+        [
+          -0.008479000069200993,
+          0.020188000053167343,
+          0.304733008146286
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[11]": {
+      "position": [
+        [
+          -0.018338000401854515,
+          0.02566399984061718,
+          0.15515799820423126
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[12]": {
+      "position": [
+        [
+          -0.013001999817788601,
+          0.05275699868798256,
+          0.2511639893054962
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03245000168681145,
+          -0.015877999365329742,
+          0.9993039965629578,
+          0.009279999881982803
+        ]
+      ]
+    },
+    "segmentation_id_map[13]": {
+      "position": [
+        [
+          -0.013716000132262707,
+          0.08416400104761124,
+          0.2558709979057312
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03245000168681145,
+          -0.015877999365329742,
+          0.9993039965629578,
+          0.009279999881982803
+        ]
+      ]
+    },
+    "segmentation_id_map[14]": {
+      "position": [
+        [
+          -0.01697400026023388,
+          0.09108500182628632,
+          0.20899799466133118
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03242700174450874,
+          -0.01592399924993515,
+          0.9993159770965576,
+          0.007840000092983246
+        ]
+      ]
+    },
+    "segmentation_id_map[15]": {
+      "position": [
+        [
+          -0.018394000828266144,
+          0.06955300271511078,
+          0.17628200352191925
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03242700174450874,
+          -0.01592399924993515,
+          0.9993159770965576,
+          0.007840000092983246
+        ]
+      ]
+    },
+    "segmentation_id_map[16]": {
+      "position": [
+        [
+          -0.012896000407636166,
+          0.03511499986052513,
+          0.24397599697113037
+        ]
+      ],
+      "quaternion": [
+        [
+          -0.03262300044298172,
+          -0.01551899965852499,
+          0.9991409778594971,
+          0.02028599940240383
+        ]
+      ]
+    },
+    "segmentation_id_map[17]": {
+      "position": [
+        [
+          -0.011172999627888203,
+          -0.00837200041860342,
+          0.2488050013780594
+        ]
+      ],
+      "quaternion": [
+        [
+          0.01774200052022934,
+          -0.9991899728775024,
+          -0.015602000057697296,
+          0.032582998275756836
+        ]
+      ]
+    },
+    "segmentation_id_map[18]": {
+      "position": [
+        [
+          -0.009957999922335148,
+          -0.03997800126671791,
+          0.25174498558044434
+        ]
+      ],
+      "quaternion": [
+        [
+          0.01774200052022934,
+          -0.9991899728775024,
+          -0.015602000057697296,
+          0.032582998275756836
+        ]
+      ]
+    },
+    "segmentation_id_map[19]": {
+      "position": [
+        [
+          -0.012868000194430351,
+          -0.04444900155067444,
+          0.20455199480056763
+        ]
+      ],
+      "quaternion": [
+        [
+          0.03227100148797035,
+          -0.9988260269165039,
+          -0.015127000398933887,
+          0.03280699998140335
+        ]
+      ]
+    },
+    "segmentation_id_map[1]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[20]": {
+      "position": [
+        [
+          -0.015643000602722168,
+          -0.020426999777555466,
+          0.17371100187301636
+        ]
+      ],
+      "quaternion": [
+        [
+          0.03227100148797035,
+          -0.9988260269165039,
+          -0.015127000398933887,
+          0.03280699998140335
+        ]
+      ]
+    },
+    "segmentation_id_map[21]": {
+      "position": [
+        [
+          -0.012136000208556652,
+          0.009744999930262566,
+          0.24299800395965576
+        ]
+      ],
+      "quaternion": [
+        [
+          0.02287600003182888,
+          -0.999085009098053,
+          -0.015434999950230122,
+          0.032662998884916306
+        ]
+      ]
+    },
+    "segmentation_id_map[22]": {
+      "position": [
+        [
+          -0.11999999731779099,
+          0.0,
+          -0.919642984867096
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7071070075035095,
+          0.0,
+          0.0,
+          0.7071070075035095
+        ]
+      ]
+    },
+    "segmentation_id_map[23]": {
+      "position": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[24]": {
+      "position": [
+        [
+          -0.08305300027132034,
+          -0.09354300051927567,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.138947993516922,
+          0.0,
+          0.0,
+          0.9902999997138977
+        ]
+      ]
+    },
+    "segmentation_id_map[25]": {
+      "position": [
+        [
+          -0.039264000952243805,
+          0.10727600008249283,
+          0.019999999552965164
+        ]
+      ],
+      "quaternion": [
+        [
+          0.3038809895515442,
+          0.0,
+          0.0,
+          0.952709972858429
+        ]
+      ]
+    },
+    "segmentation_id_map[2]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.0
+        ]
+      ],
+      "quaternion": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "segmentation_id_map[3]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.2669999897480011
+        ]
+      ],
+      "quaternion": [
+        [
+          0.9998440146446228,
+          0.0,
+          -0.0,
+          0.017640000209212303
+        ]
+      ]
+    },
+    "segmentation_id_map[4]": {
+      "position": [
+        [
+          -0.5220000147819519,
+          0.0,
+          0.2669999897480011
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7009869813919067,
+          -0.703827977180481,
+          0.06803199648857117,
+          0.09281600266695023
+        ]
+      ]
+    },
+    "segmentation_id_map[5]": {
+      "position": [
+        [
+          -0.4056510031223297,
+          0.004108000081032515,
+          0.532043993473053
+        ]
+      ],
+      "quaternion": [
+        [
+          0.6292849779129028,
+          -0.6175209879875183,
+          -0.34448501467704773,
+          -0.3224869966506958
+        ]
+      ]
+    },
+    "segmentation_id_map[6]": {
+      "position": [
+        [
+          -0.07793500274419785,
+          0.01567400060594082,
+          0.4064210057258606
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018882999196648598,
+          -0.8817520141601562,
+          0.0042050001211464405,
+          -0.47131600975990295
+        ]
+      ]
+    },
+    "segmentation_id_map[7]": {
+      "position": [
+        [
+          -0.07793500274419785,
+          0.01567400060594082,
+          0.4064210057258606
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7196450233459473,
+          -0.6935439705848694,
+          0.019076000899076462,
+          0.027282999828457832
+        ]
+      ]
+    },
+    "segmentation_id_map[8]": {
+      "position": [
+        [
+          -0.008479000069200993,
+          0.020188000053167343,
+          0.304733008146286
+        ]
+      ],
+      "quaternion": [
+        [
+          0.018773000687360764,
+          -0.9991710186004639,
+          -0.015568999573588371,
+          0.03259899839758873
+        ]
+      ]
+    },
+    "segmentation_id_map[9]": {
+      "position": [
+        [
+          0.041391000151634216,
+          0.02180499956011772,
+          0.3015049993991852
+        ]
+      ],
+      "quaternion": [
+        [
+          0.7175289988517761,
+          -0.009775999933481216,
+          0.03632599860429764,
+          -0.6955119967460632
+        ]
+      ]
+    }
+  },
+  "entity_aliases": {},
+  "reset_info": {
+    "elapsed_steps": 0,
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": true,
+    "success": false,
+    "reconfigure": false
+  },
+  "official_evaluation": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": false,
+    "is_cubeA_static": true,
+    "success": false
+  },
+  "environment_source": "@register_env(\"StackCube-v1\", max_episode_steps=50)\nclass StackCubeEnv(BaseEnv):\n    \"\"\"\n    **Task Description:**\n    The goal is to pick up a red cube and stack it on top of a green cube and let go of the cube without it falling\n\n    **Randomizations:**\n    - both cubes have their z-axis rotation randomized\n    - both cubes have their xy positions on top of the table scene randomized. The positions are sampled such that the cubes do not collide with each other\n\n    **Success Conditions:**\n    - the red cube is on top of the green cube (to within half of the cube size)\n    - the red cube is static\n    - the red cube is not being grasped by the robot (robot must let go of the cube)\n    \"\"\"\n\n    _sample_video_link = \"https://github.com/haosulab/ManiSkill/raw/main/figures/environment_demos/StackCube-v1_rt.mp4\"\n    SUPPORTED_ROBOTS = [\"panda_wristcam\", \"panda\", \"fetch\"]\n    agent: Union[Panda, Fetch]\n\n    def __init__(\n        self, *args, robot_uids=\"panda_wristcam\", robot_init_qpos_noise=0.02, **kwargs\n    ):\n        self.robot_init_qpos_noise = robot_init_qpos_noise\n        super().__init__(*args, robot_uids=robot_uids, **kwargs)\n\n    @property\n    def _default_sensor_configs(self):\n        pose = sapien_utils.look_at(eye=[0.3, 0, 0.6], target=[-0.1, 0, 0.1])\n        return [CameraConfig(\"base_camera\", pose, 128, 128, np.pi / 2, 0.01, 100)]\n\n    @property\n    def _default_human_render_camera_configs(self):\n        pose = sapien_utils.look_at([0.6, 0.7, 0.6], [0.0, 0.0, 0.35])\n        return CameraConfig(\"render_camera\", pose, 512, 512, 1, 0.01, 100)\n\n    def _load_agent(self, options: dict):\n        super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))\n\n    def _load_scene(self, options: dict):\n        self.cube_half_size = common.to_tensor([0.02] * 3, device=self.device)\n        self.table_scene = TableSceneBuilder(\n            env=self, robot_init_qpos_noise=self.robot_init_qpos_noise\n        )\n        self.table_scene.build()\n        self.cubeA = actors.build_cube(\n            self.scene,\n            half_size=0.02,\n            color=[1, 0, 0, 1],\n            name=\"cubeA\",\n            initial_pose=sapien.Pose(p=[0, 0, 0.1]),\n        )\n        self.cubeB = actors.build_cube(\n            self.scene,\n            half_size=0.02,\n            color=[0, 1, 0, 1],\n            name=\"cubeB\",\n            initial_pose=sapien.Pose(p=[1, 0, 0.1]),\n        )\n\n    def _initialize_episode(self, env_idx: torch.Tensor, options: dict):\n        with torch.device(self.device):\n            b = len(env_idx)\n            self.table_scene.initialize(env_idx)\n\n            xyz = torch.zeros((b, 3))\n            xyz[:, 2] = 0.02\n            xy = torch.rand((b, 2)) * 0.2 - 0.1\n            region = [[-0.1, -0.2], [0.1, 0.2]]\n            sampler = randomization.UniformPlacementSampler(\n                bounds=region, batch_size=b, device=self.device\n            )\n            radius = torch.linalg.norm(torch.tensor([0.02, 0.02])) + 0.001\n            cubeA_xy = xy + sampler.sample(radius, 100)\n            cubeB_xy = xy + sampler.sample(radius, 100, verbose=False)\n\n            xyz[:, :2] = cubeA_xy\n            qs = randomization.random_quaternions(\n                b,\n                lock_x=True,\n                lock_y=True,\n                lock_z=False,\n            )\n            self.cubeA.set_pose(Pose.create_from_pq(p=xyz.clone(), q=qs))\n\n            xyz[:, :2] = cubeB_xy\n            qs = randomization.random_quaternions(\n                b,\n                lock_x=True,\n                lock_y=True,\n                lock_z=False,\n            )\n            self.cubeB.set_pose(Pose.create_from_pq(p=xyz, q=qs))\n\n    def evaluate(self):\n        pos_A = self.cubeA.pose.p\n        pos_B = self.cubeB.pose.p\n        offset = pos_A - pos_B\n        xy_flag = (\n            torch.linalg.norm(offset[..., :2], axis=1)\n            <= torch.linalg.norm(self.cube_half_size[:2]) + 0.005\n        )\n        z_flag = torch.abs(offset[..., 2] - self.cube_half_size[..., 2] * 2) <= 0.005\n        is_cubeA_on_cubeB = torch.logical_and(xy_flag, z_flag)\n        # NOTE (stao): GPU sim can be fast but unstable. Angular velocity is rather high despite it not really rotating\n        is_cubeA_static = self.cubeA.is_static(lin_thresh=1e-2, ang_thresh=0.5)\n        is_cubeA_grasped = self.agent.is_grasping(self.cubeA)\n        success = is_cubeA_on_cubeB * is_cubeA_static * (~is_cubeA_grasped)\n        return {\n            \"is_cubeA_grasped\": is_cubeA_grasped,\n            \"is_cubeA_on_cubeB\": is_cubeA_on_cubeB,\n            \"is_cubeA_static\": is_cubeA_static,\n            \"success\": success.bool(),\n        }\n\n    def _get_obs_extra(self, info: dict):\n        obs = dict(tcp_pose=self.agent.tcp.pose.raw_pose)\n        if \"state\" in self.obs_mode:\n            obs.update(\n                cubeA_pose=self.cubeA.pose.raw_pose,\n                cubeB_pose=self.cubeB.pose.raw_pose,\n                tcp_to_cubeA_pos=self.cubeA.pose.p - self.agent.tcp.pose.p,\n                tcp_to_cubeB_pos=self.cubeB.pose.p - self.agent.tcp.pose.p,\n                cubeA_to_cubeB_pos=self.cubeB.pose.p - self.cubeA.pose.p,\n            )\n        return obs\n\n    def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: dict):\n        # reaching reward\n        tcp_pose = self.agent.tcp.pose.p\n        cubeA_pos = self.cubeA.pose.p\n        cubeA_to_tcp_dist = torch.linalg.norm(tcp_pose - cubeA_pos, axis=1)\n        reward = 2 * (1 - torch.tanh(5 * cubeA_to_tcp_dist))\n\n        # grasp and place reward\n        cubeA_pos = self.cubeA.pose.p\n        cubeB_pos = self.cubeB.pose.p\n        goal_xyz = torch.hstack(\n            [cubeB_pos[:, 0:2], (cubeB_pos[:, 2] + self.cube_half_size[2] * 2)[:, None]]\n        )\n        cubeA_to_goal_dist = torch.linalg.norm(goal_xyz - cubeA_pos, axis=1)\n        place_reward = 1 - torch.tanh(5.0 * cubeA_to_goal_dist)\n\n        reward[info[\"is_cubeA_grasped\"]] = (4 + place_reward)[info[\"is_cubeA_grasped\"]]\n\n        # ungrasp and static reward\n        gripper_width = (self.agent.robot.get_qlimits()[0, -1, 1] * 2).to(\n            self.device\n        )  # NOTE: hard-coded with panda\n        is_cubeA_grasped = info[\"is_cubeA_grasped\"]\n        ungrasp_reward = (\n            torch.sum(self.agent.robot.get_qpos()[:, -2:], axis=1) / gripper_width\n        )\n        ungrasp_reward[~is_cubeA_grasped] = 1.0\n        v = torch.linalg.norm(self.cubeA.linear_velocity, axis=1)\n        av = torch.linalg.norm(self.cubeA.angular_velocity, axis=1)\n        static_reward = 1 - torch.tanh(v * 10 + av)\n        reward[info[\"is_cubeA_on_cubeB\"]] = (\n            6 + (ungrasp_reward + static_reward) / 2.0\n        )[info[\"is_cubeA_on_cubeB\"]]\n\n        reward[info[\"success\"]] = 8\n\n        return reward\n\n    def compute_normalized_dense_reward(\n        self, obs: Any, action: torch.Tensor, info: dict\n    ):\n        return self.compute_dense_reward(obs=obs, action=action, info=info) / 8\n",
+  "evaluate_source": "    def evaluate(self):\n        pos_A = self.cubeA.pose.p\n        pos_B = self.cubeB.pose.p\n        offset = pos_A - pos_B\n        xy_flag = (\n            torch.linalg.norm(offset[..., :2], axis=1)\n            <= torch.linalg.norm(self.cube_half_size[:2]) + 0.005\n        )\n        z_flag = torch.abs(offset[..., 2] - self.cube_half_size[..., 2] * 2) <= 0.005\n        is_cubeA_on_cubeB = torch.logical_and(xy_flag, z_flag)\n        # NOTE (stao): GPU sim can be fast but unstable. Angular velocity is rather high despite it not really rotating\n        is_cubeA_static = self.cubeA.is_static(lin_thresh=1e-2, ang_thresh=0.5)\n        is_cubeA_grasped = self.agent.is_grasping(self.cubeA)\n        success = is_cubeA_on_cubeB * is_cubeA_static * (~is_cubeA_grasped)\n        return {\n            \"is_cubeA_grasped\": is_cubeA_grasped,\n            \"is_cubeA_on_cubeB\": is_cubeA_on_cubeB,\n            \"is_cubeA_static\": is_cubeA_static,\n            \"success\": success.bool(),\n        }\n"
+}

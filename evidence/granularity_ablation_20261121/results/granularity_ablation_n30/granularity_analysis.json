@@ -1,0 +1,500 @@
+{
+  "schema": "granularity_analysis.v1",
+  "root": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/repair_granularity/granularity_ablation_n30",
+  "bootstrap": {
+    "iterations": 10000,
+    "seed": 0,
+    "method": "percentile"
+  },
+  "failed_candidate_sha256": "fa29a66bd7faab15d73815595dcc5dcb4a779cd0b74fcaeba7df1f38c789cae6",
+  "evidence_checks": {
+    "total": 181,
+    "failed": 0,
+    "failed_details": []
+  },
+  "arms": [
+    {
+      "arm_id": "method_patch",
+      "num_runs": 30,
+      "num_success": 28,
+      "generation_cycles": 34,
+      "llm_calls": 34,
+      "valid_candidates": 34,
+      "target_action_steps": 1249,
+      "total_tokens": 157726,
+      "llm_cost_usd": 0.0,
+      "replay_action_steps_excluded": 3030,
+      "success_rate": 0.9333333333333333,
+      "success_wilson_95": [
+        0.7868,
+        0.9815
+      ],
+      "cycles_to_success": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "median_cycles_to_success": 1
+    },
+    {
+      "arm_id": "module_rewrite",
+      "num_runs": 30,
+      "num_success": 28,
+      "generation_cycles": 35,
+      "llm_calls": 35,
+      "valid_candidates": 35,
+      "target_action_steps": 1413,
+      "total_tokens": 253055,
+      "llm_cost_usd": 0.0,
+      "replay_action_steps_excluded": 3030,
+      "success_rate": 0.9333333333333333,
+      "success_wilson_95": [
+        0.7868,
+        0.9815
+      ],
+      "cycles_to_success": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "median_cycles_to_success": 1
+    }
+  ],
+  "paired": {
+    "num_pairs": 30,
+    "per_repetition": [
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          30
+        ],
+        "total_tokens": [
+          4658,
+          7343
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          30
+        ],
+        "total_tokens": [
+          4655,
+          7223
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4583,
+          7291
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          36
+        ],
+        "total_tokens": [
+          4655,
+          7116
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4653,
+          7350
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4583,
+          7290
+        ]
+      },
+      {
+        "method_patch_success": false,
+        "module_rewrite_success": false,
+        "action_steps": [
+          125,
+          398
+        ],
+        "total_tokens": [
+          13275,
+          21275
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          32
+        ],
+        "total_tokens": [
+          4583,
+          7279
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": false,
+        "action_steps": [
+          31,
+          87
+        ],
+        "total_tokens": [
+          4687,
+          20133
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          36,
+          31
+        ],
+        "total_tokens": [
+          4723,
+          7359
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4580,
+          7290
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          33,
+          32
+        ],
+        "total_tokens": [
+          4566,
+          7358
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          36,
+          36
+        ],
+        "total_tokens": [
+          4723,
+          7291
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          31,
+          31
+        ],
+        "total_tokens": [
+          4596,
+          7347
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4637,
+          7351
+        ]
+      },
+      {
+        "method_patch_success": false,
+        "module_rewrite_success": true,
+        "action_steps": [
+          211,
+          31
+        ],
+        "total_tokens": [
+          15040,
+          7363
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4656,
+          7199
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4583,
+          7344
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4580,
+          7467
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          36,
+          70
+        ],
+        "total_tokens": [
+          4782,
+          14419
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4580,
+          7293
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          36
+        ],
+        "total_tokens": [
+          4665,
+          7094
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          33,
+          31
+        ],
+        "total_tokens": [
+          4566,
+          7355
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          36,
+          31
+        ],
+        "total_tokens": [
+          4512,
+          7352
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          33,
+          31
+        ],
+        "total_tokens": [
+          4566,
+          7359
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4637,
+          7317
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          32
+        ],
+        "total_tokens": [
+          4583,
+          7333
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4656,
+          7351
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          36
+        ],
+        "total_tokens": [
+          4583,
+          7118
+        ]
+      },
+      {
+        "method_patch_success": true,
+        "module_rewrite_success": true,
+        "action_steps": [
+          32,
+          31
+        ],
+        "total_tokens": [
+          4580,
+          7395
+        ]
+      }
+    ],
+    "discordant_method_only": 1,
+    "discordant_module_only": 1,
+    "sign_test_p_two_sided": 1.0,
+    "mean_action_difference_module_minus_method": 5.466666666666667,
+    "action_difference_bootstrap_95": [
+      -14.83,
+      30.03
+    ],
+    "mean_token_difference_module_minus_method": 3177.633333333333,
+    "token_difference_bootstrap_95": [
+      2002.9,
+      4458.3
+    ],
+    "cost_guidance": [
+      "paired action difference is not separated from zero at this sample size",
+      "module_rewrite consumed more tokens per run (paired CI above zero)"
+    ]
+  },
+  "interpretation_limits": [
+    "n=30 paired repair runs from one shared failed candidate in one fixed scene",
+    "resume-based repair evidence; never merge with from-scratch generation comparisons",
+    "descriptive statistics only; no held-out-scene or cross-task generalization claim"
+  ]
+}

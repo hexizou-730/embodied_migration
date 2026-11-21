@@ -1,0 +1,148 @@
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedSelectiveRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    def _stage_approach(self) -> bool:
+        cubeA = self._entity_pos("cubeA")
+        target = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.10], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(target, gripper=0.0, steps=self.move_steps)
+            tcp = self._tcp_pos()
+            if np.linalg.norm(tcp - target) <= 0.02:
+                break
+        tcp = self._tcp_pos()
+        return bool(np.linalg.norm(tcp - target) <= 0.03)
+
+    def _stage_grasp(self) -> bool:
+        cubeA = self._entity_pos("cubeA")
+        target = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.005], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(target, gripper=0.0, steps=self.move_steps)
+            tcp = self._tcp_pos()
+            if np.linalg.norm(tcp - target) <= 0.015:
+                break
+        for _ in range(3):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_close, steps=self.settle_steps)
+            if self._is_grasping_entity("cubeA"):
+                break
+        return bool(self._is_grasping_entity("cubeA"))
+
+    def _stage_lift(self) -> bool:
+        cubeA = self._entity_pos("cubeA")
+        start_z = float(cubeA[2])
+        target = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.10], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(target, gripper=self.gripper_close, steps=self.move_steps)
+            cubeA = self._entity_pos("cubeA")
+            if float(cubeA[2]) >= start_z + 0.06:
+                break
+        cubeA = self._entity_pos("cubeA")
+        lifted = float(cubeA[2]) >= start_z + 0.05
+        return bool(lifted and self._is_grasping_entity("cubeA"))
+
+    def _stage_align(self) -> bool:
+        stack_dz = 0.04
+        for _ in range(8):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            cubeB = self._entity_pos("cubeB")
+            hover_z = float(cubeB[2]) + stack_dz + 0.08
+            if float(cubeA[2]) >= hover_z - 0.005:
+                break
+            tcp = self._tcp_pos()
+            dz = hover_z - float(cubeA[2])
+            tcp_target = np.array([tcp[0], tcp[1], tcp[2] + dz], dtype=np.float32)
+            self._move_towards(tcp_target, gripper=self.gripper_close,
+                               steps=self.move_steps)
+        for _ in range(16):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            cubeB = self._entity_pos("cubeB")
+            desired = np.array([cubeB[0], cubeB[1], cubeB[2] + stack_dz],
+                               dtype=np.float32)
+            err = desired - cubeA
+            if float(np.linalg.norm(err)) <= 0.006:
+                break
+            tcp = self._tcp_pos()
+            step_vec = err.copy()
+            norm = float(np.linalg.norm(step_vec))
+            if norm > 0.04:
+                step_vec = step_vec * (0.04 / norm)
+            tcp_target = tcp + step_vec
+            self._move_towards(tcp_target, gripper=self.gripper_close,
+                               steps=self.move_steps)
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        offset = cubeA - cubeB
+        xy_ok = bool(np.linalg.norm(offset[:2]) <= 0.02)
+        z_ok = bool(abs(float(offset[2]) - stack_dz) <= 0.012)
+        return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))
+
+    def _stage_release(self) -> bool:
+        # Open the gripper in place, then retreat upward so the fingers clear
+        # the cube and it can settle statically on cubeB.
+        for _ in range(4):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_open, steps=self.settle_steps)
+            if not self._is_grasping_entity("cubeA"):
+                break
+        # Retreat straight up to remove finger contact and let cube settle.
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            tcp = self._tcp_pos()
+            retreat = np.array([tcp[0], tcp[1], tcp[2] + 0.05], dtype=np.float32)
+            self._move_towards(retreat, gripper=self.gripper_open,
+                               steps=self.move_steps)
+            ev = self._official_evaluation()
+            if bool(ev.get("is_cubeA_on_cubeB", False)) \
+                    and bool(ev.get("is_cubeA_static", False)) \
+                    and not bool(ev.get("is_cubeA_grasped", True)):
+                return True
+        # Let the cube settle with the gripper held open and stationary.
+        for _ in range(10):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_open, steps=self.settle_steps)
+            ev = self._official_evaluation()
+            if bool(ev.get("is_cubeA_on_cubeB", False)) \
+                    and bool(ev.get("is_cubeA_static", False)) \
+                    and not bool(ev.get("is_cubeA_grasped", True)):
+                return True
+        ev = self._official_evaluation()
+        return bool(ev.get("is_cubeA_on_cubeB", False)) \
+            and bool(ev.get("is_cubeA_static", False)) \
+            and not bool(ev.get("is_cubeA_grasped", True))
+
+    def run_source_actions(self) -> bool:
+        if not self._run_stage("approach", self._stage_approach): return False
+        if not self._run_stage("grasp", self._stage_grasp): return False
+        if not self._run_stage("lift", self._stage_lift): return False
+        if not self._run_stage("align", self._stage_align): return False
+        if not self._run_stage("release", self._stage_release): return False
+        return self._official_success()
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedSelectiveRobot:
+    return GeneratedSelectiveRobot(env, control_mode=control_mode, robot_uid=robot_uid)

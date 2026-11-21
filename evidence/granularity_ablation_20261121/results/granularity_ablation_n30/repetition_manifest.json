@@ -1,0 +1,65 @@
+{
+  "schema": "repair_granularity_ablation_plan.v1",
+  "study": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/benchmark_tasks/t07_stack_cube/repair_granularity_ablation.json",
+  "failed_candidate": {
+    "path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/evidence/stackcube_placement_20261023/results/selective_migration/support_guard_repair/resume_replay/target_adapter.py",
+    "sha256": "fa29a66bd7faab15d73815595dcc5dcb4a779cd0b74fcaeba7df1f38c789cae6"
+  },
+  "environment_seed": 0,
+  "max_cycles_per_run": 3,
+  "sampling_seeds": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39
+  ],
+  "max_generation_calls": 180,
+  "generation_settings": {
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "temperature": 0.0,
+    "sampling_seed": 10,
+    "max_tokens": 6000,
+    "reasoning_effort": null,
+    "request_timeout_seconds": 180.0,
+    "request_max_retries": 0
+  },
+  "arms": {
+    "method_patch": "LLM returns only the diagnosed _stage_* method; the harness splices it in and AST-locks every other method (existing selective.py --resume-adapter path).",
+    "module_rewrite": "LLM returns a complete module under the same stage contract with the same measured evidence; any stage method may change; semantically unchanged modules are rejected."
+  },
+  "shared_controls": [
+    "same failed candidate bytes and same replay before repair",
+    "same repair localization and measured state feedback",
+    "same environment seed, model, temperature, token limit, and max cycles",
+    "paired LLM sampling seeds across arms",
+    "official success only; failed runs stay in the denominator"
+  ],
+  "note": "Resume-based repair evidence. Never merge these runs into from-scratch generation comparisons."
+}

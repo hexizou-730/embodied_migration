@@ -1,0 +1,530 @@
+Repair one failed target policy for StackCube-v1, panda -> xarm6_robotiq
+by rewriting the complete adapter. Return exactly one complete Python module and nothing else.
+This is a whole-module repair: any of the five _stage_* methods and __init__ may change; the stage
+order and the inherited runtime stay fixed. Retained stages: ['align', 'approach', 'grasp', 'lift'].
+The diagnosed repair stage from measured evidence is "release"; focus the substantive change there.
+A module semantically identical to a previously tested candidate is rejected; make an executable
+change, not comment edits.
+
+Source-derived relation and successful source-stage observation:
+{
+  "stage_id": "release",
+  "source_lines": [
+    90,
+    90
+  ],
+  "operations": [
+    "open_gripper"
+  ],
+  "source_calls": [
+    "planner.open_gripper()"
+  ],
+  "target_symbol": null,
+  "target_expression": null,
+  "entities": [
+    "cubeA",
+    "cubeB"
+  ],
+  "dependency_expressions": [],
+  "completion_check": "official success: cubeA is on cubeB, static, and not grasped",
+  "transferable_relation": "release cubeA on cubeB and satisfy the unchanged official success predicate",
+  "preserve": [
+    "stage order",
+    "object-relative task relation",
+    "completion semantics"
+  ],
+  "adaptation_obligations": [
+    "map target open command",
+    "wait for official static and released conditions"
+  ],
+  "runtime": {
+    "action_count": 2,
+    "first_action_step": 102,
+    "last_action_step": 103,
+    "source_line_counts": {
+      "90": 2
+    },
+    "final_state": {
+      "step": 103,
+      "tcp": [
+        [
+          -0.047568000853061676,
+          0.10873299837112427,
+          0.06042899936437607
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.04627734422683716,
+            0.11028970032930374,
+            0.05999899283051491
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03921497240662575,
+            0.10743801295757294,
+            0.020000355318188667
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": true,
+        "success": true
+      }
+    }
+  }
+}
+
+Target control mode: pd_ee_delta_pose
+Action bounds: {"repr": "Box([-1. -1. -1. -1. -1. -1.  0.], [1.   1.   1.   1.   1.   1.   0.81], (7,), float32)", "shape": [7], "dtype": "float32", "low": {"min": -1.0, "max": 0.0, "values": [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0]}, "high": {"min": 0.8100000023841858, "max": 1.0, "values": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.8100000023841858]}}
+Official evaluation implementation:
+    def evaluate(self):
+        pos_A = self.cubeA.pose.p
+        pos_B = self.cubeB.pose.p
+        offset = pos_A - pos_B
+        xy_flag = (
+            torch.linalg.norm(offset[..., :2], axis=1)
+            <= torch.linalg.norm(self.cube_half_size[:2]) + 0.005
+        )
+        z_flag = torch.abs(offset[..., 2] - self.cube_half_size[..., 2] * 2) <= 0.005
+        is_cubeA_on_cubeB = torch.logical_and(xy_flag, z_flag)
+        # NOTE (stao): GPU sim can be fast but unstable. Angular velocity is rather high despite it not really rotating
+        is_cubeA_static = self.cubeA.is_static(lin_thresh=1e-2, ang_thresh=0.5)
+        is_cubeA_grasped = self.agent.is_grasping(self.cubeA)
+        success = is_cubeA_on_cubeB * is_cubeA_static * (~is_cubeA_grasped)
+        return {
+            "is_cubeA_grasped": is_cubeA_grasped,
+            "is_cubeA_on_cubeB": is_cubeA_on_cubeB,
+            "is_cubeA_static": is_cubeA_static,
+            "success": success.bool(),
+        }
+
+
+Available inherited API (np is already imported):
+- self._entity_pos(name) and self._tcp_pos(): flat xyz numpy arrays, in world coordinates.
+- self._official_evaluation(): official boolean fields; self._official_success(): task success bool.
+- self._is_grasping_entity(name): actual target grasp detector.
+- self._make_action(normalized_world_xyz, gripper=value): maps to the controller frame, leaves rotation zero.
+- self._step(action): sends a real simulator action and updates termination.
+- self._move_towards(world_target, gripper=value, steps=count): translates TCP, stops within 1 cm.
+- self._repeat_action(normalized_world_xyz, gripper=value, steps=count): repeats real commands.
+- self._early_stop(): episode ended. Check it in explicit bounded loops.
+Motion helper arguments gripper and steps are keyword-only. No tol argument exists.
+For opening/closing in place use _repeat_action(np.zeros(3), gripper=..., steps=...).
+Never modify the simulator, object poses, controller, official evaluator, runtime methods, or official success.
+
+Current initialization (read-only context):
+def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+Current complete candidate module:
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedSelectiveRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    def _stage_approach(self) -> bool:
+        cubeA = self._entity_pos("cubeA")
+        target = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.10], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(target, gripper=0.0, steps=self.move_steps)
+            tcp = self._tcp_pos()
+            if np.linalg.norm(tcp - target) <= 0.02:
+                break
+        tcp = self._tcp_pos()
+        return bool(np.linalg.norm(tcp - target) <= 0.03)
+
+    def _stage_grasp(self) -> bool:
+        cubeA = self._entity_pos("cubeA")
+        target = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.005], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(target, gripper=0.0, steps=self.move_steps)
+            tcp = self._tcp_pos()
+            if np.linalg.norm(tcp - target) <= 0.015:
+                break
+        for _ in range(3):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_close, steps=self.settle_steps)
+            if self._is_grasping_entity("cubeA"):
+                break
+        return bool(self._is_grasping_entity("cubeA"))
+
+    def _stage_lift(self) -> bool:
+        cubeA = self._entity_pos("cubeA")
+        start_z = float(cubeA[2])
+        target = np.array([cubeA[0], cubeA[1], cubeA[2] + 0.10], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(target, gripper=self.gripper_close, steps=self.move_steps)
+            cubeA = self._entity_pos("cubeA")
+            if float(cubeA[2]) >= start_z + 0.06:
+                break
+        cubeA = self._entity_pos("cubeA")
+        lifted = float(cubeA[2]) >= start_z + 0.05
+        return bool(lifted and self._is_grasping_entity("cubeA"))
+
+    def _stage_align(self) -> bool:
+        # Source relation: place cubeA directly above cubeB at stack height.
+        # cube_half_size = 0.02, so stack offset is 0.04 in z.
+        # Drive the *held cube* to the target using measured cubeA position
+        # error applied to the TCP (TCP-to-held-object transform unknown).
+        stack_dz = 0.04
+        # First, raise cubeA to a safe hover height above cubeB before lateral move.
+        for _ in range(8):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            cubeB = self._entity_pos("cubeB")
+            hover_z = float(cubeB[2]) + stack_dz + 0.08
+            if float(cubeA[2]) >= hover_z - 0.005:
+                break
+            tcp = self._tcp_pos()
+            dz = hover_z - float(cubeA[2])
+            tcp_target = np.array([tcp[0], tcp[1], tcp[2] + dz], dtype=np.float32)
+            self._move_towards(tcp_target, gripper=self.gripper_close,
+                               steps=self.move_steps)
+        # Now correct lateral and vertical error using measured cube offset.
+        for _ in range(16):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            cubeB = self._entity_pos("cubeB")
+            desired = np.array([cubeB[0], cubeB[1], cubeB[2] + stack_dz],
+                               dtype=np.float32)
+            err = desired - cubeA
+            if float(np.linalg.norm(err)) <= 0.006:
+                break
+            tcp = self._tcp_pos()
+            step_vec = err.copy()
+            norm = float(np.linalg.norm(step_vec))
+            if norm > 0.04:
+                step_vec = step_vec * (0.04 / norm)
+            tcp_target = tcp + step_vec
+            self._move_towards(tcp_target, gripper=self.gripper_close,
+                               steps=self.move_steps)
+        # Final verification against official geometry.
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        offset = cubeA - cubeB
+        xy_ok = bool(np.linalg.norm(offset[:2]) <= 0.02)
+        z_ok = bool(abs(float(offset[2]) - stack_dz) <= 0.012)
+        return bool(xy_ok and z_ok and self._is_grasping_entity("cubeA"))
+
+    def _stage_release(self) -> bool:
+        for _ in range(8):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_open, steps=self.settle_steps)
+            ev = self._official_evaluation()
+            if bool(ev.get("is_cubeA_on_cubeB", False)) and bool(ev.get("is_cubeA_static", False)) \
+                    and not bool(ev.get("is_cubeA_grasped", True)):
+                return True
+        ev = self._official_evaluation()
+        return bool(ev.get("is_cubeA_on_cubeB", False)) and bool(ev.get("is_cubeA_static", False)) \
+            and not bool(ev.get("is_cubeA_grasped", True))
+
+    def run_source_actions(self) -> bool:
+        if not self._run_stage("approach", self._stage_approach): return False
+        if not self._run_stage("grasp", self._stage_grasp): return False
+        if not self._run_stage("lift", self._stage_lift): return False
+        if not self._run_stage("align", self._stage_align): return False
+        if not self._run_stage("release", self._stage_release): return False
+        return self._official_success()
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedSelectiveRobot:
+    return GeneratedSelectiveRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```
+
+The module contract is literal, not optional:
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+class GeneratedSelectiveRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    # Keep, improve, or replace any of the five required _stage_* methods.
+
+    def run_source_actions(self) -> bool:
+        if not self._run_stage("approach", self._stage_approach): return False
+        if not self._run_stage("grasp", self._stage_grasp): return False
+        if not self._run_stage("lift", self._stage_lift): return False
+        if not self._run_stage("align", self._stage_align): return False
+        if not self._run_stage("release", self._stage_release): return False
+        return self._official_success()
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedSelectiveRobot:
+    return GeneratedSelectiveRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```
+
+Use only Python standard-library modules and numpy. Do not import torch, sapien, mani_skill, gymnasium,
+or controller implementations. Do not override _step, _run_stage, _snapshot, _official_evaluation,
+_official_success, _entity_catalog, _robot_root_quat, or _world_delta_to_action_delta. Do not define
+helper methods outside the five required _stage_* methods.
+
+Real execution evidence:
+{
+  "success": false,
+  "message": "task program returned failure",
+  "execution_error": "",
+  "action_steps": 124,
+  "official_evaluation": {
+    "is_cubeA_grasped": false,
+    "is_cubeA_on_cubeB": true,
+    "is_cubeA_static": false,
+    "success": false
+  },
+  "repair_localization": {
+    "runtime_failed_stage": "release",
+    "repair_stage": "release",
+    "reason": "runtime_failed_stage"
+  },
+  "stage_boundary_states": {
+    "approach": {
+      "step": 3,
+      "tcp": [
+        [
+          -0.08130700141191483,
+          -0.09296400099992752,
+          0.11993099749088287
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.0830530896782875,
+            -0.0935426577925682,
+            0.019999898970127106
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926442563533783,
+            0.10727579891681671,
+            0.019999992102384567
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": true,
+        "success": false
+      }
+    },
+    "grasp": {
+      "step": 18,
+      "tcp": [
+        [
+          -0.08242800086736679,
+          -0.09378699958324432,
+          0.024708999320864677
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.08253037184476852,
+            -0.09318209439516068,
+            0.02000621147453785
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926438093185425,
+            0.10727570205926895,
+            0.02000001072883606
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "lift": {
+      "step": 21,
+      "tcp": [
+        [
+          -0.08128999918699265,
+          -0.0933310016989708,
+          0.12016300112009048
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.08100511133670807,
+            -0.09300605207681656,
+            0.11431611329317093
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03926438093185425,
+            0.10727570205926895,
+            0.02000001072883606
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": false,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "align": {
+      "step": 28,
+      "tcp": [
+        [
+          -0.030674999579787254,
+          0.1154009997844696,
+          0.059087999165058136
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.036756906658411026,
+            0.10590297728776932,
+            0.06156207621097565
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.03924097493290901,
+            0.10746403783559799,
+            0.020023735240101814
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": true,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    },
+    "release": {
+      "step": 124,
+      "tcp": [
+        [
+          -0.030904000625014305,
+          0.11592300236225128,
+          0.05879700183868408
+        ]
+      ],
+      "entities": {
+        "cubeA": [
+          [
+            -0.02797028049826622,
+            0.13756535947322845,
+            0.059595074504613876
+          ]
+        ],
+        "cubeB": [
+          [
+            -0.039291687309741974,
+            0.10756392776966095,
+            0.01999959535896778
+          ]
+        ]
+      },
+      "official_evaluation": {
+        "is_cubeA_grasped": false,
+        "is_cubeA_on_cubeB": true,
+        "is_cubeA_static": false,
+        "success": false
+      }
+    }
+  },
+  "final_state": {
+    "tcp": [
+      -0.030904000625014305,
+      0.11592300236225128,
+      0.05879700183868408
+    ],
+    "task_state": {
+      "robot_init_qpos_noise": 0.02,
+      "num_envs": 1,
+      "reconfiguration_freq": 0,
+      "cube_half_size": [
+        0.019999999552965164,
+        0.019999999552965164,
+        0.019999999552965164
+      ]
+    },
+    "entities": {
+      "cubeA": {
+        "position": [
+          [
+            -0.027969999238848686,
+            0.1375650018453598,
+            0.05959499999880791
+          ]
+        ],
+        "quaternion": [
+          [
+            -0.025825999677181244,
+            0.011358000338077545,
+            0.01502699963748455,
+            0.9994890093803406
+          ]
+        ]
+      },
+      "cubeB": {
+        "position": [
+          [
+            -0.039292000234127045,
+            0.10756400227546692,
+            0.019999999552965164
+          ]
+        ],
+        "quaternion": [
+          [
+            0.2999800145626068,
+            -4.999999873689376e-06,
+            3.600000127335079e-05,
+            0.953944981098175
+          ]
+        ]
+      }
+    }
+  }
+}
+
+Each candidate restarts from reset and replays retained stages. The final failed snapshot is not the
+entry state of this repair: use the measured preceding-stage boundary and re-read state at runtime.
+Use the source object-relative relation to meet the official predicates; TCP arrival alone does not
+establish the object's pose. Return True only after measuring each stage's completion.
+Latest validation error: 
+Return only the complete module.
