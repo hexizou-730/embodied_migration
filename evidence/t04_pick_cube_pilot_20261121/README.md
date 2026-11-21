@@ -30,3 +30,10 @@ study 配置声明的 stage_semantics(is_obj_placed 等)正常进入 prompt。
 
 原始重放轨迹:`t04_pick_cube_seed_000.json`;阶段程序:`t04_stage_program.json`;
 生成与执行证据:`t04_selective_smoke/`(prompt、LLM 响应、trial、cycle 记录)。
+
+## 留出泛化(零 LLM)
+
+首个从零成功 Adapter 固定重放,未见 seeds 100–109:**10/10 官方成功**
+(单次 21–25 actions),结果未回流。从零稳定性 5/5(采样 seed 1–5)加上
+冒烟共 6/6;易任务的从零产物在未见初始状态上无一次失败。
+证据:`heldout_t04_adapter/`。

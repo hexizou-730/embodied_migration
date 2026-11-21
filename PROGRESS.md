@@ -58,6 +58,11 @@ PickCube 从零 6/6 vs StackCube 从零 1/5 vs StackCube 修复 75/80（93.8%）
 兑现的是已有的接近度"。主消融 75/80 的单一起点条件已在论文 5.2 节明示。
 费用约 $0.04，证据见 `evidence/granularity_ablation_20261121/`（diverse_*）。
 
+2026-11-21 收官：PickCube 首个从零成功 Adapter 留出重放（seeds 100–109，
+零 LLM）**10/10**（21–25 actions），易行留出格补齐；StackCube 修复 Adapter
+为 9/10，历史从零固定 Adapter 为 5/10。生成与修复产物均不过拟合其产生场景，
+差异在失败深度而非泛化。今日全部研究费用约 $0.21。
+
 ## 已完成
 
 1. 建立通用迁移 Harness：读取源程序和目标接口，调用 LLM 生成 Adapter，在

@@ -1,0 +1,85 @@
+{
+  "schema": "heldout_adapter_replay.v1",
+  "adapter": "results/selective_migration/t04_selective_smoke/artifacts/target_adapter.py",
+  "adapter_sha256": "2018ef9620d36bd752bdaf895c6192f2bc1240101f293dea2a6ad2c183e8f2f7",
+  "seeds": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109
+  ],
+  "llm_calls": 0,
+  "code_repairs": 0,
+  "num_success": 10,
+  "num_trials": 10,
+  "success_rate": 1.0,
+  "results": [
+    {
+      "seed": 100,
+      "success": true,
+      "official_success": true,
+      "action_steps": 22
+    },
+    {
+      "seed": 101,
+      "success": true,
+      "official_success": true,
+      "action_steps": 21
+    },
+    {
+      "seed": 102,
+      "success": true,
+      "official_success": true,
+      "action_steps": 23
+    },
+    {
+      "seed": 103,
+      "success": true,
+      "official_success": true,
+      "action_steps": 21
+    },
+    {
+      "seed": 104,
+      "success": true,
+      "official_success": true,
+      "action_steps": 21
+    },
+    {
+      "seed": 105,
+      "success": true,
+      "official_success": true,
+      "action_steps": 23
+    },
+    {
+      "seed": 106,
+      "success": true,
+      "official_success": true,
+      "action_steps": 25
+    },
+    {
+      "seed": 107,
+      "success": true,
+      "official_success": true,
+      "action_steps": 21
+    },
+    {
+      "seed": 108,
+      "success": true,
+      "official_success": true,
+      "action_steps": 22
+    },
+    {
+      "seed": 109,
+      "success": true,
+      "official_success": true,
+      "action_steps": 24
+    }
+  ],
+  "note": "Held-out replay only; never fed back to repair or adapter selection."
+}

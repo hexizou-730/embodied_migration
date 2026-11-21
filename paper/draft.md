@@ -21,7 +21,8 @@ the simulator's official evaluator decides acceptance. On ManiSkill
 StackCube (Panda to xArm6), this loop reaches official success in 75 of 80
 repair runs from a near-miss failure (median one repair cycle), where fresh
 from-scratch generation succeeds once in five runs under the same provider,
-and a repaired adapter held fixed succeeds on 9 of 10 unseen seeds. Repair
+and adapters held fixed succeed on 9 of 10
+(repaired) and 10 of 10 (from-scratch) unseen seeds. Repair
 reliability is failure-depth dependent, and we measure it: repairing a
 final-stage near-miss succeeds in three of three runs, while structurally
 deeper transport failures mostly stay unrepaired within the same budget —
@@ -254,12 +255,14 @@ overhead. The one repair format failure in 40 pairs (a nested helper rejected
 by the structural check before execution) is retained and shown in the
 taxonomy.
 
-### 5.4 Repaired code generalizes
+### 5.4 Both repaired and generated code generalize
 
-The first successful method-repair adapter, held fixed and replayed on
-unseen seeds 100–109 with zero LLM calls: 9/10 official success (the single
-failure is retained), against 5/10 for a historical from-scratch fixed
-adapter. Repair did not overfit the failure scene.
+Held fixed on unseen seeds 100–109 with zero LLM calls: the StackCube repair
+adapter 9/10 official success, and the PickCube from-scratch adapter 10/10
+(21–25 actions per run) — against 5/10 for a historical from-scratch fixed
+adapter. Neither generation nor repair overfit the scene it was produced in;
+the difference between them is the failure-depth profile of Section 5.2, not
+the generalization of the artifact.
 
 ### 5.5 Failure taxonomy
 
