@@ -1,0 +1,81 @@
+{
+  "schema": "selective_migration_study.v1",
+  "study_id": "pick_cube_panda_to_xarm6",
+  "status": "stage_program_pending_source_trace",
+  "research_question": "Does the measured-evidence repair loop remain reliable on a second task with a three-stage program, and does the stage-preserving protocol transfer beyond the StackCube source style?",
+  "manual_evaluation_only": {
+    "expected_stage_order": [
+      "approach",
+      "grasp",
+      "align"
+    ],
+    "expected_entities": {
+      "approach": ["cube"],
+      "grasp": ["cube"],
+      "align": ["cube", "goal_site"]
+    },
+    "note": "Used after extraction for validation, not read by the extractor. The dry AST run on 2026-11-21 produced the same three-stage order; the official replay trace is still required for action attribution."
+  },
+  "stage_semantics": {
+    "approach": {
+      "completion_check": "TCP reaches the source-derived pregrasp pose above the cube",
+      "transferable_relation": "derive a collision-clear pregrasp pose from the cube",
+      "adaptation_obligations": ["replace the Panda planner motion", "check target pregrasp reachability"]
+    },
+    "grasp": {
+      "completion_check": "official is_grasped is true after the gripper closes",
+      "transferable_relation": "close the target gripper around the cube and establish a verified grasp",
+      "adaptation_obligations": [
+        "adapt grasp orientation and TCP offset to the target gripper",
+        "map the target close command",
+        "verify the official grasp state"
+      ]
+    },
+    "align": {
+      "completion_check": "official is_obj_placed is true: the held cube rests at the goal site",
+      "transferable_relation": "transport the grasped cube to the goal site using the source goal-relative geometry",
+      "adaptation_obligations": [
+        "replace the Panda planner motion",
+        "account for the target TCP-to-held-object transform",
+        "preserve the cube-to-goal_site placement geometry"
+      ]
+    }
+  },
+  "stage_semantics_note": "Human-declared completion semantics supplied to prompts per the 2026-11-21 design decision; the extractor stays task-neutral and never reads these fields. Predicate names follow the official PickCube-v1 evaluation observed in the frozen source trial (is_grasped, is_obj_placed, is_robot_static).",
+  "task": {
+    "task_id": "t04_pick_cube",
+    "env_id": "PickCube-v1",
+    "official_success": "env.unwrapped.evaluate()['success']"
+  },
+  "source": {
+    "robot_uid": "panda",
+    "control_mode": "pd_joint_pos",
+    "entrypoint": "run",
+    "program_evidence": "source_programs/frozen/t04_pick_cube.py",
+    "frozen_record": "source_programs/frozen/t04_pick_cube.json",
+    "frozen_validation": "seeds 0-9 at 10/10 official success, frozen 2026-09-18, sha256 237644ade0254f1edf5f4ec8fd035db11287b769a62843b056b688985e9c9406",
+    "stage_trace_seed": 0,
+    "stage_trace_note": "Seed 8 is degenerate in the frozen record (official success after one action); the stage trace deliberately uses seed 0 (70 actions).",
+    "stage_representation": "evidence/t04_pick_cube_pilot_20261121/t04_stage_program.json"
+  },
+  "target": {
+    "robot_uid": "xarm6_robotiq",
+    "control_mode": "pd_ee_delta_pose",
+    "observed_gripper_closed": 0.81,
+    "observed_gripper_open": 0.0,
+    "officially_listed_for_environment": false,
+    "interface_note": "Gripper contract follows the measured StackCube xarm6_robotiq endpoints; PickCube target-interface facts must be confirmed by discover_environment before any paid generation."
+  },
+  "fixed_boundaries": {
+    "environment_implementation": "unchanged",
+    "official_success_signal": "unchanged",
+    "simulator": "unchanged",
+    "target_low_level_controller": "unchanged",
+    "generated_surface": "target task adapter only"
+  },
+  "not_yet_established": [
+    "stage extraction with runtime action attribution on this task",
+    "target interface initialization and reachability on PickCube-v1",
+    "any generated or repaired target adapter for this task"
+  ]
+}
