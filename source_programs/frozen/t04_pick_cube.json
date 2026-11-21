@@ -1,0 +1,195 @@
+{
+  "schema": "frozen_source_program.v2",
+  "task_id": "t04_pick_cube",
+  "env_id": "PickCube-v1",
+  "source_robot": "panda",
+  "control_mode": "pd_joint_pos",
+  "origin": "maniskill_3.0.1_motionplanning_reference",
+  "provenance": {
+    "kind": "existing_candidate",
+    "catalog_origin": "maniskill_3.0.1_motionplanning_reference"
+  },
+  "frozen_at_utc": "2026-09-18T12:34:33.142132+00:00",
+  "candidate_path": "candidates/t04_pick_cube.py",
+  "frozen_path": "frozen/t04_pick_cube.py",
+  "source_sha256": "237644ade0254f1edf5f4ec8fd035db11287b769a62843b056b688985e9c9406",
+  "support_code_sha256": "ba5d913bad9477a3bb8caeaa29342e52148a025861189c4f1e6959e4102594cf",
+  "validated_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "success_rate": 1.0,
+  "max_episode_steps": 1000,
+  "success_authority": "env.unwrapped.evaluate()['success']",
+  "environment_contract_sha256": "e8e8ab0de654544acecd4c347d01ced994d1696693f3b995720da6014cd94cd0",
+  "trials": [
+    {
+      "seed": 0,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 70,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_000.json"
+    },
+    {
+      "seed": 1,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 71,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_001.json"
+    },
+    {
+      "seed": 2,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 46,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_002.json"
+    },
+    {
+      "seed": 3,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 81,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_003.json"
+    },
+    {
+      "seed": 4,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 73,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_004.json"
+    },
+    {
+      "seed": 5,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 81,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_005.json"
+    },
+    {
+      "seed": 6,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 66,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_006.json"
+    },
+    {
+      "seed": 7,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 70,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_007.json"
+    },
+    {
+      "seed": 8,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 1,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_008.json"
+    },
+    {
+      "seed": 9,
+      "success": true,
+      "message": "source actions reached official success",
+      "action_steps": 77,
+      "official_success": true,
+      "terminated": true,
+      "truncated": false,
+      "failure_diagnosis": {
+        "layer": "skill_adapter",
+        "reason": "official_task_outcome_not_reached",
+        "repair_hint": "Compare the runtime snapshot and official evaluation with the intended stage, then change the failed action sequence or geometry.",
+        "message": "source actions reached official success"
+      },
+      "trial_path": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/results/source_preparation/phase4_refresh/tasks/t04_pick_cube/initial_001/full/t04_pick_cube/seed_009.json"
+    }
+  ]
+}

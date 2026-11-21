@@ -32,6 +32,7 @@ from .llm import gen_text
 from .selective_comparison import _semantic_hash
 from .selective_migration import (
     FROZEN_PROGRAM,
+    apply_stage_semantics,
     completed_stages,
     failed_stage,
     generation_settings,
@@ -100,7 +101,7 @@ def run_module_rewrite_repair(
     root = study_path.parents[2]
     study = json.loads(study_path.read_text(encoding="utf-8"))
     stage_path = root / study["source"]["stage_representation"]
-    stage_program = json.loads(stage_path.read_text(encoding="utf-8"))
+    stage_program = apply_stage_semantics(json.loads(stage_path.read_text(encoding="utf-8")), study)
     stage_order = [str(value) for value in stage_program["stage_order"]]
     target = study["target"]
     task = study["task"]
@@ -274,6 +275,7 @@ def run_module_rewrite_repair(
         "failed_candidate_sha256": resume_record["failed_candidate_sha256"],
         "repair_output_format": "complete_module",
         "source_metadata_filter": "extracted_source_facts_only",
+        "stage_semantics_source": stage_program.get("stage_semantics_source"),
         "stage_order": stage_order,
         "locked_stages": sorted(locked_stages),
         "next_repair_stage": repair_stage,

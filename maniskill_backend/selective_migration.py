@@ -289,7 +289,7 @@ def run_selective_migration(
     root = study_path.parents[2]
     study = json.loads(study_path.read_text(encoding="utf-8"))
     stage_path = root / study["source"]["stage_representation"]
-    stage_program = json.loads(stage_path.read_text(encoding="utf-8"))
+    stage_program = apply_stage_semantics(json.loads(stage_path.read_text(encoding="utf-8")), study)
     stage_order = [str(value) for value in stage_program["stage_order"]]
     target = study["target"]
     task = study["task"]
@@ -478,6 +478,7 @@ def run_selective_migration(
         "generation_settings": generation_settings(),
         "repair_output_format": "single_stage_method",
         "source_metadata_filter": "extracted_source_facts_only",
+        "stage_semantics_source": stage_program.get("stage_semantics_source"),
         "source_program_sha256": stage_program.get("source_sha256"),
         "stage_order": stage_order,
         "locked_stages": sorted(locked_stages),
@@ -512,13 +513,20 @@ def _selective_prompt(
     stage_contract = "\n".join(
         f'- "{stage_id}" -> self._stage_{stage_id}' for stage_id in stage_order
     )
-    if incumbent_code and repair_stage:
-        repair_rule = (
-            f"This is a local repair. Change exactly one method: _stage_{repair_stage}. "
-            "Every other method must remain semantically identical; AST hashes are checked."
-        )
-    else:
-        repair_rule = "This is initial generation. Implement all required stage methods."
+    count_word = _stage_count_word(stage_order)
+    literal_calls = "\n".join(
+        f'    if not self._run_stage("{stage_id}", self._stage_{stage_id}): return False'
+        for stage_id in stage_order
+    )
+    entity_phrase = _entity_phrase(stage_program)
+    entity_sentence = (
+        f"Use exact entity names {entity_phrase}."
+        if entity_phrase
+        else "Use exact entity names from the frozen stage program."
+    )
+    entity_calls_line = _entity_calls_line(_entity_names(stage_program))
+    grasp_entity_line = _grasp_entity_line(stage_program)
+    repair_rule = "This is initial generation. Implement all required stage methods."
     return f"""Create the target-side adapter for this fixed selective-migration study.
 
 Experiment:
@@ -533,16 +541,12 @@ Observed target interface and reset state:
 Required stage interface and order:
 {stage_contract}
 
-The public method must contain these five literal calls in exactly this order:
-    if not self._run_stage("approach", self._stage_approach): return False
-    if not self._run_stage("grasp", self._stage_grasp): return False
-    if not self._run_stage("lift", self._stage_lift): return False
-    if not self._run_stage("align", self._stage_align): return False
-    if not self._run_stage("release", self._stage_release): return False
+The public method must contain these {count_word} literal calls in exactly this order:
+{literal_calls}
     return self._official_success()
 
 Each _stage_* method must read measured state, use a bounded loop or branch, execute real actions,
-and return True only when its own stage relation is measured. Use exact entity names cubeA and cubeB.
+and return True only when its own stage relation is measured. {entity_sentence}
 Use the observed 7D pd_ee_delta_pose layout. The inherited _make_action fills translation and the
 last gripper channel while leaving rotation increments zero. Measured finger-pad separation confirms
 gripper_open=0.0 and gripper_close=0.81 for this mode. Keep world-frame object relations and let inherited motion helpers convert world
@@ -561,10 +565,10 @@ class GeneratedSelectiveRobot(ManiSkillDynamicRobot):
                          gripper_open=0.0, gripper_close=0.81,
                          move_steps=30, settle_steps=12, max_delta_m=0.04)
 
-    # Implement exactly the five required _stage_* methods here.
+    # Implement exactly the {count_word} required _stage_* methods here.
 
     def run_source_actions(self) -> bool:
-        # Insert the five literal _run_stage calls shown above, unchanged.
+        # Insert the {count_word} literal _run_stage calls shown above, unchanged.
         ...
 
 def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedSelectiveRobot:
@@ -574,15 +578,15 @@ Use only Python standard-library modules and numpy. Do not import torch, sapien,
 or controller implementations. Do not override _step, _run_stage, _snapshot, _official_evaluation,
 _official_success, _entity_catalog, _robot_root_quat, or _world_delta_to_action_delta. Do not define
 your own environment wrappers or task-success logic. The generated class may define only __init__,
-the five required _stage_* methods, and run_source_actions; do not add helper methods. Inside every
+the {count_word} required _stage_* methods, and run_source_actions; do not add helper methods. Inside every
 stage call documented inherited APIs directly, including self._early_stop() in bounded loops.
 Return the complete module, not a patch.
 
 Runtime measurement values are flat numpy vectors. Read them only through these inherited methods:
-- self._entity_pos("cubeA") and self._entity_pos("cubeB") return flat xyz arrays.
+{entity_calls_line}
 - self._tcp_pos() returns a flat TCP xyz array.
 - self._official_evaluation() returns the official task booleans.
-- self._is_grasping_entity("cubeA") returns the target grasp detector.
+{grasp_entity_line}
 - self._move_towards(world_target, gripper=value, steps=count) moves toward a world-frame xyz target.
 - self._repeat_action(delta_xyz, gripper=value, steps=count) repeats one normalized translation/gripper command.
 Do not call _entity_catalog() and do not subscript Actor objects. The JSON target observation above is
@@ -677,6 +681,77 @@ establish the object's pose. Return True only after measuring this stage's compl
 Latest validation error: {latest_error}
 Return only the replacement function.
 """
+
+
+_STAGE_SEMANTIC_KEYS = ("completion_check", "transferable_relation", "adaptation_obligations", "preserve")
+_STAGE_COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def apply_stage_semantics(stage_program: Mapping[str, Any], study: Mapping[str, Any]) -> dict[str, Any]:
+    """Overlay study-declared stage semantics onto the extracted program.
+
+    The extractor stays task-neutral and never reads these fields. A task's
+    study config may declare human-supplied completion semantics that replace
+    the generic template text in generation prompts. Studies without a
+    stage_semantics section keep byte-identical prompts and records.
+    """
+
+    semantics = study.get("stage_semantics") or {}
+    if not semantics:
+        return dict(stage_program)
+    stages = stage_program.get("stages") or []
+    unknown = sorted(set(semantics) - {str(stage.get("stage_id")) for stage in stages})
+    if unknown:
+        raise ValueError(f"stage_semantics declares unknown stages: {', '.join(unknown)}")
+    program = json.loads(json.dumps(stage_program))
+    for stage in program["stages"]:
+        override = semantics.get(stage["stage_id"]) or {}
+        for key in _STAGE_SEMANTIC_KEYS:
+            if key in override:
+                stage[key] = override[key]
+    program["stage_semantics_source"] = "study_config_declared"
+    return program
+
+
+def _stage_count_word(stage_order: Sequence[str]) -> str:
+    return _STAGE_COUNT_WORDS.get(len(stage_order), str(len(stage_order)))
+
+
+def _entity_names(stage_program: Mapping[str, Any]) -> list[str]:
+    names: list[str] = []
+    for stage in stage_program.get("stages") or []:
+        for name in stage.get("entities") or []:
+            if name not in names:
+                names.append(str(name))
+    return names
+
+
+def _entity_phrase(stage_program: Mapping[str, Any]) -> str:
+    names = _entity_names(stage_program)
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _entity_calls_line(names: Sequence[str]) -> str:
+    if not names:
+        return "- self._entity_pos(name) returns a flat xyz array."
+    if len(names) == 1:
+        return f'- self._entity_pos("{names[0]}") returns a flat xyz array.'
+    calls = [f'self._entity_pos("{name}")' for name in names]
+    return "- " + " and ".join(calls) + " return flat xyz arrays."
+
+
+def _grasp_entity_line(stage_program: Mapping[str, Any]) -> str:
+    for stage in stage_program.get("stages") or []:
+        if "grasp" in str(stage.get("stage_id", "")) and stage.get("entities"):
+            return f'- self._is_grasping_entity("{stage["entities"][0]}") returns the target grasp detector.'
+    names = _entity_names(stage_program)
+    if names:
+        return f'- self._is_grasping_entity("{names[0]}") returns the target grasp detector.'
+    return "- self._is_grasping_entity(name) returns the target grasp detector."
 
 
 def _compact_observation(value: Mapping[str, Any]) -> dict[str, Any]:
