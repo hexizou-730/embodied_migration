@@ -77,6 +77,7 @@ Harness 中执行 294 个动作，返回成功，且 ManiSkill 官方 `success=T
 | `selective.py` | StackCube 五阶段生成与单方法修复；可重放已有候选后续修 |
 | `phase4.py` | StackCube 三方法从零生成对照、独立重复和自动汇总 |
 | `ablation.py` | 同一失败候选下，单方法修复与整体重写的成对消融，只隔离修复粒度 |
+| `analyze_ablation.py` | 离线重算消融原始证据并输出配对统计（Wilson 区间、符号检验、bootstrap CI） |
 
 单文件迁移，不需要在任务目录中注册：
 
