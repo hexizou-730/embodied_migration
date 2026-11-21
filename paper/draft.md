@@ -114,7 +114,7 @@ and our evaluation criterion is the simulator's own success predicate rather
 than task-level proxies.
 
 **LLM code generation for robots.** Code-as-policies lines of work
-\cite{codeaspolicies,progprompt,lmp} generate robot programs from language;
+\cite{codeaspolicies,progprompt} generate robot programs from language;
 open-ended explorers \cite{voyager} accumulate skills with self-verification.
 These loops rarely close on a physical official evaluator with per-action
 attribution; our failures are grounded in measured stage-boundary states and
@@ -122,7 +122,7 @@ official booleans, which is precisely what makes a bounded repair loop
 trustworthy.
 
 **Automated program repair and self-debugging.** LLM self-repair
-\cite{selfdebug,sweagent-line} fixes code against tests. Our setting differs
+\cite{selfdebug,sweagent} fixes code against tests. Our setting differs
 in two ways: the "test" is a physical simulation whose failure layers
 (interface assumption, false stage completion, contact, budget) need
 diagnosis, and the repair scope is constrained and verified structurally
@@ -263,5 +263,37 @@ class; the numbers are effects and intervals, not universals.
 ## 7 Conclusion
 
 Measured feedback and source-grounded localization — not output scope — make
-LLLM robot-code repair reliable across embodiments, at cents per task, with
+LLM robot-code repair reliable across embodiments, at cents per task, with
 evidence that survives recomputation.
+
+## References
+
+(draft entries; verify venues and years against the camera-ready target
+before submission)
+
+- \cite{codeaspolicies} J. Liang, W. Huang, F. Xia, P. Xu, K. Hausman,
+  B. Ichter, P. Florence, A. Zeng. "Code as Policies: Typed Procedure Call
+  Representations for Language Model Programs." ICRA 2023.
+- \cite{progprompt} J. Singh, V. Blukis, A. Mousavian, A. Garg, D. Xu,
+  E. Toshev, S. Song. "ProgPrompt: Generating Situated Robot Task Plans using
+  Environment-Aware Large Language Models." CoRL 2022.
+- \cite{voyager} G. Wang, Y. Xie, Y. Jiang, A. Mandlekar, C. Fan, Y. Zhu,
+  L. Fan, A. Anandkumar. "Voyager: An Open-Ended Embodied Agent with Large
+  Language Models." arXiv:2305.16225, 2023.
+- \cite{octo} Octo Model Team (D. Ghosh et al.). "Octo: An Open-Source
+  Generalist Robot Policy." RSS 2024.
+- \cite{rtx} Open X-Embodiment Collaboration. "RT-X: Open Robotics Datasets
+  for Large-Scale Cross-Embodiment Robot Learning." arXiv:2310.08899, 2023.
+- \cite{crossformer} N. Doshi et al. "Cross-Embodiment Transfer with
+  CrossFormer." RSS 2024.
+- \cite{selfdebug} X. Chen, M. Lin, N. Schärli, D. Zhou. "Teaching Large
+  Language Models to Self-Debug." ICLR 2024.
+- \cite{sweagent} J. Yang, C. E. Jimenez, A. Wettig, K. Lieret, S. Yao,
+  K. Narasimhan, O. Press. "SWE-agent: Agent-Computer Interfaces Enable
+  Software Engineering." NeurIPS 2024.
+- \cite{maniskill3} S. Tao et al. "ManiSkill3: GPU Parallelized Robotics
+  Simulation and Rendering for Large-Scale Embodied AI." NeurIPS Datasets and
+  Benchmarks, 2024.
+- \cite{sapien} F. Xiang, Y. Qin, K. Mo, Y. Xia, H. Zhu, F. Liu, M. Liu,
+  H. Jiang, B. Yuan, H. S. Fang, D. Xu, C. Gan. "SAPIEN: A SimulAted
+  Part-based Interactive ENvironment." CVPR 2020.
