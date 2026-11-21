@@ -33,6 +33,11 @@ n=30 确认运行：两臂均 28/30，discordant 对称 1/1，符号检验 p=1.0
 零成本就绪：seed 0 重放官方成功且 70/70 动作归入 approach/grasp/align 三阶段，
 stages.py 校验 valid=True，见 `evidence/t04_pick_cube_pilot_20261121/`。
 
+2026-11-21 再追加：通用化三阶段管线在 t04 上端到端首次真实运行即官方成功——
+从零生成 1 轮、24 actions、8,158 tokens（约 $0.002），prompt 通过字节级泛化
+检查，study 声明的 stage_semantics 正常注入。此为单次冒烟，不构成 t04 从零
+成功率结论；t04 与 StackCube 的难度差异保留为论文分层叙事素材。
+
 ## 已完成
 
 1. 建立通用迁移 Harness：读取源程序和目标接口，调用 LLM 生成 Adapter，在

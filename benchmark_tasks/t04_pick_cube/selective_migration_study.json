@@ -1,7 +1,7 @@
 {
   "schema": "selective_migration_study.v1",
   "study_id": "pick_cube_panda_to_xarm6",
-  "status": "stage_program_pending_source_trace",
+  "status": "source_stage_program_valid_first_generation_success",
   "research_question": "Does the measured-evidence repair loop remain reliable on a second task with a three-stage program, and does the stage-preserving protocol transfer beyond the StackCube source style?",
   "manual_evaluation_only": {
     "expected_stage_order": [

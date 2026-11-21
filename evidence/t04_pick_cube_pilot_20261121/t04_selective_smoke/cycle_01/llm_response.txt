@@ -1,0 +1,87 @@
+```python
+from typing import Any
+import numpy as np
+from maniskill_backend.dynamic_adapter import ManiSkillDynamicRobot
+
+
+class GeneratedSelectiveRobot(ManiSkillDynamicRobot):
+    def __init__(self, env: Any, *, control_mode: str, robot_uid: str) -> None:
+        super().__init__(env, control_mode=control_mode, robot_uid=robot_uid,
+                         gripper_open=0.0, gripper_close=0.81,
+                         move_steps=30, settle_steps=12, max_delta_m=0.04)
+
+    def _stage_approach(self) -> bool:
+        cube_pos = np.asarray(self._entity_pos("cube"), dtype=np.float32).reshape(-1)[:3]
+        tcp_pos = np.asarray(self._tcp_pos(), dtype=np.float32).reshape(-1)[:3]
+        pregrasp = cube_pos + np.array([0.0, 0.0, 0.10], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(pregrasp, gripper=0.0, steps=30)
+            tcp_pos = np.asarray(self._tcp_pos(), dtype=np.float32).reshape(-1)[:3]
+            if float(np.linalg.norm(tcp_pos - pregrasp)) <= 0.02:
+                break
+        tcp_pos = np.asarray(self._tcp_pos(), dtype=np.float32).reshape(-1)[:3]
+        cube_pos = np.asarray(self._entity_pos("cube"), dtype=np.float32).reshape(-1)[:3]
+        above = tcp_pos[2] - cube_pos[2]
+        lateral = float(np.linalg.norm(tcp_pos[:2] - cube_pos[:2]))
+        return bool(above >= 0.03 and lateral <= 0.06)
+
+    def _stage_grasp(self) -> bool:
+        cube_pos = np.asarray(self._entity_pos("cube"), dtype=np.float32).reshape(-1)[:3]
+        grasp_target = cube_pos + np.array([0.0, 0.0, 0.005], dtype=np.float32)
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._move_towards(grasp_target, gripper=0.0, steps=30)
+            tcp_pos = np.asarray(self._tcp_pos(), dtype=np.float32).reshape(-1)[:3]
+            if float(np.linalg.norm(tcp_pos - grasp_target)) <= 0.015:
+                break
+        if self._early_stop():
+            return False
+        self._repeat_action(np.zeros(3, dtype=np.float32), gripper=0.81, steps=12)
+        for _ in range(4):
+            if self._early_stop():
+                return False
+            if self._is_grasping_entity("cube"):
+                break
+            self._repeat_action(np.zeros(3, dtype=np.float32), gripper=0.81, steps=8)
+        return bool(self._is_grasping_entity("cube"))
+
+    def _stage_align(self) -> bool:
+        goal_pos = np.asarray(self._entity_pos("goal_site"), dtype=np.float32).reshape(-1)[:3]
+        cube_pos = np.asarray(self._entity_pos("cube"), dtype=np.float32).reshape(-1)[:3]
+        tcp_pos = np.asarray(self._tcp_pos(), dtype=np.float32).reshape(-1)[:3]
+        offset = tcp_pos - cube_pos
+        target = goal_pos + offset
+        for _ in range(10):
+            if self._early_stop():
+                return False
+            self._move_towards(target, gripper=0.81, steps=30)
+            cube_pos = np.asarray(self._entity_pos("cube"), dtype=np.float32).reshape(-1)[:3]
+            goal_pos = np.asarray(self._entity_pos("goal_site"), dtype=np.float32).reshape(-1)[:3]
+            tcp_pos = np.asarray(self._tcp_pos(), dtype=np.float32).reshape(-1)[:3]
+            offset = tcp_pos - cube_pos
+            target = goal_pos + offset
+            if float(np.linalg.norm(cube_pos - goal_pos)) <= 0.02:
+                break
+        for _ in range(4):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32), gripper=0.81, steps=12)
+            if self._official_evaluation().get("is_obj_placed", False):
+                break
+        cube_pos = np.asarray(self._entity_pos("cube"), dtype=np.float32).reshape(-1)[:3]
+        goal_pos = np.asarray(self._entity_pos("goal_site"), dtype=np.float32).reshape(-1)[:3]
+        return bool(float(np.linalg.norm(cube_pos - goal_pos)) <= 0.025)
+
+    def run_source_actions(self) -> bool:
+        if not self._run_stage("approach", self._stage_approach): return False
+        if not self._run_stage("grasp", self._stage_grasp): return False
+        if not self._run_stage("align", self._stage_align): return False
+        return self._official_success()
+
+
+def build_robot(env: Any, *, control_mode: str, robot_uid: str) -> GeneratedSelectiveRobot:
+    return GeneratedSelectiveRobot(env, control_mode=control_mode, robot_uid=robot_uid)
+```
