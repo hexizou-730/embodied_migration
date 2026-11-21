@@ -1,0 +1,238 @@
+{
+  "schema": "selective_migration_result.v1",
+  "status": "target_budget_exhausted",
+  "success": false,
+  "study": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/benchmark_tasks/t07_stack_cube/selective_migration_study.json",
+  "spec": {
+    "env_id": "StackCube-v1",
+    "task_label": "t07_stack_cube",
+    "source_robot": "panda",
+    "target_robot": "xarm6_robotiq",
+    "source_control_mode": "pd_joint_pos",
+    "target_control_mode": "pd_ee_delta_pose",
+    "seed": 0,
+    "max_episode_steps": 1000,
+    "max_source_cycles": 2,
+    "max_target_cycles": 3,
+    "obs_mode": "state",
+    "sim_backend": "auto",
+    "render_backend": "gpu"
+  },
+  "runtime_contract": {
+    "gripper_open": 0.0,
+    "gripper_close": 0.81
+  },
+  "generation_settings": {
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "temperature": 0.0,
+    "sampling_seed": 3,
+    "max_tokens": 6000,
+    "reasoning_effort": null,
+    "request_timeout_seconds": 180.0,
+    "request_max_retries": 0
+  },
+  "repair_output_format": "single_stage_method",
+  "source_metadata_filter": "extracted_source_facts_only",
+  "stage_semantics_source": null,
+  "source_program_sha256": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895",
+  "stage_order": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "locked_stages": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "next_repair_stage": "align",
+  "incumbent_method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "3bd4064a9927002c5f3b75ab09ed489e745b3b079d8572198fd71e25ac64e992",
+    "_stage_grasp": "22344d372ddcc83fe408ecf4ca6ee71b59cab7ad45f60ce4b4688673dd9dc72f",
+    "_stage_lift": "280a4948ad9e8fd87c3026d465a3d7f5a1ab3618176624915e7c4986dc13e992",
+    "_stage_align": "9dfd9743a79e4597947d913c8d53c69cecc36e1c67bbd2d5fdb594639bce8649",
+    "_stage_release": "cafc2bb15caa0f31d78c3ae53fd918b6915e9857d2c2c564817b91e6f92337f5",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "model": "deepseek-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 588,
+        "prompt_tokens": 3627,
+        "total_tokens": 4215,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 3456
+        },
+        "prompt_cache_hit_tokens": 3456,
+        "prompt_cache_miss_tokens": 171
+      },
+      "allowed_stage": "align",
+      "generation_unit": "stage_method",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": true,
+      "adapter": "results/selective_migration/diverse_s3_r3/cycle_01/target_adapter.py",
+      "method_hashes": {
+        "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+        "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+        "_stage_approach": "3bd4064a9927002c5f3b75ab09ed489e745b3b079d8572198fd71e25ac64e992",
+        "_stage_grasp": "22344d372ddcc83fe408ecf4ca6ee71b59cab7ad45f60ce4b4688673dd9dc72f",
+        "_stage_lift": "280a4948ad9e8fd87c3026d465a3d7f5a1ab3618176624915e7c4986dc13e992",
+        "_stage_align": "7708e0b1cf305c880f8217cded1c3b02f23ae227379f29ad64aa6da24a0df464",
+        "_stage_release": "cafc2bb15caa0f31d78c3ae53fd918b6915e9857d2c2c564817b91e6f92337f5",
+        "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+      },
+      "trial_result": "results/selective_migration/diverse_s3_r3/cycle_01/trial_result.json",
+      "success": false,
+      "action_steps": 820,
+      "failed_stage": "align",
+      "repair_localization": {
+        "runtime_failed_stage": "align",
+        "repair_stage": "align",
+        "reason": "runtime_failed_stage"
+      },
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "message": "task program returned failure"
+    },
+    {
+      "cycle": 2,
+      "model": "deepseek-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 723,
+        "prompt_tokens": 3764,
+        "total_tokens": 4487,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 3584
+        },
+        "prompt_cache_hit_tokens": 3584,
+        "prompt_cache_miss_tokens": 180
+      },
+      "allowed_stage": "align",
+      "generation_unit": "stage_method",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": true,
+      "adapter": "results/selective_migration/diverse_s3_r3/cycle_02/target_adapter.py",
+      "method_hashes": {
+        "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+        "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+        "_stage_approach": "3bd4064a9927002c5f3b75ab09ed489e745b3b079d8572198fd71e25ac64e992",
+        "_stage_grasp": "22344d372ddcc83fe408ecf4ca6ee71b59cab7ad45f60ce4b4688673dd9dc72f",
+        "_stage_lift": "280a4948ad9e8fd87c3026d465a3d7f5a1ab3618176624915e7c4986dc13e992",
+        "_stage_align": "c1243db619db0bfcbe02d5653c8e37f436fc539e073ab8be5f2d9c272c0b3bc0",
+        "_stage_release": "cafc2bb15caa0f31d78c3ae53fd918b6915e9857d2c2c564817b91e6f92337f5",
+        "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+      },
+      "trial_result": "results/selective_migration/diverse_s3_r3/cycle_02/trial_result.json",
+      "success": false,
+      "action_steps": 29,
+      "failed_stage": "align",
+      "repair_localization": {
+        "runtime_failed_stage": "align",
+        "repair_stage": "align",
+        "reason": "runtime_failed_stage"
+      },
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "message": "maniskill_backend.dynamic_harness._NoActionProgress: Generated adapter loop made no simulator progress: action_steps stayed at 29 for 412 generated-code lines. Every loop iteration must execute self._step(action) or break/return."
+    },
+    {
+      "cycle": 3,
+      "model": "deepseek-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 695,
+        "prompt_tokens": 4150,
+        "total_tokens": 4845,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 1664
+        },
+        "prompt_cache_hit_tokens": 1664,
+        "prompt_cache_miss_tokens": 2486
+      },
+      "allowed_stage": "align",
+      "generation_unit": "stage_method",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": true,
+      "adapter": "results/selective_migration/diverse_s3_r3/cycle_03/target_adapter.py",
+      "method_hashes": {
+        "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+        "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+        "_stage_approach": "3bd4064a9927002c5f3b75ab09ed489e745b3b079d8572198fd71e25ac64e992",
+        "_stage_grasp": "22344d372ddcc83fe408ecf4ca6ee71b59cab7ad45f60ce4b4688673dd9dc72f",
+        "_stage_lift": "280a4948ad9e8fd87c3026d465a3d7f5a1ab3618176624915e7c4986dc13e992",
+        "_stage_align": "9dfd9743a79e4597947d913c8d53c69cecc36e1c67bbd2d5fdb594639bce8649",
+        "_stage_release": "cafc2bb15caa0f31d78c3ae53fd918b6915e9857d2c2c564817b91e6f92337f5",
+        "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+      },
+      "trial_result": "results/selective_migration/diverse_s3_r3/cycle_03/trial_result.json",
+      "success": false,
+      "action_steps": 29,
+      "failed_stage": "align",
+      "repair_localization": {
+        "runtime_failed_stage": "align",
+        "repair_stage": "align",
+        "reason": "runtime_failed_stage"
+      },
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "message": "maniskill_backend.dynamic_harness._NoActionProgress: Generated adapter loop made no simulator progress: action_steps stayed at 29 for 313 generated-code lines. Every loop iteration must execute self._step(action) or break/return."
+    }
+  ],
+  "resume_replay": {
+    "adapter": "results/selective_migration/stackcube_scratch_s3/artifacts/target_adapter.py",
+    "method_hashes": {
+      "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+      "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+      "_stage_approach": "3bd4064a9927002c5f3b75ab09ed489e745b3b079d8572198fd71e25ac64e992",
+      "_stage_grasp": "22344d372ddcc83fe408ecf4ca6ee71b59cab7ad45f60ce4b4688673dd9dc72f",
+      "_stage_lift": "280a4948ad9e8fd87c3026d465a3d7f5a1ab3618176624915e7c4986dc13e992",
+      "_stage_align": "a58ecbd101152b3e020fd13ec878ccb6a9b30de57fa4ce01f206df4543c3201d",
+      "_stage_release": "cafc2bb15caa0f31d78c3ae53fd918b6915e9857d2c2c564817b91e6f92337f5",
+      "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+    },
+    "success": false,
+    "action_steps": 388,
+    "repair_localization": {
+      "runtime_failed_stage": "align",
+      "repair_stage": "align",
+      "reason": "runtime_failed_stage"
+    }
+  },
+  "target_adapter": "results/selective_migration/diverse_s3_r3/artifacts/target_adapter.py"
+}

@@ -1,0 +1,46 @@
+def _stage_align(self) -> bool:
+    cubeB = self._entity_pos("cubeB")
+    cubeA = self._entity_pos("cubeA")
+    tcp = self._tcp_pos()
+    # Preserve the source object-relative stack geometry: cubeA center should
+    # sit one cube height above cubeB center, with xy centered on cubeB.
+    cube_h = 0.04
+    desired_cubeA = np.array([cubeB[0], cubeB[1], cubeB[2] + cube_h], dtype=np.float32)
+    # Account for the target TCP-to-held-object transform by measuring the
+    # current offset and commanding the TCP to desired_cubeA - offset.
+    offset = cubeA - tcp
+    target_tcp = desired_cubeA - offset
+    for _ in range(18):
+        if self._early_stop():
+            return False
+        if not self._is_grasping_entity("cubeA"):
+            return False
+        cubeA_now = self._entity_pos("cubeA")
+        tcp_now = self._tcp_pos()
+        offset_now = cubeA_now - tcp_now
+        target_now = desired_cubeA - offset_now
+        err = target_now - tcp_now
+        if float(np.linalg.norm(err)) <= 0.008:
+            break
+        self._move_towards(target_now, gripper=self.gripper_close, steps=self.move_steps)
+    # Fine correction using measured object error directly, bounded.
+    for _ in range(8):
+        if self._early_stop():
+            return False
+        if not self._is_grasping_entity("cubeA"):
+            return False
+        cubeA_now = self._entity_pos("cubeA")
+        tcp_now = self._tcp_pos()
+        obj_err = desired_cubeA - cubeA_now
+        if float(np.linalg.norm(obj_err)) <= 0.005:
+            break
+        self._move_towards(tcp_now + obj_err, gripper=self.gripper_close, steps=self.move_steps)
+    cubeA_now = self._entity_pos("cubeA")
+    cubeB_now = self._entity_pos("cubeB")
+    xy_err = float(np.linalg.norm(cubeA_now[:2] - cubeB_now[:2]))
+    z_err = float(abs((cubeA_now[2] - cubeB_now[2]) - cube_h))
+    return bool(
+        self._is_grasping_entity("cubeA")
+        and xy_err <= 0.012
+        and z_err <= 0.012
+    )

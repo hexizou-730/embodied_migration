@@ -1,0 +1,51 @@
+{
+  "cycle": 2,
+  "model": "deepseek-flash",
+  "used_llm": true,
+  "usage": {
+    "completion_tokens": 607,
+    "prompt_tokens": 3803,
+    "total_tokens": 4410,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 1664
+    },
+    "prompt_cache_hit_tokens": 1664,
+    "prompt_cache_miss_tokens": 2139
+  },
+  "allowed_stage": "align",
+  "generation_unit": "stage_method",
+  "locked_stages_before": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "valid": true,
+  "adapter": "results/selective_migration/diverse_s5_r3/cycle_02/target_adapter.py",
+  "method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "a32ec145d252c9f7d6a987c8fd936fcdb75915dbacc420943e73e666d380ce0c",
+    "_stage_grasp": "e06aff4deefcaad3b643b3fc8ef4e946a5f4d47285e75af864fcf7bf209e15bd",
+    "_stage_lift": "8d0b2d769062d05bb45aed68b075b314cbbfa38b9d2fba4416acf96df4d7a00d",
+    "_stage_align": "3cd9e59d56a49c59fecf33083e0c3756ae8a043c1cfb90b6c380eed93be1cdb5",
+    "_stage_release": "6250d372ad226663489be369c9a478bd3744e401f36a7736d2d6dcafd8a04584",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "trial_result": "results/selective_migration/diverse_s5_r3/cycle_02/trial_result.json",
+  "success": false,
+  "action_steps": 28,
+  "failed_stage": "align",
+  "repair_localization": {
+    "runtime_failed_stage": "align",
+    "repair_stage": "align",
+    "reason": "runtime_failed_stage"
+  },
+  "completed_stages": [
+    "approach",
+    "grasp",
+    "lift"
+  ],
+  "message": "maniskill_backend.dynamic_harness._NoActionProgress: Generated adapter loop made no simulator progress: action_steps stayed at 28 for 467 generated-code lines. Every loop iteration must execute self._step(action) or break/return."
+}

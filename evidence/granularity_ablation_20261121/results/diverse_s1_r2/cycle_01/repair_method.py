@@ -1,0 +1,72 @@
+def _stage_release(self) -> bool:
+    # Open the gripper in place and let the cube settle onto cubeB.
+    for _ in range(10):
+        if self._early_stop():
+            return False
+        self._repeat_action(np.zeros(3, dtype=np.float32),
+                            gripper=self.gripper_open, steps=self.settle_steps)
+        ev = self._official_evaluation()
+        if bool(ev.get("success", False)):
+            return True
+        if (not bool(ev.get("is_cubeA_grasped", True))
+                and bool(ev.get("is_cubeA_static", False))
+                and bool(ev.get("is_cubeA_on_cubeB", False))):
+            return True
+
+    # If the cube is not on cubeB, re-grasp it and place it directly above cubeB.
+    for _ in range(6):
+        if self._early_stop():
+            return False
+        ev = self._official_evaluation()
+        if bool(ev.get("success", False)):
+            return True
+
+        pos_a = self._entity_pos("cubeA")
+        pos_b = self._entity_pos("cubeB")
+
+        if not bool(ev.get("is_cubeA_grasped", False)):
+            # Move above cubeA and close the gripper to pick it up.
+            above_a = np.array([pos_a[0], pos_a[1], pos_a[2] + 0.08], dtype=np.float32)
+            self._move_towards(above_a, gripper=self.gripper_open, steps=self.move_steps)
+            if self._early_stop():
+                return False
+            self._move_towards(pos_a, gripper=self.gripper_open, steps=self.move_steps)
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_close, steps=self.settle_steps)
+            if self._early_stop():
+                return False
+            self._move_towards(above_a, gripper=self.gripper_close, steps=self.move_steps)
+            if self._early_stop():
+                return False
+
+        # Carry cubeA over cubeB and lower it to the stacking height.
+        pos_a = self._entity_pos("cubeA")
+        pos_b = self._entity_pos("cubeB")
+        drop_z = pos_b[2] + 0.04
+        over_b = np.array([pos_b[0], pos_b[1], drop_z + 0.08], dtype=np.float32)
+        self._move_towards(over_b, gripper=self.gripper_close, steps=self.move_steps)
+        if self._early_stop():
+            return False
+        drop_target = np.array([pos_b[0], pos_b[1], drop_z], dtype=np.float32)
+        self._move_towards(drop_target, gripper=self.gripper_close, steps=self.move_steps)
+        if self._early_stop():
+            return False
+
+        # Release and settle.
+        for _ in range(6):
+            if self._early_stop():
+                return False
+            self._repeat_action(np.zeros(3, dtype=np.float32),
+                                gripper=self.gripper_open, steps=self.settle_steps)
+            ev = self._official_evaluation()
+            if bool(ev.get("success", False)):
+                return True
+            if (not bool(ev.get("is_cubeA_grasped", True))
+                    and bool(ev.get("is_cubeA_static", False))
+                    and bool(ev.get("is_cubeA_on_cubeB", False))):
+                return True
+
+    ev = self._official_evaluation()
+    return bool(ev.get("success", False))

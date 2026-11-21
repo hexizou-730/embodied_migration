@@ -1,0 +1,140 @@
+{
+  "schema": "selective_migration_result.v1",
+  "status": "success",
+  "success": true,
+  "study": "/users/eleves-b/2025/hexi.zou/Embodied/embodied_migration/benchmark_tasks/t07_stack_cube/selective_migration_study.json",
+  "spec": {
+    "env_id": "StackCube-v1",
+    "task_label": "t07_stack_cube",
+    "source_robot": "panda",
+    "target_robot": "xarm6_robotiq",
+    "source_control_mode": "pd_joint_pos",
+    "target_control_mode": "pd_ee_delta_pose",
+    "seed": 0,
+    "max_episode_steps": 1000,
+    "max_source_cycles": 2,
+    "max_target_cycles": 3,
+    "obs_mode": "state",
+    "sim_backend": "auto",
+    "render_backend": "gpu"
+  },
+  "runtime_contract": {
+    "gripper_open": 0.0,
+    "gripper_close": 0.81
+  },
+  "generation_settings": {
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "temperature": 0.0,
+    "sampling_seed": 2,
+    "max_tokens": 6000,
+    "reasoning_effort": null,
+    "request_timeout_seconds": 180.0,
+    "request_max_retries": 0
+  },
+  "repair_output_format": "single_stage_method",
+  "source_metadata_filter": "extracted_source_facts_only",
+  "stage_semantics_source": null,
+  "source_program_sha256": "96dbbe764ab5fd25fc2c83b179eeef72eed4f58472b9b634b26e43f0f339e895",
+  "stage_order": [
+    "approach",
+    "grasp",
+    "lift",
+    "align",
+    "release"
+  ],
+  "locked_stages": [
+    "align",
+    "approach",
+    "grasp",
+    "lift",
+    "release"
+  ],
+  "next_repair_stage": null,
+  "incumbent_method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "428c49a145770696559bd03857eed91ddde4393bafa4010c6cc96be889a5dadd",
+    "_stage_grasp": "9704ad66cb82b9ade661580874e279534576b1ce4c9ac199b070676145f76a58",
+    "_stage_lift": "9a46a7dd7ee9d5ff3eae952ecadb9c4b501b87e9d97aa4d46028ca256ddffb51",
+    "_stage_align": "329bbe6acdac4d369650a63c2cf24cf8bd5a4bd35988b769e7d83d60ccf45ab4",
+    "_stage_release": "c69469211f34748a72940437921025fe8bee2ef40565dd3fbd53e5ab4fc9143a",
+    "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "model": "deepseek-flash",
+      "used_llm": true,
+      "usage": {
+        "completion_tokens": 654,
+        "prompt_tokens": 3701,
+        "total_tokens": 4355,
+        "completion_tokens_details": null,
+        "prompt_tokens_details": {
+          "audio_tokens": null,
+          "cached_tokens": 3456
+        },
+        "prompt_cache_hit_tokens": 3456,
+        "prompt_cache_miss_tokens": 245
+      },
+      "allowed_stage": "align",
+      "generation_unit": "stage_method",
+      "locked_stages_before": [
+        "approach",
+        "grasp",
+        "lift"
+      ],
+      "valid": true,
+      "adapter": "results/selective_migration/diverse_s4_r2/cycle_01/target_adapter.py",
+      "method_hashes": {
+        "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+        "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+        "_stage_approach": "428c49a145770696559bd03857eed91ddde4393bafa4010c6cc96be889a5dadd",
+        "_stage_grasp": "9704ad66cb82b9ade661580874e279534576b1ce4c9ac199b070676145f76a58",
+        "_stage_lift": "9a46a7dd7ee9d5ff3eae952ecadb9c4b501b87e9d97aa4d46028ca256ddffb51",
+        "_stage_align": "329bbe6acdac4d369650a63c2cf24cf8bd5a4bd35988b769e7d83d60ccf45ab4",
+        "_stage_release": "c69469211f34748a72940437921025fe8bee2ef40565dd3fbd53e5ab4fc9143a",
+        "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+      },
+      "trial_result": "results/selective_migration/diverse_s4_r2/cycle_01/trial_result.json",
+      "success": true,
+      "action_steps": 31,
+      "failed_stage": null,
+      "repair_localization": {
+        "runtime_failed_stage": null,
+        "repair_stage": null,
+        "reason": "official_success"
+      },
+      "completed_stages": [
+        "approach",
+        "grasp",
+        "lift",
+        "align",
+        "release"
+      ],
+      "message": "adapter returned success and official evaluate() returned success"
+    }
+  ],
+  "resume_replay": {
+    "adapter": "results/selective_migration/stackcube_scratch_s4/artifacts/target_adapter.py",
+    "method_hashes": {
+      "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+      "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+      "_stage_approach": "428c49a145770696559bd03857eed91ddde4393bafa4010c6cc96be889a5dadd",
+      "_stage_grasp": "9704ad66cb82b9ade661580874e279534576b1ce4c9ac199b070676145f76a58",
+      "_stage_lift": "9a46a7dd7ee9d5ff3eae952ecadb9c4b501b87e9d97aa4d46028ca256ddffb51",
+      "_stage_align": "7d4895aca181ee2d2879f8f1a58dc725380e9474ffc2cbd86bd74cb1acc2df46",
+      "_stage_release": "c69469211f34748a72940437921025fe8bee2ef40565dd3fbd53e5ab4fc9143a",
+      "run_source_actions": "a68321c91db0c766a3c065d1bfcbe686646470fa1159900fff121301e4703916"
+    },
+    "success": false,
+    "action_steps": 28,
+    "repair_localization": {
+      "runtime_failed_stage": "align",
+      "repair_stage": "align",
+      "reason": "runtime_failed_stage"
+    }
+  },
+  "target_adapter": "results/selective_migration/diverse_s4_r2/artifacts/target_adapter.py"
+}

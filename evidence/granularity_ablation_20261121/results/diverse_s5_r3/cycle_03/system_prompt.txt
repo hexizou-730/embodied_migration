@@ -1,0 +1,1 @@
+Repair one ManiSkill policy method. Return only def _stage_align(self) -> bool, with no class, imports, explanations, or other methods. Read measured state and execute bounded actions.

@@ -19,9 +19,14 @@ whose measured end state contradicts an official predicate that the source run
 had made true; an LLM rewrites only that stage under a structural contract, and
 the simulator's official evaluator decides acceptance. On ManiSkill
 StackCube (Panda to xArm6), this loop reaches official success in 75 of 80
-repair runs (median one cycle) while fresh from-scratch generation succeeds
-once in five runs under the same provider, and a repaired adapter held fixed
-succeeds on 9 of 10 unseen seeds. A pre-registered paired ablation over 40
+repair runs from a near-miss failure (median one repair cycle), where fresh
+from-scratch generation succeeds once in five runs under the same provider,
+and a repaired adapter held fixed succeeds on 9 of 10 unseen seeds. Repair
+reliability is failure-depth dependent, and we measure it: repairing a
+final-stage near-miss succeeds in three of three runs, while structurally
+deeper transport failures mostly stay unrepaired within the same budget —
+tracing the real difficulty to the align geometry, never to diagnosis, which
+localizes correctly in every run. A pre-registered paired ablation over 40
 repair runs shows the choice matters less than expected: restricting the
 repair output to the diagnosed stage saves a CI-separated 38% of tokens per
 run but does not change success or executed actions, so the large action
@@ -62,13 +67,19 @@ proposes code.
 
 Three findings organize the paper.
 
-**Finding 1 — Repair is nearly certain where generation is not.** Across 80
-paired repair runs on StackCube (Panda to xArm6), the loop reaches official
-success in 75 runs, median one repair cycle, whether the LLM rewrites one
-diagnosed stage method or the whole module (Section 5.2). A repaired adapter
-held fixed succeeds on 9 of 10 held-out seeds, against 5 of 10 for a
-historical from-scratch fixed adapter, so the product of repair is not a patch
-overfit to one failure scene (Section 5.4).
+**Finding 1 — Repair is nearly certain for near-miss failures, and failure
+depth is measurable.** Across 80 paired repair runs on StackCube (Panda to
+xArm6), all starting from a candidate whose align stage claimed completion
+while off by centimeters, the loop reaches official success in 75 runs,
+median one repair cycle, whether the LLM rewrites one diagnosed stage method
+or the whole module (Section 5.2). Repaired code generalizes: an adapter held
+fixed succeeds on 9 of 10 held-out seeds (Section 5.4). But concentration on
+one failure mode would be its own confound, so we also repair four failure
+modes with structurally different signatures: a final-stage near-miss repairs
+3/3 in one cycle, while deeper transport failures repair 1/9 within the same
+budget — the loop's diagnosis localizes correctly in all twelve runs, so the
+bottleneck is the model's ability to re-reach difficult stage geometry, not
+the measurement (Section 5.2).
 
 **Finding 2 — What matters is feedback and preservation, not output scope.**
 A pre-registered paired ablation over 40 repair runs shows equal success
@@ -87,8 +98,9 @@ six of six independent runs, one cycle each, about $0.002 per run
 not have to.
 
 We state the boundaries plainly. The repair evidence is resume-based by
-construction — every repair run starts from the same recorded failed
-candidate — and is never merged with from-scratch statistics. The study spans
+construction — repair runs start from recorded failed candidates (the paired
+ablation from one near-miss candidate, the failure-depth probe from four more)
+and is never merged with from-scratch statistics. The study spans
 two tasks and one robot pair at a flash-scale model, all in one physical
 scene per task; nothing here is a cross-task or cross-robot generalization
 claim. And the loop's reliability presumes interface facts that human probing
@@ -214,6 +226,20 @@ Forty paired repair runs from the same hash-pinned failed candidate: n=10
 (method-repair) vs 38/40 (module-repair); discordant pairs symmetric (1/1 in
 the n=30 half; sign p = 1.0); median one repair cycle in both arms.
 
+Failure depth. All forty pairs share one near-miss starting point, so we
+repair four further failure modes harvested from the from-scratch runs of
+Section 5.1 (three sampling seeds each): a final-stage near-miss (release
+fails, all prior stages pass with postconditions intact) repairs 3/3 in one
+cycle; transport failures localized to align repair 1/9 within the same
+three-cycle budget, expending hundreds of actions per attempt. Localization
+was correct in all twelve runs — the source-postcondition check never
+mis-targeted — so failure depth, not diagnosis, separates the outcomes.
+The single successful from-scratch run fits the same structure: its first
+cycle was a near-miss false pass caught by the postcondition check, and its
+second cycle repaired align. Reliability, in other words, concentrates
+where the candidate is already close; the pipeline's measured evidence tells
+you reliably whether you are.
+
 ### 5.3 Granularity is second-order
 
 Paired differences (module − method): actions −2.8 [−17.3, 8.3] then +5.5
@@ -241,20 +267,29 @@ Table 3: interface-assumption errors found by human probes (gripper
 direction; stationary-close no-op); false stage completion caught by
 source-postcondition reopening; format brittleness of single-method output
 (one nested-helper rejection in 40 pairs); physical failures of from-scratch
-generation (contact never established, budget exhausted). The pattern worth
-naming: humans fixed interfaces, the LLM fixed policy — automation's real
-boundary in this pipeline today.
+generation (contact never established, budget exhausted); and — the axis that
+governs repair reliability — failure depth, with near-miss and structurally
+deep failures separated by measured stage-end states rather than by
+impression. The pattern worth naming: humans fixed interfaces, the LLM fixed
+policy, and the pipeline's measurement tells you which world you are in;
+automation's real boundary in this pipeline today is the deep-failure repair
+ceiling.
 
 ## 6 Discussion
 
 When is repair needed? The difficulty table answers operationally: on an easy
 task, generate — it is one cycle and two-thirds of a cent; when generation
 fails on a hard task, repair from the failure with measured evidence — it is
-near-certain. What makes repair work is not how much code the model writes
-but that its claims are checked against the official evaluator and the source
-run's own predicate flips; the ablation is what lets us say this with a
-straight face, because the obvious confound — write less, fail less — is
-measured out. The honest limit of "automatic" is the interface probes that
+near-certain when the failure is a near miss, and the measured evidence says
+which kind you have. What makes repair work is not how much code the model
+writes but that its claims are checked against the official evaluator and the
+source run's own predicate flips; the ablation is what lets us say this with
+a straight face, because the obvious confound — write less, fail less — is
+measured out. And the failure-depth result keeps the claim honest in the
+other direction: the loop does not magically solve the align geometry that
+from-scratch generation could not; it converts every pipeline state into a
+measured verdict of how close you are, and it cashes in exactly the closeness
+that exists. The honest limit of "automatic" is the interface probes that
 preceded it; a pipeline that measures its own interface assumptions the way
 it measures stage postconditions is the natural next step. Scope limits:
 resume-based repair statistics, one scene per task, one robot pair, one model

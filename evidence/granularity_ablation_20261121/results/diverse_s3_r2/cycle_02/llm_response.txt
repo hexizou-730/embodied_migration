@@ -1,0 +1,56 @@
+def _stage_align(self) -> bool:
+        half = 0.02
+        grasp_steps = 0
+        for _ in range(8):
+            if self._early_stop():
+                return False
+            if self._is_grasping_entity("cubeA"):
+                break
+            self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.settle_steps)
+            grasp_steps += 1
+        if not self._is_grasping_entity("cubeA"):
+            return False
+
+        for _ in range(40):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            cubeB = self._entity_pos("cubeB")
+            tcp = self._tcp_pos()
+            offset = cubeA - tcp
+            target = np.array([cubeB[0], cubeB[1], cubeB[2] + 2.0 * half], dtype=np.float32)
+            err = target - cubeA
+            if float(np.linalg.norm(err[:2])) <= 0.003 and float(abs(err[2])) <= 0.003:
+                break
+            tcp_target = target - offset
+            self._move_towards(tcp_target, gripper=self.gripper_close, steps=self.move_steps)
+            if not self._is_grasping_entity("cubeA"):
+                self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.settle_steps)
+                if not self._is_grasping_entity("cubeA"):
+                    return False
+
+        for _ in range(10):
+            if self._early_stop():
+                return False
+            cubeA = self._entity_pos("cubeA")
+            cubeB = self._entity_pos("cubeB")
+            offset = cubeA - cubeB
+            xy_err = float(np.linalg.norm(offset[:2]))
+            z_err = float(abs(offset[2] - 2.0 * half))
+            if xy_err <= 0.003 and z_err <= 0.003:
+                break
+            tcp = self._tcp_pos()
+            correction = np.array([cubeB[0] - cubeA[0], cubeB[1] - cubeA[1],
+                                   (cubeB[2] + 2.0 * half) - cubeA[2]], dtype=np.float32)
+            self._move_towards(tcp + correction, gripper=self.gripper_close, steps=self.move_steps)
+            if not self._is_grasping_entity("cubeA"):
+                self._repeat_action(np.zeros(3), gripper=self.gripper_close, steps=self.settle_steps)
+                if not self._is_grasping_entity("cubeA"):
+                    return False
+
+        cubeA = self._entity_pos("cubeA")
+        cubeB = self._entity_pos("cubeB")
+        offset = cubeA - cubeB
+        xy_ok = float(np.linalg.norm(offset[:2])) <= 0.02
+        z_ok = float(abs(offset[2] - 2.0 * half)) <= 0.006
+        return bool(self._is_grasping_entity("cubeA") and xy_ok and z_ok)
