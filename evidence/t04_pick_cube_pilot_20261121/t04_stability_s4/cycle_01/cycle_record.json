@@ -1,0 +1,45 @@
+{
+  "cycle": 1,
+  "model": "deepseek-flash",
+  "used_llm": true,
+  "usage": {
+    "completion_tokens": 1265,
+    "prompt_tokens": 6913,
+    "total_tokens": 8178,
+    "completion_tokens_details": null,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 6779
+    },
+    "prompt_cache_hit_tokens": 6779,
+    "prompt_cache_miss_tokens": 134
+  },
+  "allowed_stage": null,
+  "generation_unit": "complete_module",
+  "locked_stages_before": [],
+  "valid": true,
+  "adapter": "results/selective_migration/t04_stability_s4/cycle_01/target_adapter.py",
+  "method_hashes": {
+    "build_robot": "b5d43f06618e32e284dc0a4a1cbeb396a29408c6989f44c03d93174c6036519a",
+    "__init__": "cc0ea202a4da498d38be729ec043cf8c72b0cef7107429c04880e7b75ee752d7",
+    "_stage_approach": "fe604f481b5195ed12858cc1055df285caf80b0f6f26f802a19c34c64af3b174",
+    "_stage_grasp": "3312519a5127a4adf6ac9c1402752ba0be1cf70ec90110070bac8370c1322607",
+    "_stage_align": "7e62106db808043d6c2976773c5ad55d5b0bbef8834a071365e212d1dc8b2c49",
+    "run_source_actions": "03d0259035143d01a588a388592e53b51e903768011ac8cb7c501772ba9ac72b"
+  },
+  "trial_result": "results/selective_migration/t04_stability_s4/cycle_01/trial_result.json",
+  "success": true,
+  "action_steps": 24,
+  "failed_stage": null,
+  "repair_localization": {
+    "runtime_failed_stage": null,
+    "repair_stage": null,
+    "reason": "official_success"
+  },
+  "completed_stages": [
+    "approach",
+    "grasp",
+    "align"
+  ],
+  "message": "adapter returned success and official evaluate() returned success"
+}

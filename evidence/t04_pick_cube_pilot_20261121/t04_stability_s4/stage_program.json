@@ -1,0 +1,311 @@
+{
+  "schema": "source_stage_program.v1",
+  "task_id": "t04_pick_cube",
+  "source_program": "source_programs/frozen/t04_pick_cube.py",
+  "source_sha256": "237644ade0254f1edf5f4ec8fd035db11287b769a62843b056b688985e9c9406",
+  "entrypoint": "run",
+  "source_robot": "panda",
+  "source_control_mode": "pd_joint_pos",
+  "stage_order": [
+    "approach",
+    "grasp",
+    "align"
+  ],
+  "stages": [
+    {
+      "stage_id": "approach",
+      "source_lines": [
+        50,
+        50
+      ],
+      "operations": [
+        "move_tcp_to_pose"
+      ],
+      "source_calls": [
+        "planner.move_to_pose_with_screw(reach_pose)"
+      ],
+      "target_symbol": "reach_pose",
+      "target_expression": "reach_pose",
+      "entities": [
+        "cube"
+      ],
+      "dependency_expressions": [
+        "(grasp_info['closing'], grasp_info['center'])",
+        "0.025",
+        "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+        "env.agent.build_grasp_pose(approaching, closing, env.cube.pose.sp.p)",
+        "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+        "env.unwrapped",
+        "get_actor_obb(env.cube)",
+        "grasp_pose * sapien.Pose([0, 0, -0.05])",
+        "np.array([0, 0, -1])"
+      ],
+      "completion_check": "TCP reaches the source-derived pregrasp pose above the cube",
+      "transferable_relation": "derive a collision-clear pregrasp pose from the cube",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "replace the Panda planner motion",
+        "check target pregrasp reachability"
+      ],
+      "runtime": {
+        "action_count": 21,
+        "first_action_step": 1,
+        "last_action_step": 21,
+        "source_line_counts": {
+          "50": 21
+        },
+        "final_state": {
+          "step": 21,
+          "tcp": [
+            [
+              -0.0033809999004006386,
+              0.05529800057411194,
+              0.0729139968752861
+            ]
+          ],
+          "entities": {
+            "cube": [
+              [
+                -0.0007477579056285322,
+                0.053642310202121735,
+                0.019999941810965538
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "success": false,
+            "is_obj_placed": false,
+            "is_robot_static": true,
+            "is_grasped": false
+          }
+        }
+      }
+    },
+    {
+      "stage_id": "grasp",
+      "source_lines": [
+        55,
+        56
+      ],
+      "operations": [
+        "move_tcp_to_pose",
+        "close_gripper"
+      ],
+      "source_calls": [
+        "planner.move_to_pose_with_screw(grasp_pose)",
+        "planner.close_gripper()"
+      ],
+      "target_symbol": "grasp_pose",
+      "target_expression": "grasp_pose",
+      "entities": [
+        "cube"
+      ],
+      "dependency_expressions": [
+        "(grasp_info['closing'], grasp_info['center'])",
+        "0.025",
+        "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+        "env.agent.build_grasp_pose(approaching, closing, env.cube.pose.sp.p)",
+        "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+        "env.unwrapped",
+        "get_actor_obb(env.cube)",
+        "np.array([0, 0, -1])"
+      ],
+      "completion_check": "official is_grasped is true after the gripper closes",
+      "transferable_relation": "close the target gripper around the cube and establish a verified grasp",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "adapt grasp orientation and TCP offset to the target gripper",
+        "map the target close command",
+        "verify the official grasp state"
+      ],
+      "runtime": {
+        "action_count": 20,
+        "first_action_step": 22,
+        "last_action_step": 41,
+        "source_line_counts": {
+          "55": 14,
+          "56": 6
+        },
+        "final_state": {
+          "step": 41,
+          "tcp": [
+            [
+              -0.003639000002294779,
+              0.053711000829935074,
+              0.021562999114394188
+            ]
+          ],
+          "entities": {
+            "cube": [
+              [
+                -0.0008599997963756323,
+                0.05454900488257408,
+                0.020536214113235474
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "success": false,
+            "is_obj_placed": false,
+            "is_robot_static": true,
+            "is_grasped": true
+          }
+        }
+      }
+    },
+    {
+      "stage_id": "align",
+      "source_lines": [
+        62,
+        62
+      ],
+      "operations": [
+        "move_tcp_to_pose"
+      ],
+      "source_calls": [
+        "planner.move_to_pose_with_screw(goal_pose)"
+      ],
+      "target_symbol": "goal_pose",
+      "target_expression": "goal_pose",
+      "entities": [
+        "cube",
+        "goal_site"
+      ],
+      "dependency_expressions": [
+        "(grasp_info['closing'], grasp_info['center'])",
+        "0.025",
+        "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+        "env.agent.build_grasp_pose(approaching, closing, env.cube.pose.sp.p)",
+        "env.agent.tcp.pose.to_transformation_matrix()[0, :3, 1].cpu().numpy()",
+        "env.unwrapped",
+        "get_actor_obb(env.cube)",
+        "np.array([0, 0, -1])",
+        "sapien.Pose(env.goal_site.pose.sp.p, grasp_pose.q)"
+      ],
+      "completion_check": "official is_obj_placed is true: the held cube rests at the goal site",
+      "transferable_relation": "transport the grasped cube to the goal site using the source goal-relative geometry",
+      "preserve": [
+        "stage order",
+        "object-relative task relation",
+        "completion semantics"
+      ],
+      "adaptation_obligations": [
+        "replace the Panda planner motion",
+        "account for the target TCP-to-held-object transform",
+        "preserve the cube-to-goal_site placement geometry"
+      ],
+      "runtime": {
+        "action_count": 29,
+        "first_action_step": 42,
+        "last_action_step": 70,
+        "source_line_counts": {
+          "62": 29
+        },
+        "final_state": {
+          "step": 70,
+          "tcp": [
+            [
+              0.016718000173568726,
+              0.0004990000161342323,
+              0.27636900544166565
+            ]
+          ],
+          "entities": {
+            "cube": [
+              [
+                0.019500531256198883,
+                0.0013352897949516773,
+                0.27534979581832886
+              ]
+            ],
+            "goal_site": [
+              [
+                0.026815734803676605,
+                -0.0019813179969787598,
+                0.2889334559440613
+              ]
+            ]
+          },
+          "official_evaluation": {
+            "success": true,
+            "is_obj_placed": true,
+            "is_robot_static": true,
+            "is_grasped": true
+          }
+        }
+      }
+    }
+  ],
+  "source_assumptions": {
+    "robot_specific_imports": [
+      "from source_programs.vendor.mani_skill_motionplanning.panda.motionplanner import PandaArmMotionPlanningSolver"
+    ],
+    "controller": "pd_joint_pos",
+    "planner_symbols": [
+      "planner.close",
+      "planner.close_gripper",
+      "planner.move_to_pose_with_screw"
+    ],
+    "pre_action_robot_geometry_calls": [
+      "compute_grasp_info_by_obb(obb, approaching=approaching, target_closing=target_closing, depth=FINGER_LENGTH)",
+      "env.agent.build_grasp_pose(approaching, closing, env.cube.pose.sp.p)",
+      "get_actor_obb(env.cube)"
+    ]
+  },
+  "official_evaluation_at_trace_end": {
+    "success": true,
+    "is_obj_placed": true,
+    "is_robot_static": true,
+    "is_grasped": true
+  },
+  "trace_summary": {
+    "action_count": 70,
+    "mapped_action_count": 70,
+    "unmapped_action_count": 0,
+    "unmapped_source_lines": {}
+  },
+  "provenance": {
+    "stage_boundaries": "AST action calls",
+    "entity_dependencies": "recursive AST assignment dependencies",
+    "action_counts": "successful runtime source-line attribution",
+    "completion_checks": "operation templates plus official evaluate fields",
+    "llm_used": false
+  },
+  "validation": {
+    "ok": true,
+    "errors": [],
+    "manual_evaluation_only": {
+      "expected_stage_order": [
+        "approach",
+        "grasp",
+        "align"
+      ],
+      "expected_entities": {
+        "approach": [
+          "cube"
+        ],
+        "grasp": [
+          "cube"
+        ],
+        "align": [
+          "cube",
+          "goal_site"
+        ]
+      },
+      "note": "Used after extraction for validation, not read by the extractor. The dry AST run on 2026-11-21 produced the same three-stage order; the official replay trace is still required for action attribution."
+    }
+  },
+  "input_evidence": {
+    "study": "benchmark_tasks/t04_pick_cube/selective_migration_study.json",
+    "successful_trial": "results/stage_trace_t04/t04_pick_cube_seed_000.json"
+  },
+  "stage_semantics_source": "study_config_declared"
+}
